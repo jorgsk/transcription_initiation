@@ -1,0 +1,10 @@
+* The results with unphysical sequences should be without expected energy values
+* (the first plots are like this)
+
+Lizt with only random sequences and without exected values:
+
+*** First 10 explain more than last 10 ***
+* (0.33176412097819036, 0.039083941355087082) for 1-10
+* (0.22631578947368422, 0.16592729588956373) for 10-20
+ 
+

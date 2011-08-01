@@ -1,0 +1,201 @@
+\documentclass[a4paper]{article}
+
+% Support for Norwegian letters
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amsfonts,amssymb,amsthm,booktabs,array,mathtools}
+% consider package mhchem for typesetting chemical formulas
+
+% Proper space and font for integral differential term
+\newcommand{\dd}{\; \mathrm{d}} 
+% Shorcut for ODEs with proper font
+\newcommand{\diff}[2]{\frac{\mathrm{d} #1}{\mathrm{d} #2}}
+% Shortcut for PDEs with proper font (shortcut: PDB)
+\newcommand{\pdiff}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\pdiffn}[3]{\frac{\partial^{#3} #1}{\partial #2^{#3}}}
+
+% Absolute value and norm commands.
+% Read the mathtools.pdf to fix these!
+\providecommand{\abs}[1]{\lvert#1\rvert} 
+
+% Set the depth of section numbering
+\setcounter{secnumdepth}{0}
+
+\begin{document} 
+
+
+\section{Materials and Methods}
+
+All data analysis is performed with in house Python scipts. Statistics libraries
+are either from scipy or from R accessed through the Python module rpy. Unless
+otherwise noted, Spearman rank correlation coefficents are used.
+
+\subsubsection{Calculating RNA-DNA and DNA-DNA hybrid energies}
+
+RNA-DNA and DNA-DNA hybrid energies are calculated using a nearest neighbor
+models that use the energy parameters from \cite{wu_temperature_2002-1} and
+\cite{santalucia_thermodynamics_2004}, respectively.
+
+\section{Results}
+
+\subsubsection{Correlation of RNA-DNA and DNA-DNA binding energies with promoter
+escape}
+
+Figure X shows the change in the correlation
+coefficient for the association between RNA-DNA energy and PY and DNA-DNA
+energy and PY, when an increasing length of the ITR is taken into account. The
+RNA-DNA energy vs. PY reaches significance at the 0.05 level at 10 nts and
+levels out at 15 nts with p = 0.005. The DNA-DNA energy vs. PY association never
+reaches statistical significance. Figure XXX shows a scatterplot of 15 nt
+RNA-DNA energies vs PY. A strong RNA-DNA bond is associated with low rates of
+promoter escape, while weaker RNA-DNA bonds may or may not give higher values of
+promoter escape.
+
+\subsubsection{Combining $\Delta G_{\text{RNA-DNA}}$ and $\Delta
+G_{\text{DNA-DNA}}$ in a more physical model}
+
+The 15nt RNA-DNA hybrid that gives peak
+significance in Figure X is unphysical, in the sense that the length of the
+RNA-DNA hybrid is at most 8-9 nt, yet it is a measure of the overall strength of
+all the intermediate RNA-DNA hybrids formed inside RNAP during the initiation of
+transcription. Although the DNA-DNA energy could not explain promoter escape
+alone, it is possible that promoter escape can best be described as some function
+of both $\Delta G_{\text{RNA-DNA}}$ and $\Delta G_{\text{DNA-DNA}}$. In
+thermodynamic models of transcriptional elongation it is often assumed that
+$\Delta G_{\text{RNA-DNA}}$, $\Delta G_{\text{DNA-DNA}}$, and $\Delta
+G_{\text{RNA-RNA}}$ determine the state transitions of the elongating complex
+\cite{tadigotla_thermodynamic_2006}, where $\Delta G_{\text{RNA-RNA}}$ is the
+free folding energy of the nascent RNA closest to the elongating complex.
+By further assuming that the elongating complex reaches local equilibrium
+between each nucleotide addition \cite{greive_thinking_2005}, the rate of
+transcription elongation can be written as proportional to the exponent of the
+sum of the three free energy terms mentioned above:
+\begin{equation}
+	\label{eq:equilibrium1}
+	r_e \propto e^{\Delta G_{\text{RNA-DNA}}+\Delta
+	G_{\text{DNA-DNA}}+\Delta G_{\text{RNA-RNA}}},
+\end{equation}
+During promoter escape the nascent RNA extrudes no more than 5 nts out of the
+RNA exit channel, making it unlikely that RNA secondary structures play a role in
+promoter escape, so that the $\Delta G_{\text{RNA-RNA}}$ can be taken out of
+equation \eqref{eq:equilibrium1} to give:
+\begin{equation}
+	\label{eq:equilibrium2}
+	r_e \propto e^{\Delta G_{\text{RNA-DNA}}+\Delta
+	G_{\text{DNA-DNA}}}.
+\end{equation}
+Indeed, a model that uses the energy terms in \eqref{eq:equilibrium2} to
+predict the kinetic behavior of transcription initiation has been published
+\cite{xue_kinetic_2008}, where the authors argue that the RNAP-$\Sigma$
+holoenzyme also reaches local equilibrium between each nucleotide addition in
+transcription initiation. If the local equilibrium assumption is true for
+transcription initiation, and if $\Delta G_{\text{DNA-DNA}}$ matters at all to
+this process, then the sum of $\Delta G_{\text{RNA-DNA}}$ and $\Delta
+G_{\text{DNA-DNA}}$ should explain promoter escape better than $\Delta
+G_{\text{RNA-DNA}}$ alone. To investigate this, we correlated $\Delta
+G_{\text{RNA-DNA}}$+$\Delta G_{\text{DNA-DNA}}$ to promoter escape in a model that
+takes into account the joint kinetic behaviour of the DNA bubble and the nascent
+RNA during transcription initiation. In this model, it is assumed
+that when RNAP initiates the open complex, DNA is unwound from nt -11 to +2
+\cite{borukhov_rna_2008}. It is also assumed that transcription initiation works by
+scrunching, i.e. the DNA bubble stays open from -11 and increases in size
+downstream until promoter escape \cite{revyakin_abortive_2006}.
+
+In this model, after the DNA bubble has been formed, the first nucleotide is added to form the
++1 RNA-DNA hybrid. Sequentially, the DNA bubble is increased by one nt
+downstream, and the next nucleotide is added added to position +1. If $\Delta
+G_{\text{DNA-DNA}}^{i,j}$ and $\Delta G_{\text{RNA-DNA}}^{i,j}$ denote the
+DNA-DNA and RNA-DNA hybrid energies, respectively, from position i to j, then
+the sum of sums of RNA-DNA and DNA-DNA energies are calculated as in equation
+\eqref{eq:physicalsum} 
+\begin{align}
+	\label{eq:physicalsum}
+	\sum \Delta G &=
+	\left(\Delta G_{\text{DNA-DNA}}^{-11,2} + \Delta
+	G_{\text{RNA-DNA}}^{1,1}\right) + \left(\Delta G_{\text{DNA-DNA}}^{-11,3} + \Delta
+	G_{\text{RNA-DNA}}^{1,2}\right) + \nonumber \\
+	 \dots + & \left(\Delta G_{\text{DNA-DNA}}^{-11,8} + \Delta G_{\text{RNA-DNA}}^{1,8}\right)
+	+ \left(\Delta G_{\text{DNA-DNA}}^{-11,9} + \Delta
+	G_{\text{RNA-DNA}}^{2,9}\right) +\nonumber \\
+	 & \dots
+	+ \left(\Delta G_{\text{DNA-DNA}}^{-11,21} + \Delta G_{\text{RNA-DNA}}^{13,20}\right).
+\end{align}
+As can be seen in FIGURE XXX, the sum of RNA-DNA and DNA-DNA energies is less
+correlated with promoter escape than RNA-DNA energy alone.
+
+By adding $\Delta G_{\text{RNA-DNA}}$ and $\Delta G_{\text{DNA-DNA}}$ (opposed
+to subtracting them) it is assumed that both factors
+act in the same directon; here, it is assumed that weak DNA-DNA and
+RNA-DNA bonds better facilitate promoter escape than strong bonds. If instead
+weak RNA-DNA bonds and strong DNA-DNA bonds facilitate promoter escape, the sum
+of subtractions of $\Delta G_{\text{RNA-DNA}}$ and $\Delta G_{\text{DNA-DNA}}$
+is given in \eqref{eq:minphysicalsum}.
+\begin{align}
+	\label{eq:minphysicalsum}
+	\sum \Delta G &=
+	\left(\Delta G_{\text{DNA-DNA}}^{-11,2} - \Delta
+	G_{\text{RNA-DNA}}^{1,1}\right) + \left(\Delta G_{\text{DNA-DNA}}^{-11,3} - \Delta
+	G_{\text{RNA-DNA}}^{1,2}\right) + \nonumber \\
+	 \dots + & \left(\Delta G_{\text{DNA-DNA}}^{-11,8} - \Delta G_{\text{RNA-DNA}}^{1,8}\right)
+	+ \left(\Delta G_{\text{DNA-DNA}}^{-11,9} - \Delta
+	G_{\text{RNA-DNA}}^{2,9}\right) +\nonumber \\
+	 & \dots
+	+ \left(\Delta G_{\text{DNA-DNA}}^{-11,21} - \Delta G_{\text{RNA-DNA}}^{13,20}\right).
+\end{align}
+However, subtracting $\Delta G_{\text{RNA-DNA}}$ and $\Delta G_{\text{DNA-DNA}}$
+in this way did not improve the correlation to promoter escape. 
+
+\subsubsection{PolyA, polyT, and $\sigma^{70}$ binding sites}
+%It is possible that polyA or polyT stretches in the UTR could cause
+%transcriptional slippage CITATION, which can lead to either an aborted product or a too
+%long finished transcript product; either way transcriptional slippage affects
+%promoter escape and it could be possible to observe a relationship between polyA
+%or polY stretches in the ITR of a promoter and how well it undergoes promoter
+%escape. Figure XXX shows a table of the 43 ITR sequences, sorted by their productive
+%yield value, where the columns show if a polyA or polyT stretch has been found,
+%and if so, where it is located. Also in Figure XXX is a scatterplot of RNA-DNA
+%energies vs promoter escape that illustrates what sequences have polyA or polT
+%stretches and how many they have. There is no clear correlation between polyA or
+%polyT stretches in the ITR of a promoter and its ability for promoter escape. If
+%anything, there is a weak positive association between polyA and polyT stretches
+%and promoter escape, likely because polyA and polyT sequences have weak RNA-DNA
+%bonds.
+
+Recent evidence indicates that $\Sigma^{70}$ is stochastically released from
+RNAP after transcription initiation. If retained, $\sigma^{70}$ is
+capable of rebinding the -10 like elements, causing transcriptional pausing
+anywhere during transcription elongation \cite{mooney_tethering_2003}.
+Specifically, $\sigma^{70}$ has been shown to induce pausing in the ITR region
+of the $\lambda$ late gene operon \cite{ring_function_1996} though the
+recognition of a -10 like element. The pause at this promoter lasts in the order
+of a minute and therefore severely affects promoter escape.
+
+Since a -10 like equence is likely to occur by chance in 43 randomized ITR
+sequences and might affect promoter escape by causing $\sigma^{70}$-induced
+pauses, we looked for an association between the occurence of -10 like sequences
+in the ITR region of a promoter and its PY. In Figure XXX, the list of the 43
+promoter ITRs are given with a column indicating if a minus 10 element has been
+found in the ITR.  The -10 elements are either curated from literature or taken
+from the RegulonDB database. As can be seen, there is no correlation between the
+occurrence of -10 like elements in the ITR and PY. This shows that it is not
+enough to have the presence of a -10 like element in the ITR to induce promoter
+proximal pausing. However, Hsu has observed that the insertion of a -10
+consensus sequence in the ITR has no affect on the abortive ladder on the XXX
+promoter (Hsu, personal communcation).
+
+% TODO Tomorrow, CONTINUE TO fill in all the citations and make the text
+% correct. But first, skim those two papers found by scopus. You have read about
+% the GGGC regulator in subtilus. Apparently, a pause before the C insertion can
+% let the GGG slip upstream relative to the DNA template to allow another G to
+% be added. Questions: 1)can it slip forward? 2) Will this leave the G
+% dangeling? Or is it bound to the -1 element???? Do the -1,-2,-3 elements
+% matter for backsliding in these slippage experiments? Can you check this for
+% the experiments in question?
+% After that, redo that minus10 finding like you suggested in Transcription.
+% RESULT from BMC paper: very hard to improve promoter in the -1 to -40 area.
+% Golden chance for ITR :)
+
+\bibliographystyle{plain}
+\bibliography{/home/jorgsk/phdproject/bibtex/jorgsk}	
+
+\end{document}
