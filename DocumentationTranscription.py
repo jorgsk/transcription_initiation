@@ -19,9 +19,19 @@ import Filereader
 import Energycalc
 import Orderrank
 
-# So you don't have to 1/0 any more. Call dbg()
-from IPython.Debugger import Tracer;
-debug = Tracer()
+def run_from_ipython():
+    try:
+        __IPYTHON__active
+        return True
+    except NameError:
+        return False
+
+if run_from_ipython():
+    from IPython.Debugger import Tracer
+    #from IPython.core.debugger import Tracer
+    debug = Tracer()
+else:
+    def debug(): 1/0
 
 rc('text', usetex=True)  # Using latex in labels in plot
 rc('font', family='serif')  # Setting font family in plot text
