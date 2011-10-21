@@ -4,6 +4,7 @@
 
 # Python modules
 from __future__ import division
+import os
 import random
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,7 +18,7 @@ import Workhouse
 import Filereader
 import Energycalc
 import Orderrank
-import ITRgenerator
+
 # So you don't have to 1/0 any more. Call dbg()
 from IPython.Debugger import Tracer;
 debug = Tracer()
@@ -32,7 +33,9 @@ hsu3 = '/Hsu/csvHsuOmit3'
 hsu4 = '/Hsu/csvHsu2008'
 
 # Figure directory for rna_dna analysis
-rna_dna_fig_dir = '/home/jorgsk/phdproject/writeup_summer_2010/rna_dna_analysis/figures'
+# The path to the directory the script is located in
+here = os.path.dirname(os.path.realpath(__file__))
+rna_dna_fig_dir = os.path.join(here, 'figures')
 
 # Correlator correlates the DNA-RNA/DNA energies of the subsequences of the ITS
 # sequences with the data points of those sequences. ran = 'yes' will generate
@@ -286,14 +289,15 @@ def ladPlot(lizt, reverse='no', pline='yes'):
         ticklabels = [str(integer)+'-20' for integer in range(1,21-2)]
     xticklabels = [str(integer) for integer in range(3,21)]
     yticklabels = [str(integer) for integer in np.arange(0, 0.8, 0.1)]
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
+
+    fig, ax = plt.subplots()
     ax.set_xticks(range(3,21))
     ax.set_xticklabels(xticklabels)
     ax.set_xlabel("Nucleotide from transcription start", size=26)
     ax.set_ylabel("Spearman rank coefficient, $r$", size=26)
     ax.plot(incrX, corr1, 'b', label='RNA/DNA', linewidth=2)
     ax.plot(incrX, corr2, 'g', label='DNA/DNA', linewidth=2)
+
     if pline == 'yes':
         pval = PvalDeterminer(toplot1)
         ax.axhline(y=pval, color='r', label='p = 0.05 threshold', linewidth=2)
@@ -301,11 +305,13 @@ def ladPlot(lizt, reverse='no', pline='yes'):
     ax.set_yticks(np.arange(0, 0.8, 0.1))
     ax.set_yticklabels(yticklabels)
     name = 'simplified_ladder.eps'
+
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
         l.set_fontsize(18)
     for l in ax.get_yticklabels():
         l.set_fontsize(18)
+
     fig.set_figwidth(9)
     fig.set_figheight(10)
     fig.savefig(rna_dna_fig_dir + '/' + name, format="eps")
@@ -871,11 +877,10 @@ def PaperResults(lizt, ITSs):
     # Plots for the simplified model
     ladPlot(lizt) # ladder plot simplified
     ScatterPlotter(lizt, ITSs, model='simplified', stds='yes') # the scatter plot
-    #
 
 def Main():
     lizt, ITSs = ReadAndFixData() # read raw data
-    lizt, ITSs = StripSet(4, lizt, ITSs) # strip promoters (0 for nostrip)
+    #lizt, ITSs = StripSet(4, lizt, ITSs) # strip promoters (0 for nostrip)
     PaperResults(lizt, ITSs)
     #NewEnergyAnalyzer(ITSs) # going back to see the energy-values again
     #RedlistInvestigator(ITSs)
