@@ -31,7 +31,8 @@ if run_from_ipython():
     #from IPython.core.debugger import Tracer
     debug = Tracer()
 else:
-    def debug(): 1/0
+    def debug():
+        pass
 
 rc('text', usetex=True)  # Using latex in labels in plot
 rc('font', family='serif')  # Setting font family in plot text

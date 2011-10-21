@@ -1,8 +1,20 @@
 # Ensure 4/5 is float and not 0
 from __future__ import division
 
-from IPython.Debugger import Tracer
-debug = Tracer()
+def run_from_ipython():
+    try:
+        __IPYTHON__active
+        return True
+    except NameError:
+        return False
+
+if run_from_ipython():
+    from IPython.Debugger import Tracer
+    #from IPython.core.debugger import Tracer
+    debug = Tracer()
+else:
+    def debug():
+        pass
 
 import Workhouse
 import numpy as np
