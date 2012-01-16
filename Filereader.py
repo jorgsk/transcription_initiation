@@ -2,9 +2,20 @@
 it. Prior to this reading, the data should be properly saved in a csv file using
 Formatfixer.py
 """
+def run_from_ipython():
+    try:
+        __IPYTHON__active
+        return True
+    except NameError:
+        return False
 
-from IPython.Debugger import Tracer
-debug = Tracer()
+if run_from_ipython():
+    from IPython.Debugger import Tracer
+    #from IPython.core.debugger import Tracer
+    debug = Tracer()
+else:
+    def debug():
+        pass
 
 import csv
 import numpy as np

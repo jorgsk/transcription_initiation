@@ -46,7 +46,7 @@ hsu4 = '/Hsu/csvHsu2008'
 # Figure directory for rna_dna analysis
 # The path to the directory the script is located in
 here = os.path.dirname(os.path.realpath(__file__))
-rna_dna_fig_dir = os.path.join(here, 'figures')
+fig_dir = os.path.join(here, 'figures')
 
 # Correlator correlates the DNA-RNA/DNA energies of the subsequences of the ITS
 # sequences with the data points of those sequences. ran = 'yes' will generate
@@ -185,17 +185,24 @@ def CorrelatorPlotter(lizt, pline='yes'):
         pval = PvalDeterminer(RNAnoMsat)
         ax.axhline(y=pval, color='r', label='$p$ = 0.05 threshold', linewidth=2)
     ax.legend(loc='upper left')
-    name = 'physical_ladder.pdf'
+
     ax.set_yticks(np.arange(0, 0.8, 0.1))
     ax.set_yticklabels(yticklabels)
+
     # awkward way of setting the tick sizes
     for l in ax.get_xticklabels():
         l.set_fontsize(18)
     for l in ax.get_yticklabels():
         l.set_fontsize(18)
+
     fig.set_figwidth(8)
     fig.set_figheight(9)
-    fig.savefig(rna_dna_fig_dir + '/' + name, transparent=True, format="pdf")
+
+    for formt in ['pdf', 'eps', 'png']:
+        name = 'physical_ladder.' + formt
+        odir = os.path.join(fig_dir, formt)
+
+        fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
 def SimpleCorr(seqdata, ran='no', rev='no'):
     """Calculate the correlation between RNA-DNA and DNA-DNA energies with PY
@@ -315,7 +322,6 @@ def ladPlot(lizt, reverse='no', pline='yes'):
     ax.legend(loc='upper left')
     ax.set_yticks(np.arange(0, 0.8, 0.1))
     ax.set_yticklabels(yticklabels)
-    name = 'simplified_ladder.eps'
 
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
@@ -325,7 +331,12 @@ def ladPlot(lizt, reverse='no', pline='yes'):
 
     fig.set_figwidth(9)
     fig.set_figheight(10)
-    fig.savefig(rna_dna_fig_dir + '/' + name, format="eps")
+
+    for formt in ['pdf', 'eps', 'png']:
+        name = 'simplified_ladder.' + formt
+        odir = os.path.join(fig_dir, formt)
+
+        fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
 def ITSgenerator_local(nrseq):
     """Generate list of nrseq RNA random sequences """
@@ -820,36 +831,46 @@ def ScatterPlotter(lizt, ITSs, model='physical', stds='no'):
     ax = fig.add_subplot(111)
     ax.set_xlabel("RNA-DNA energy ($\Delta G$)", size=28)
     ax.set_ylabel("Productive yield ", size=28)
+
     if model == 'physical':
         RD, RDplot = Correlator(lizt, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=1)
         one_20s = RDplot[0] # energy is normalized for the physical model
         PYs = RDplot[1]
         PYs_std = RDplot[2]
         name = 'physical_scatter_PY_vs_RNADNA'
+
     if model == 'simplified':
         one_20s = [itr.rna_dna1_20 for itr in ITSs] # simply the 1-20 energy
         PYs = [itr.PY for itr in ITSs]
         PYs_std = [itr.PY_std for itr in ITSs]
         name = 'simplified_scatter_PY_vs_RNADNA'
+
     if stds == 'yes':
-        name = name + '_stds.eps'
+        name = name + '_stds'
         ax.errorbar(one_20s,PYs,yerr=PYs_std,fmt='ro')
     else:
-        name = name + '.eps'
         ax.scatter(one_20s, PYs)
+
     # awkward way of setting the tick sizes
     for l in ax.get_xticklabels():
         l.set_fontsize(18)
     for l in ax.get_yticklabels():
         l.set_fontsize(18)
+
     if model == 'simplified':
         ax.set_xlim(-25.5,-11)
     if model == 'physical':
         ax.set_xlim(-1.02,-0.5)
+
     ax.set_ylim(0,11)
     fig.set_figwidth(9)
     fig.set_figheight(10)
-    fig.savefig(rna_dna_fig_dir + '/' + name, format="eps")
+
+    for formt in ['pdf', 'eps', 'png']:
+        name = name + '.' + formt
+        odir = os.path.join(fig_dir, formt)
+
+        fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
 def PaperResults(lizt, ITSs):
     """Produce all the results that should be included in the paper."""
