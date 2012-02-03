@@ -3,13 +3,13 @@
 # Python modules
 from __future__ import division
 import random
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
 import scipy.interpolate
 import operator
 from Bio.Seq import Seq
-from matplotlib import rc
 # My own modules
 import Testfit
 import Workhouse
@@ -17,8 +17,24 @@ import Filereader
 import Energycalc
 import Orderrank
 
-rc('text', usetex=True)  # Using latex in labels in plot
-rc('font', family='serif')  # Setting font family in plot text
+########################
+def run_from_ipython():
+    try:
+        __IPYTHON__active
+        return True
+    except NameError:
+        return False
+# only get the debug functio prop
+if run_from_ipython():
+    from IPython.Debugger import Tracer
+    debug = Tracer()
+else:
+    def debug():
+        pass
+########################
+
+matplotlib.rc('text', usetex=True)  # Using latex in labels in plot
+matplotlib.rc('font', family='serif')  # Setting font family in plot text
 
 # Locations of input data
 biotech = '/Rahmi/full_sequences_standardModified'
@@ -739,9 +755,10 @@ def Testrandom():
     table = []
     for dummy in range(1000):
         table.append(ITRgenerator(1))
+
     1/0
 
-def Main():
+def main():
     lizt, ITRs = ReadAndFixData()
     lizt = StripSet(4, lizt) # must uncomment when not working with the standard set
     #NewEnergyAnalyzer(ITRs) # going back to see the energy-values again
@@ -753,8 +770,8 @@ def Main():
     #skrot = LadderScrutinizer(lizt)
     Testrandom()
 
-
-Main()
+if __name__ == '__main__':
+    main()
 
 # TODO create a method that outputs all the results you use in the paper?
 

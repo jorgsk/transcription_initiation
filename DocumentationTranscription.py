@@ -6,6 +6,7 @@
 from __future__ import division
 import os
 import random
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
@@ -18,6 +19,7 @@ import Workhouse
 import Filereader
 import Energycalc
 import Orderrank
+from glob import glob
 
 def run_from_ipython():
     try:
@@ -34,8 +36,8 @@ else:
     def debug():
         pass
 
-rc('text', usetex=True)  # Using latex in labels in plot
-rc('font', family='serif')  # Setting font family in plot text
+matplotlib.rc('text', usetex=True)  # Using latex in labels in plot
+matplotlib.rc('font', family='serif')  # Setting font family in plot text
 
 # Locations of input data
 hsu1 = '/Hsu/csvHsu'
@@ -46,7 +48,10 @@ hsu4 = '/Hsu/csvHsu2008'
 # Figure directory for rna_dna analysis
 # The path to the directory the script is located in
 here = os.path.dirname(os.path.realpath(__file__))
-fig_dir = os.path.join(here, 'figures')
+fig_dir1 = os.path.join(here, 'figures')
+fig_dir2 = '/home/jorgsk/phdproject/The-Tome/my_papers/rna-dna-paper/figures'
+
+fig_dirs = (fig_dir1, fig_dir2)
 
 # Correlator correlates the DNA-RNA/DNA energies of the subsequences of the ITS
 # sequences with the data points of those sequences. ran = 'yes' will generate
@@ -55,6 +60,36 @@ fig_dir = os.path.join(here, 'figures')
 # 'yes' will sum up the energy values for each ITS. sumit == 'no' wil do a
 # sliding window analysis. The sliding window may be important for correlating
 # with Abortive Probabilities.
+
+def welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha):
+    """
+    Got this from the scipy mailinglist, guy named Angus
+    """
+
+    # calculate standard variances of the means
+    svm1 = sem1**2 * n1
+    svm2 = sem2**2 * n2
+    print "standard variance of the mean 1: %0.4f" % svm1
+    print "standard variance of the mean 2: %0.4f" % svm2
+    print ""
+    t_s_prime = (mean1 - mean2)/np.sqrt(svm1/n1+svm2/n2)
+    print "t'_s = %0.4f" % t_s_prime
+    print ""
+    t_alpha_df1 = scipy.stats.t.ppf(1-alpha/2, n1 - 1)
+    t_alpha_df2 = scipy.stats.t.ppf(1-alpha/2, n2 - 1)
+    print "t_alpha[%d] = %0.4f" % (n1-1, t_alpha_df1)
+    print "t_alpha[%d] = %0.4f" % (n2-1, t_alpha_df2)
+    print ""
+    t_alpha_prime = (t_alpha_df1 * sem1**2 + t_alpha_df2 * sem2**2) / \
+                    (sem1**2 + sem2**2)
+    print "t'_alpha = %0.4f" % t_alpha_prime
+    print ""
+    if abs(t_s_prime) > t_alpha_prime:
+        print "Significantly different"
+        return True
+    else:
+        print "Not significantly different"
+        return False
 
 def Correlator(seqdata, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=0.05, plot='no'):
     """ Investigate correlations between DNA/DNA, RNA/DNA, and productive yield
@@ -76,7 +111,7 @@ def Correlator(seqdata, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=0.05
     unphysical according to msat. For example, 'N25' will have 0 for (10,18).
     Instead return the expected energy of a sequence of that length. """
 
-    maxlen = 9  # max length of RNA/DNA hybrid
+    maxlen = 8  # max length of RNA/DNA hybrid
     # Interchange 'rows' and 'columns' in seqdata
     rowdata = [[row[val] for row in seqdata] for val in range(len(seqdata[0]))]
     # rowdata = [sequence name, sequence, PY, PYstd..]
@@ -87,6 +122,7 @@ def Correlator(seqdata, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=0.05
     # NOTE encolsRNA adds Expected energy value after msat is reached!
     encolsRNA = [Energycalc.PhysicalRNA(row[1], row[-2], msatyes, maxlen) for row in seqdata]
     encolsDNA = [Energycalc.PhysicalDNA(row[1]) for row in seqdata]
+
     if ran == 'yes':
         ran = ITSgenerator_local(len(seqdata))
         # Adding msat to sequences to mimick the real data
@@ -100,6 +136,7 @@ def Correlator(seqdata, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=0.05
               range(len(encolsRNA[0]))]
     enrowsDNA = [[[row[val][0] for row in encolsDNA], row[val][1]] for val in
               range(len(encolsDNA[0]))]
+
     if kind == 'RNA':
         enrows = enrowsRNA
     elif kind == 'DNA':
@@ -114,6 +151,7 @@ def Correlator(seqdata, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=0.05
             zum = np.array(enrowsRNA[indx][0]) + np.array(enrowsDNA[indx][0])
             zumranges = [enrowsRNA[indx][1], enrowsDNA[indx][1]]
             enrows.append([zum.tolist(), zumranges])
+
     # Including only the relevant data in rowdata: PY(2) and MSAT(6).
     experidata = [rowdata[2]]
     plot_returns = [[], [], []]
@@ -134,7 +172,7 @@ def Correlator(seqdata, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=0.05
     for datapoint in range(len(experidata)):
         for subseqnr in range(len(enrows)):
             # Separating the energies from their indeces
-            statistics = Workhouse.Spearman(experidata[datapoint], enrows[subseqnr][0])
+            statistics = scipy.stats.spearmanr(experidata[datapoint], enrows[subseqnr][0])
             pval = statistics[1]
             if pval <= p:
                 corr = statistics[0]
@@ -146,38 +184,39 @@ def CorrelatorPlotter(lizt, pline='yes'):
     """ Plot the results from Correlation(). Lists are from [0,3] to [0,20] real
     world"""
     # Full lists. Plotdata = [energy, PY, PYstdv]
-    title = 'Correlation between sum of RNA-DNA bonds from 0-3 to 0'
+    title = 'Correlation of energy terms with PY for a kinetic model'
     sumit = 'yes'
     msatyes = 'no'
     ran = 'no'
     RNAnoMsat, plotNo = Correlator(lizt, ran, sumit, msatyes, kind='RNA', p=1)
     # Plot Not taking Msat into account
-    title = 'Not taking MSAT into account'
     #Workhouse.StdPlotter(plotNo[0], plotNo[1], plotNo[2], 'RNA/DNA '
                          #'energy', 'Productive yield', title)
     msatyes = 'yes'
     RNAyesMsat, plotYes = Correlator(lizt, ran, sumit, msatyes, kind='RNA', p=1)
     # Plot taking Msat into account 
-    title = 'Taking MSAT into account'
     #Workhouse.StdPlotter(plotYes[0], plotYes[1], plotYes[2], 'RNA/DNA '
                          #'energy', 'Productive yield', title)
     DNA, DNAplot = Correlator(lizt, ran, sumit, msatyes, kind='DNA', p=1)
     both, bothplot = Correlator(lizt, ran, sumit, msatyes, kind='combo',p=1)
     # Just the correlation coefficients (and the pvals of one of them for interp)
-    RNAnoM = [row[0] for row in RNAnoMsat]
+    RNAnoM = [row[0] for row in RNAnoMsat[1:]]
     RNAyesM = [row[0] for row in RNAyesMsat]
-    DNA = [row[0] for row in DNA]
-    both = [row[0] for row in both]
-    # Making a figure the pythonic way
+
+    DNA = [row[0] for row in DNA[1:]]
+    both = [row[0] for row in both[1:]]
+
     xticklabels = [str(integer) for integer in range(3,21)]
     yticklabels = [str(integer) for integer in np.arange(0, 0.8, 0.1)]
     incrX = range(3,21)
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
+
+    fig, ax = plt.subplots()
+
     ax.set_xticks(range(3,21))
     ax.set_xticklabels(xticklabels)
-    ax.set_xlabel("Nucleotide from transcription start", size=26)
-    ax.set_ylabel("Spearman rank correlation, $r$", size=26)
+    ax.set_xlabel("Nucleotide from TTS", size=26)
+    ax.set_ylabel("Correlation coefficient, $r$", size=26)
+
     ax.plot(incrX, RNAnoM,'b', label='RNA/DNA', linewidth=2)
     ax.plot(incrX, DNA,'g', label='DNA/DNA', linewidth=2)
     ax.plot(incrX, both,'c', label='RNA/DNA + DNA/DNA', linewidth=2)
@@ -189,6 +228,8 @@ def CorrelatorPlotter(lizt, pline='yes'):
     ax.set_yticks(np.arange(0, 0.8, 0.1))
     ax.set_yticklabels(yticklabels)
 
+    #ax.set_title(title, size=26)
+
     # awkward way of setting the tick sizes
     for l in ax.get_xticklabels():
         l.set_fontsize(18)
@@ -198,55 +239,75 @@ def CorrelatorPlotter(lizt, pline='yes'):
     fig.set_figwidth(8)
     fig.set_figheight(9)
 
-    for formt in ['pdf', 'eps', 'png']:
-        name = 'physical_ladder.' + formt
-        odir = os.path.join(fig_dir, formt)
+    ax.legend()
+    debug()
 
-        fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+    for fig_dir in fig_dirs:
+        for formt in ['pdf', 'eps', 'png']:
 
-def SimpleCorr(seqdata, ran='no', rev='no'):
+            name = 'physical_ladder.' + formt
+            odir = os.path.join(fig_dir, formt)
+
+            if not os.path.isdir(odir):
+                os.makedirs(odir)
+
+            fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+
+def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
     """Calculate the correlation between RNA-DNA and DNA-DNA energies with PY
     for incremental positions of the correlation window (0:3) to (0:20). Two
     versions are returned: one where sequence-average expected energies are
     added after msat and one where nothing is done for msat.
     The rev='yes' option only gives meaningful result for
     incremental without adding expected values."""
+
     rowdata = [[row[val] for row in seqdata] for val in range(len(seqdata[0]))]
     seqs = rowdata[1]
+
     if ran == 'yes':
         nrseq = len(seqdata) #how many sequences. (might remove some)
         seqs = ITSgenerator_local(nrseq)
 #    labels = ['Name','Sequence','PY','PYst','RPY','RPYst','RIF','RIFst','APR','MSAT','R']
+
     PY = rowdata[2]
 #    PY = rowdata[8] # the correlation between RNA/DNA and R must be commented
 #    upon.
+
     msat = rowdata[-2]
     # Calculating incremental energies from 3 to 20 with and without expected
     # energies added after msat in incr[1]. incr[0] has incremental energies
     # without adding expected energies after msat. NOTE E(4nt)+E(5nt)=E(10nt)
     # causes diffLen+1
+
     incrEnsRNA = [[], []] # 0 is withOut exp, 1 is With exp
     incrEnsDNA = [[], []]
     start = 3 #nan for start 0,1, and 2. start =3 -> first is seq[0:3] (0,1,2)
     for index, sequence in enumerate(seqs):
         incrRNA = [[], []]
         incrDNA = [[], []]
-        for top in range(start,21):
+
+        for top in range(start, maxlen+1):
             # Setting the subsequences from which energy should be calculated
             rnaRan = sequence[0:top]
+            dnaRan = sequence[0:top+1]
+
             if rev == 'yes':
                 rnaRan = sequence[top-start:]
-            dnaRan = sequence[0:top+1]
+
             tempRNA = Energycalc.RNA_DNAenergy(rnaRan)
             tempDNA = Energycalc.PhysicalDNA(dnaRan)[-1][0]
+
             incrRNA[0].append(tempRNA)
             incrDNA[0].append(tempDNA)
+
+            # you are beyond msat -> calculate average energy
             if top > msat[index]:
                 diffLen = top-msat[index]
                 #RNA
                 baseEnRNA = Energycalc.RNA_DNAenergy(sequence[:int(msat[index])])
                 diffEnRNA = Energycalc.RNA_DNAexpected(diffLen+1)
                 incrRNA[1].append(baseEnRNA + diffEnRNA)
+
                 #DNA
                 baseEnDNA = Energycalc.DNA_DNAenergy(sequence[:int(msat[index])])
                 diffEnDNA = Energycalc.DNA_DNAexpected(diffLen+1)
@@ -257,68 +318,99 @@ def SimpleCorr(seqdata, ran='no', rev='no'):
         #RNA
         incrEnsRNA[0].append(incrRNA[0])
         incrEnsRNA[1].append(incrRNA[1])
+
         #DNA
         incrEnsDNA[0].append(incrDNA[0])
         incrEnsDNA[1].append(incrDNA[1])
+
     #RNA
     incrEnsRNA[0] = np.array(incrEnsRNA[0]).transpose() #transposing
     incrEnsRNA[1] = np.array(incrEnsRNA[1]).transpose() #transposing
+
     #DNA
     incrEnsDNA[0] = np.array(incrEnsDNA[0]).transpose() #transposing
-    incrEnsDNA[1] = np.array(incrEnsDNA[1]).transpose() #transposing
+    incrEnsDNA[1] = np.array(incrEnsDNA[1]).transpose () #transposing
     # Calculating the different statistics
+
+    # RNA + DNA without expected energy
+    incrEnsRNADNA = incrEnsRNA[0] + incrEnsDNA[0]
+
+    RNADNA = []
+    for index in range(len(incrEnsRNADNA)):
+        RNADNA.append(scipy.stats.spearmanr(incrEnsRNADNA[index], PY))
+
     #RNA
     incrWithExp20RNA = []
     incrWithoExp20RNA = []
     for index in range(len(incrEnsRNA[0])):
-        incrWithoExp20RNA.append(Workhouse.Spearman(incrEnsRNA[0][index], PY))
-        incrWithExp20RNA.append(Workhouse.Spearman(incrEnsRNA[1][index], PY))
+        incrWithoExp20RNA.append(scipy.stats.spearmanr(incrEnsRNA[0][index], PY))
+        incrWithExp20RNA.append(scipy.stats.spearmanr(incrEnsRNA[1][index], PY))
+
     #DNA
     incrWithExp20DNA = []
     incrWithoExp20DNA = []
     for index in range(len(incrEnsDNA[0])):
-        incrWithoExp20DNA.append(Workhouse.Spearman(incrEnsDNA[0][index], PY))
-        incrWithExp20DNA.append(Workhouse.Spearman(incrEnsDNA[1][index], PY))
-    #
+        incrWithoExp20DNA.append(scipy.stats.spearmanr(incrEnsDNA[0][index], PY))
+        incrWithExp20DNA.append(scipy.stats.spearmanr(incrEnsDNA[1][index], PY))
+
     arne = [incrWithExp20RNA, incrWithExp20DNA, incrWithoExp20RNA, incrWithoExp20DNA]
 
-    return arne
+    output = {}
+    output['RNA_{0} msat-corrected'.format(maxlen)] = arne[0]
+    output['DNA_{0} msat-corrected'.format(maxlen)] = arne[1]
+
+    output['RNA_{0} uncorrected'.format(maxlen)] = arne[2]
+    output['DNA_{0} uncorrected'.format(maxlen)] = arne[3]
+
+    output['RNADNA_{0} uncorrected'.format(maxlen)] = RNADNA
+
+    return output
 
 def ladPlot(lizt, reverse='no', pline='yes'):
     """ Printing the probability ladder for the ITS data. When nt = 5 on the
     x-axis the correlation coefficient of the corresponding y-value is the
     correlation coefficient of the binding energies of the ITS[0:5] sequences with PY.
     nt = 20 is the full length ITS binding energy-PY correlation coefficient.  """
-    arne = SimpleCorr(lizt, rev=reverse)
+    maxlen = 20
+    arne = SimpleCorr(lizt, rev=reverse, maxlen=maxlen)
     # The first element is the energy of the first 3 nucleotides
     start = 3
-    end = len(arne[2])+3
+    end = maxlen+1
     incrX = range(start, end)
-    WithExp20RNA = arne[0]
-    WithExp20DNA = arne[1]
-    WithoExp20RNA = arne[2]
-    WithoExp20DNA = arne[3]
+
+    WithoExp20RNA = arne['RNA_{0} uncorrected'.format(maxlen)]
+    WithoExp20DNA = arne['DNA_{0} uncorrected'.format(maxlen)]
+    WithoExp20RNADNA = arne['RNADNA_{0} uncorrected'.format(maxlen)]
+
     toplot1 = WithoExp20RNA #Always RNA smth
     toplot2 = WithoExp20DNA
+    toplot3 = WithoExp20RNADNA
+
     corr1 = [tup[0] for tup in toplot1]
     corr2 = [tup[0] for tup in toplot2]
+    corr3 = [tup[0] for tup in toplot3]
+
     # Making a figure the pythonic way
     if reverse == 'yes':
         ticklabels = [str(integer)+'-20' for integer in range(1,21-2)]
+
     xticklabels = [str(integer) for integer in range(3,21)]
     yticklabels = [str(integer) for integer in np.arange(0, 0.8, 0.1)]
 
     fig, ax = plt.subplots()
+
     ax.set_xticks(range(3,21))
     ax.set_xticklabels(xticklabels)
     ax.set_xlabel("Nucleotide from transcription start", size=26)
-    ax.set_ylabel("Spearman rank coefficient, $r$", size=26)
-    ax.plot(incrX, corr1, 'b', label='RNA/DNA', linewidth=2)
-    ax.plot(incrX, corr2, 'g', label='DNA/DNA', linewidth=2)
+    ax.set_ylabel("Correlation coefficient, $r$", size=26)
+    ax.plot(incrX, corr1, 'b', label='RNA-DNA', linewidth=2)
+    ax.plot(incrX, corr2, 'g', label='DNA-DNA', linewidth=2)
+    ax.plot(incrX, corr3, 'c', label='RNA-DNA + DNA-DNA', linewidth=2)
 
     if pline == 'yes':
         pval = PvalDeterminer(toplot1)
         ax.axhline(y=pval, color='r', label='p = 0.05 threshold', linewidth=2)
+
     ax.legend(loc='upper left')
     ax.set_yticks(np.arange(0, 0.8, 0.1))
     ax.set_yticklabels(yticklabels)
@@ -332,11 +424,16 @@ def ladPlot(lizt, reverse='no', pline='yes'):
     fig.set_figwidth(9)
     fig.set_figheight(10)
 
-    for formt in ['pdf', 'eps', 'png']:
-        name = 'simplified_ladder.' + formt
-        odir = os.path.join(fig_dir, formt)
+    for fig_dir in fig_dirs:
+        for formt in ['pdf', 'eps', 'png']:
+            name = 'simplified_ladder.' + formt
 
-        fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+            odir = os.path.join(fig_dir, formt)
+
+            if not os.path.isdir(odir):
+                os.makedirs(odir)
+
+            fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
 def ITSgenerator_local(nrseq):
     """Generate list of nrseq RNA random sequences """
@@ -354,7 +451,7 @@ def LadderScrutinizer(lizt, n=10):
     msat = rowdata[-2]
     py = rowdata[2]
     # The real correlation ladder
-    arne = SimpleCorr(lizt)
+    arne = SimpleCorr(lizt, maxlen=20)
     laddA = [tup[0] for tup in arne[2]][:13]
     # Consider the ladder up to arne[6][15-3]. Rank these. Subtract a range(12).
     # This will be deviation from perfect linear increase. This is the score.
@@ -375,7 +472,7 @@ def LadderScrutinizer(lizt, n=10):
         enRNA = [Energycalc.PhysicalRNA(seq, msat, msatyes) for seq in ranITS]
         RNAen = [[[row[val][0] for row in enRNA], row[val][1]] for val in
                   range(len(enRNA[0]))]
-        corrz = [Workhouse.Spearman(enRNArow[0],py) for enRNArow in RNAen]
+        corrz = [scipy.stats.spearmanr(enRNArow[0],py) for enRNArow in RNAen]
         onlyCorr = np.array([tup[0] for tup in corrz])
         # Rank the correlation ladder
         ranLa = Orderrank.Order(onlyCorr[:13])
@@ -417,7 +514,7 @@ def Purine_RNADNA(repnr=100, ranNr=39, rand='biased', upto=20):
                 sequence = seq_iterator.next()[:upto]
             purTable[nr] = sequence.count('G') + sequence.count('A')
             enTable[nr] = Energycalc.RNA_DNAenergy(sequence)
-        cor, pval = Workhouse.Spearman(purTable, enTable)
+        cor, pval = scipy.stats.spearmanr(purTable, enTable)
         cor_vals.append(cor)
         p_vals.append(pval)
 
@@ -515,6 +612,9 @@ class ITS(object):
         self.rna_dna1_10 = Energycalc.RNA_DNAenergy(self.sequence[:10])
         self.rna_dna1_15 = Energycalc.RNA_DNAenergy(self.sequence[:15])
         self.rna_dna1_20 = Energycalc.RNA_DNAenergy(self.sequence)
+        self.dna_dna1_10 = Energycalc.DNA_DNAenergy(self.sequence[:10])
+        self.dna_dna1_15 = Energycalc.DNA_DNAenergy(self.sequence[:15])
+        self.dna_dna1_20 = Energycalc.DNA_DNAenergy(self.sequence)
         # Redlisted sequences 
         self.redlist = []
         self.redlisted = False
@@ -677,8 +777,8 @@ def HsuRandomTester(ITSs):
     purine_levs = [itr.sequence.count('G') + itr.sequence.count('A') for itr in ITSs]
     rna_dna15 = [itr.rna_dna1_15 for itr in ITSs]
     rna_dna20 = [itr.rna_dna1_20 for itr in ITSs]
-    rho15, p15 = Workhouse.Spearman(purine_levs, rna_dna15)
-    rho20, p20 = Workhouse.Spearman(purine_levs, rna_dna20)
+    rho15, p15 = scipy.stats.spearmanr(purine_levs, rna_dna15)
+    rho20, p20 = scipy.stats.spearmanr(purine_levs, rna_dna20)
 
     print sumgatc
     total = sum(sumgatc) # Should be 43*20 = 860
@@ -744,12 +844,12 @@ def PurineLadder(ITSs):
     a_ladd = np.array([itr.a_ladder for itr in ITSs])
     PYs = np.array([itr.PY for itr in ITSs])
     energies = np.array([itr.energy_ladder for itr in ITSs])
-    pur_corr = [Workhouse.Spearman(pur_ladd[:,row], PYs) for row in range(18)]
-    a_corr = [Workhouse.Spearman(a_ladd[:,row], PYs) for row in range(18)]
-    en_corr = [Workhouse.Spearman(a_ladd[:,row], energies[:,row]) for row in range(18)]
+    pur_corr = [scipy.stats.spearmanr(pur_ladd[:,row], PYs) for row in range(18)]
+    a_corr = [scipy.stats.spearmanr(a_ladd[:,row], PYs) for row in range(18)]
+    en_corr = [scipy.stats.spearmanr(a_ladd[:,row], energies[:,row]) for row in range(18)]
     # The correlation between purines and the Hsu R-D energies (quoted as 0.457
     # for up to 20)
-    pur_en_corr = [Workhouse.Spearman(pur_ladd[:,row], energies[:,row]) for row in range(18)]
+    pur_en_corr = [scipy.stats.spearmanr(pur_ladd[:,row], energies[:,row]) for row in range(18)]
 
     for row in pur_en_corr:
         print row
@@ -789,7 +889,7 @@ def PurineLadder(ITSs):
     # because 
     en15s = [Energycalc.RNA_DNAenergy(itr.sequence[:15]) for itr in ITSs]
     pur15s = [itr.sequence[:15].count('A') + itr.sequence[:15].count('G') for itr in ITSs]
-    fck_corr = Workhouse.Spearman(en15s, pur15s)
+    fck_corr = scipy.stats.spearmanr(en15s, pur15s)
 
 def ReadAndFixData():
     """ Read Hsu paper-data and Hsu normalized data. """
@@ -846,7 +946,6 @@ def ScatterPlotter(lizt, ITSs, model='physical', stds='no'):
         name = 'simplified_scatter_PY_vs_RNADNA'
 
     if stds == 'yes':
-        name = name + '_stds'
         ax.errorbar(one_20s,PYs,yerr=PYs_std,fmt='ro')
     else:
         ax.scatter(one_20s, PYs)
@@ -866,11 +965,19 @@ def ScatterPlotter(lizt, ITSs, model='physical', stds='no'):
     fig.set_figwidth(9)
     fig.set_figheight(10)
 
-    for formt in ['pdf', 'eps', 'png']:
-        name = name + '.' + formt
-        odir = os.path.join(fig_dir, formt)
+    for fig_dir in fig_dirs:
+        for formt in ['pdf', 'eps', 'png']:
+            if stds == 'yes':
+                fname = name + '_stds.' + formt
+            else:
+                fname = name + '.' + formt
 
-        fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+            odir = os.path.join(fig_dir, formt)
+
+            if not os.path.isdir(odir):
+                os.makedirs(odir)
+
+            fig.savefig(os.path.join(odir, fname), transparent=True, format=formt)
 
 def PaperResults(lizt, ITSs):
     """Produce all the results that should be included in the paper."""
@@ -891,12 +998,14 @@ def PaperResults(lizt, ITSs):
     ## RESULT: correlation 0.28, p = 0.09 for just DNA at 20, physical model.
     #
     # Plots for the physical model
-    CorrelatorPlotter(lizt) # the ladder plot
-    ScatterPlotter(lizt, ITSs, model='physical', stds='yes') # the scatter plot
+    #CorrelatorPlotter(lizt) # the ladder plot
+    #ScatterPlotter(lizt, ITSs, model='physical', stds='yes') # the scatter plot
+    #ScatterPlotter(lizt, ITSs, model='physical', stds='no') # the scatter plot
     #
     # #################### Simplifided model RESULTS #########################
     #
-    #arne = SimpleCorr(lizt, rev='no')
+    #simple_correlation = SimpleCorr(lizt, rev='no', maxlen=20)
+
     #WithExp20RNA = arne[0]
     ## RESULT correlation 0.52, p = 0.0007 at 20, RNA w/Exp en, simplified model.
     #WithExp20DNA = arne[1]
@@ -905,36 +1014,308 @@ def PaperResults(lizt, ITSs):
     ## RESULT correlation 0.50, p = 0.001 at 20, RNA w/o/Exp en, simplified model.
     #WithoExp20DNA = arne[3]
     ## RESULT correlation 0.20, p = 0.21 at 20, RNA w/o/Exp en, simplified model.
-    #
-    # Plots for the simplified model
-    ladPlot(lizt) # ladder plot simplified
-    ScatterPlotter(lizt, ITSs, model='simplified', stds='yes') # the scatter plot
 
-def Main():
+    # Scatter plot of 1-20 RNA-DNA and DNA-DNA
+    #simple_corr_scatter(ITSs, stds='yes')
+    simple_corr_scatter(ITSs, stds='no')
+    # Plots for the simplified model
+
+    #ladPlot(lizt) # ladder plot simplified
+
+    #ScatterPlotter(lizt, ITSs, model='simplified', stds='yes') # the scatter plot
+
+def simple_corr_scatter(ITSs, stds='yes'):
+    """
+    Contrast the scatterplots of the RNA-DNA energy with the DNA-DNA energy
+    """
+
+    name = '1_20_scatter_comparison_RD_DD'
+
+    fig, axes = plt.subplots(1, 2, sharey=True)
+
+    rna_one_20s = [its.rna_dna1_20 for its in ITSs] # simply the 1-20 energy
+    dna_one_20s = [its.dna_dna1_20 for its in ITSs] # simply the 1-20 energy
+
+    energies = [rna_one_20s, dna_one_20s]
+
+    PYs = [itr.PY for itr in ITSs]
+    PYs_std = [itr.PY_std for itr in ITSs]
+
+    # attempting log-transform
+    #PYs = [np.log2(val) for val in PYs]
+    #PYs_std = [np.log2(val) for val in PYs_std]
+
+    fmts = ['ro', 'go']
+
+    for ax_nr, ax in enumerate(axes):
+        this_en = energies[ax_nr]
+        if stds == 'yes':
+            ax.errorbar(this_en, PYs, yerr=PYs_std, fmt=fmts[ax_nr])
+        else:
+            ax.scatter(this_en, PYs, color=fmts[ax_nr][:1])
+
+        corrs = scipy.stats.spearmanr(this_en, PYs)
+
+        header = 'r = {0:.2f}, p = {1:.3f}'.format(corrs[0], corrs[1])
+        ax.set_title(header, size=25)
+
+        if ax_nr == 0:
+            ax.set_ylabel("Productive yield ", size=23)
+            ax.set_xlabel("RNA-DNA energy ($\Delta G$)", size=23)
+        else:
+            ax.set_xlabel("DNA-DNA energy ($\Delta G$)", size=23)
+
+        # awkward way of setting the tick sizes
+        for l in ax.get_xticklabels():
+            l.set_fontsize(18)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(18)
+
+    fig.set_figwidth(20)
+    fig.set_figheight(10)
+
+    for formt in ['pdf', 'eps', 'png']:
+
+        if stds == 'yes':
+            fname = name + '_stds.' + formt
+        else:
+            fname = name + '.' + formt
+
+        for fig_dir in fig_dirs:
+            odir = os.path.join(fig_dir, formt)
+
+            if not os.path.isdir(odir):
+                os.makedirs(odir)
+
+            fpath = os.path.join(odir, fname)
+
+            fig.savefig(fpath, transparent=True, format=formt)
+
+
+def genome_wide():
+    """
+    Check if there is an RNA-DNA correlation for the ITS in the genome in
+    general. Compare the RNA-DNA energy for the different promoters with
+
+    1) Random sites in the e coli genome
+    2) Shuffled +1 to +20(15) sites
+
+    Most are promoters are compuattionally annotated
+
+     11 [HIPP|W|Human inference of promoter position],[AIPP|W|Automated inference of promoter position]
+     11 [HIPP|W|Human inference of promoter position],[ICA|W|Inferred by computational analysis]
+     11 [TIM|S|Transcription initiation mapping],[HIPP|W|Human inference of promoter position],[IMP|W|Inferred from mutant phenotype]
+     13 [TIM|S|Transcription initiation mapping],[IMP|W|Inferred from mutant phenotype]
+     15 [HIPP|W|Human inference of promoter position],[IEP|W|Inferred from expression pattern]
+     15 [IDA|W|Inferred from direct assay],[IEP|W|Inferred from expression pattern]
+     20 [TIM|S|Transcription initiation mapping],[HTTIM|S|High-throughput transcription initiation mapping]
+     27 [TIM|S|Transcription initiation mapping],[ICA|W|Inferred by computational analysis],[AIPP|W|Automated inference of promoter position]
+     33 [TIM|S|Transcription initiation mapping],[AIPP|W|Automated inference of promoter position]
+     61 [IEP|W|Inferred from expression pattern]
+     96 [AIPP|W|Automated inference of promoter position]
+    134 [HIPP|W|Human inference of promoter position]
+    153 [HIPP|W|Human inference of promoter position],[TIM|S|Transcription initiation mapping]
+    186 [TIM|S|Transcription initiation mapping],[HIPP|W|Human inference of promoter position]
+    261 [HTTIM|S|High-throughput transcription initiation mapping]
+    579 [TIM|S|Transcription initiation mapping]
+   1777 [ICWHO|W|Inferred computationally without human oversight]
+    """
+
+    # 1) Get the RNA-DNA energies for the different sigma-promoters, both std
+    # and mean
+    sigprom_dir = 'sequence_data/ecoli/sigma_promoters'
+    sig_paths = glob(sigprom_dir+'/*')
+
+    sig_dict = {}
+    for path in sig_paths:
+        fdir, fname = os.path.split(path)
+        sig_dict[fname[8:15]] = path
+
+    # parse the promoters and get the energies
+    sig_energies = {}
+    sig_jumbl_energies = {}
+
+    #
+    clen = 20
+
+    gc_count_sigma = []
+
+    all_energies = []
+
+    for sigmaType, sigpath in sig_dict.items():
+        at_count = []
+        energies = []
+        jumbl_energies = []
+        for line in open(sigpath, 'rb'):
+            # skip the silly header
+
+            if line == '\n' or line.startswith('#') or line.startswith('\t'):
+                continue
+
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+            # one sequence like this 
+            if seq == '':
+                continue
+
+            #if 'TIM' not in evidence:
+                #continue
+
+            if clen == 20:
+                its = seq[-20:].upper()
+            else:
+                its = seq[-20:-(20-clen)].upper()
+
+            # count gc content
+            gc_count_sigma.append(its.count('G') + its.count('C'))
+
+            jumbl_its = ''.join([its[np.random.randint(clen)] for v in
+                                 range(clen)])
+            energies.append(Energycalc.RNA_DNAenergy(its))
+            all_energies.append(Energycalc.RNA_DNAenergy(its))
+
+            jumbl_energies.append(Energycalc.RNA_DNAenergy(jumbl_its))
+
+            at_count.append(its.count('A') + its.count('T'))
+
+        sig_energies[sigmaType] = (np.mean(energies), np.std(energies))
+        sig_jumbl_energies[sigmaType] = (np.mean(jumbl_energies), np.std(jumbl_energies))
+
+        print sigmaType, np.mean(at_count), np.std(at_count)
+
+    # get energies for 10000 random locations in e coli genome
+    ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
+    ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
+    drawlen = len(ecoli_seq) - clen
+
+    gc_count_rand = []
+
+    debug()
+    rand_at = []
+    randenergies = []
+    jumbl_randenergies = []
+    for rnr in range(100000):
+        rand_pos = np.random.random_integers(drawlen)
+        randseq = ecoli_seq[rand_pos:rand_pos+clen]
+
+        gc_count_sigma.append(its.count('G') + its.count('C'))
+        gc_count_rand.append(randseq.count('G') + randseq.count('C'))
+
+        rand_at.append(randseq.count('A') + randseq.count('T'))
+
+        randenergies.append(Energycalc.RNA_DNAenergy(randseq))
+
+        jumbl_rs = ''.join([randseq[np.random.randint(clen)] for v in range(clen)])
+        jumbl_randenergies.append(Energycalc.RNA_DNAenergy(jumbl_rs))
+
+    print 'random at count', np.mean(rand_at)
+    print 'std at count', np.std(rand_at)
+    print ''
+    print 'random mean energies', np.mean(randenergies)
+    print 'random std energies', np.std(randenergies)
+    print ''
+    print 'random jumbl mean energies', np.mean(jumbl_randenergies)
+    print 'random jumbl std energies', np.std(jumbl_randenergies)
+    print ''
+
+    #print 'jumbled mean energies', np.mean(randenergies)
+    #print 'jumbled std energies', np.std(randenergies)
+
+    print ''
+    print 'all promoters mean and std', np.mean(all_energies), np.std(all_energies)
+    print ''
+
+    for sigm in sig_energies.keys():
+        print sigm, 'original mean and std', sig_energies[sigm]
+        print sigm, 'jumbled mean and std', sig_jumbl_energies[sigm]
+
+    print 'sigma gc rate', sum(gc_count_sigma)/(len(gc_count_sigma)*clen)
+    print 'random gc rate', sum(gc_count_rand)/(len(gc_count_rand)*clen)
+
+    fig, ax = plt.subplots(1)
+    ax.hist(randenergies, bins=40, alpha=0.5, color='g', label='Random',
+            normed=True)
+    ax.hist(all_energies, bins=40, alpha=0.85, color='b', label='Promoter ITS',
+           normed=True)
+
+    #ax.set_title = '\mu_random = -22.5, \mu_ITS = -20.1'
+
+    ax.legend()
+
+    for fig_dir in fig_dirs:
+        for formt in ['pdf', 'eps', 'png']:
+
+            name = 'ITS_rand_distribution_comparison.' + formt
+            odir = os.path.join(fig_dir, formt)
+
+            if not os.path.isdir(odir):
+                os.makedirs(odir)
+
+            fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+
+    alpha = 0.001
+    n1 = len(all_energies)
+    n2 = len(randenergies)
+    mean1 = np.mean(all_energies)
+    mean2 = np.mean(randenergies)
+
+    # standard error of the mean is std / sqrt(n)
+    sem1 = np.std(all_energies) / np.sqrt(n1)
+    sem2 = np.std(randenergies) / np.sqrt(n1)
+
+    welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
+
+
+def main():
     lizt, ITSs = ReadAndFixData() # read raw data
-    #lizt, ITSs = StripSet(4, lizt, ITSs) # strip promoters (0 for nostrip)
+    #lizt, ITSs = StripSet(2, lizt, ITSs) # strip promoters (0 for nostrip)
     PaperResults(lizt, ITSs)
+
     #NewEnergyAnalyzer(ITSs) # going back to see the energy-values again
     #RedlistInvestigator(ITSs)
     #RedlistPrinter(ITSs)
     #HsuRandomTester(ITSs)
     #PurineLadder(ITSs)
 
-    # Testing figure stretching
+    genome_wide()
 
-    #bob = plt.figure()
-    #axx = bob.add_subplot(111)
-    #axx.plot([1,2,3], [1,2,2])
-    #print bob.get_figwidth()
-    #print bob.get_figheight()
-    #bob.savefig('/home/jorgsk/testfig_default_really.eps', format='eps')
-    #bob.set_figwidth(7)
-    #bob.set_figheight(9)
-    #bob.savefig('/home/jorgsk/testfig_landscape.eps', format='eps')
+    #return lizt, ITSs
 
-    return lizt, ITSs
+#dna = Energycalc.NNDD
+#rna = Energycalc.NNRD
 
-lizt, ITSs = Main()
+#dna_en = []
+#rna_en = []
+
+#for term in rna.keys():
+    #if term in dna and term in rna and term != 'Initiation':
+        #dna_en.append(dna[term])
+        #rna_en.append(rna[term])
+
+#plt.scatter(dna_en, rna_en)
+#plt.plot([-3, 0], [-3, 0])
+#plt.show()
+#debug()
+
+if __name__ == '__main__':
+    main()
+    #lizt, ITSs = main()
+
+# IDEA: If there is a selection pressure for RNA-DNA energy at the ITS, it
+# should be visible in promoters all over. Check annotated ITS versus random
+# sequence, and also against jumbled ITS sequence
+# RESULT random 15-mers have higher RNA-DNA binding energy than promoter ITS.
+# Naturally, the AT-count determines this. Is this entirely explained from the
+# 5' folding energy? Or can we say that this is another contributing factor to
+# having high AT content at the ITS of promoters? What if we look at promoters
+# with long UTRS (+50), does the correlation then still hold?
+# RESULT variance of the RNA-DNA energy increases for randomly jumbled sequence,
+# both for ITS and control. What could be the cause of this? Maybe I need to use
+# promoters where the UTR is at least XX nucleotides, because this value could
+# be biased by codons, where the NT-order is highly non-random.
+# TODO find long 5UTRs. It's a pain in the ass to find good annotated regions. I
+# think you have to intersect the CDS in the gtf file with the transcription
+# start sites from the sigma files. Then you'll get the 5'UTRs. Chose only those
+# that are long. But that can wait.
 
 # IDEA: compare the energies of Hsu's set with random sequences using a QQ plot.
 # QQ plots are a graphical way of comparing two distributions. Another way would
@@ -984,6 +1365,8 @@ lizt, ITSs = Main()
 # alternatively see if there is no variation in 2nt products when normalized by
 # some factor. TODO really investigate this. What causes the difference in the
 # 2-and 3nt bands? This could be crucial.
+# RESULT: 2012 comment, the 2-band could just be a source of inaccuracy in the
+# experiments
 
 # TODO -10-like sequences in the exposed non-template
 # strand? Might hamper expression. Sigma intervention!!
