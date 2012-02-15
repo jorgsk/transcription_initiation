@@ -1348,14 +1348,7 @@ def NewSimpleCorr(seqdata, energy_function, maxlen=20):
 
     return output
 
-def New_Correlatvalues(lizt, ITSs):
-    """
-    New values for dinucleotide pyrophosphate addition have been published. How
-    do these data correlate with your values?
-
-    For easiest correlation, make the ladder.
-    """
-
+def new_ladder(lizt):
     """ Printing the probability ladder for the ITS data. When nt = 5 on the
     x-axis the correlation coefficient of the corresponding y-value is the
     correlation coefficient of the binding energies of the ITS[0:5] sequences with PY.
@@ -1368,9 +1361,10 @@ def New_Correlatvalues(lizt, ITSs):
 
     name2func = [('r_f', resistant_fraction), ('k1', k1), ('k1_mins', kminus1),
                  ('Keq', Keq_EC8_EC9)]
-    name2func = [('r_f', resistant_fraction), ('k1', k1), ('k1_mins', kminus1),
-                 ('Keq', Keq_EC8_EC9)]
+    # The r_f, k1, and K_eq correlate (r_f positively and k1 and K_eq negatively
+    name2func = [('r_f', resistant_fraction)]
 
+    plt.ion()
     fig, ax = plt.subplots()
     for name, energy_func in name2func:
         arne = NewSimpleCorr(lizt, energy_func, maxlen=maxlen)
@@ -1383,6 +1377,7 @@ def New_Correlatvalues(lizt, ITSs):
         corr1 = [tup[0] for tup in toplot1]
 
         ax.plot(incrX, corr1, label=name, linewidth=2)
+
 
     xticklabels = [str(integer) for integer in range(3,21)]
     yticklabels = [str(integer) for integer in np.arange(-1, 1, 0.1)]
@@ -1411,7 +1406,6 @@ def New_Correlatvalues(lizt, ITSs):
 
     plt.show()
 
-    debug()
     #for fig_dir in fig_dirs:
         #for formt in ['pdf', 'eps', 'png']:
             #name = 'simplified_ladder.' + formt
@@ -1423,9 +1417,20 @@ def New_Correlatvalues(lizt, ITSs):
 
             #fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
+
+def New_Correlatvalues(lizt, ITSs):
+    """
+    New values for dinucleotide pyrophosphate addition have been published. How
+    do these data correlate with your values?
+
+    For easiest correlation, make the ladder.
+    """
+    new_ladder(lizt)
+
+
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
-    #lizt, ITSs = StripSet(2, lizt, ITSs) # strip promoters (0 for nostrip)
+    #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
     #PaperResults(lizt, ITSs)
 
     #NewEnergyAnalyzer(ITSs) # going back to see the energy-values again
@@ -1437,6 +1442,9 @@ def main():
     #genome_wide()
 
     New_Correlatvalues(lizt, ITSs)
+    # RESULTS you have new correlation values that are better
+    # New title: The duration of abortive transcription initiation is regulated
+    # by the rate of incorporation of p
 
 
 ############ Small test to correlate rna-dna and dna-dna energies ############
