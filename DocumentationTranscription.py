@@ -36,8 +36,8 @@ else:
     def debug():
         pass
 
-matplotlib.rc('text', usetex=True)  # Using latex in labels in plot
-matplotlib.rc('font', family='serif')  # Setting font family in plot text
+#matplotlib.rc('text', usetex=True)  # Using latex in labels in plot
+#matplotlib.rc('font', family='serif')  # Setting font family in plot text
 
 # Locations of input data
 hsu1 = '/Hsu/csvHsu'
@@ -1264,11 +1264,169 @@ def genome_wide():
 
     welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
 
+def dimer_calc(energy_function, seq):
+    """
+    Use the dictionary 'energy_function' to cacluate the value of seq
+    """
+    def repl(n):
+        if n == 'T':
+            return 'U'
+        return n
+
+    indiv = [repl(l) for l in list(seq)] # splitting sequence into individual letters
+
+    # getting dinucleotides
+    neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
+    energy = sum([energy_function[nei] for nei in neigh])
+
+    return energy
+
+def NewSimpleCorr(seqdata, energy_function, maxlen=20):
+    """Calculate the correlation between RNA-DNA and DNA-DNA energies with PY
+    for incremental positions of the correlation window (0:3) to (0:20). Two
+    versions are returned: one where sequence-average expected energies are
+    added after msat and one where nothing is done for msat.
+    The rev='yes' option only gives meaningful result for
+    incremental without adding expected values."""
+
+    rowdata = [[row[val] for row in seqdata] for val in range(len(seqdata[0]))]
+    seqs = rowdata[1]
+
+    PY = rowdata[2]
+
+    msat = rowdata[-2]
+    # Calculating incremental energies from 3 to 20 with and without expected
+    # energies added after msat in incr[1]. incr[0] has incremental energies
+    # without adding expected energies after msat. NOTE E(4nt)+E(5nt)=E(10nt)
+    # causes diffLen+1
+
+    incrEnsRNA = [[], []] # 0 is withOut exp, 1 is With exp
+    start = 3 #nan for start 0,1, and 2. start =3 -> first is seq[0:3] (0,1,2)
+    for index, sequence in enumerate(seqs):
+        incrRNA = [[], []]
+
+        for top in range(start, maxlen+1):
+            # Setting the subsequences from which energy should be calculated
+            rnaRan = sequence[0:top]
+
+            tempRNA = dimer_calc(energy_function, rnaRan)
+
+            incrRNA[0].append(tempRNA)
+
+            # you are beyond msat -> calculate average energy
+            if top > msat[index]:
+                diffLen = top-msat[index]
+                #RNA
+                baseEnRNA = dimer_calc(energy_function, sequence[:int(msat[index])])
+                diffEnRNA = Energycalc.RNA_DNAexpected(diffLen+1)
+                incrRNA[1].append(baseEnRNA + diffEnRNA)
+
+            else:
+                incrRNA[1].append(tempRNA)
+        #RNA
+        incrEnsRNA[0].append(incrRNA[0])
+        incrEnsRNA[1].append(incrRNA[1])
+
+    #RNA
+    incrEnsRNA[0] = np.array(incrEnsRNA[0]).transpose() #transposing
+    incrEnsRNA[1] = np.array(incrEnsRNA[1]).transpose() #transposing
+
+    # Calculating the different statistics
+
+    #RNA
+    incrWithExp20RNA = []
+    incrWithoExp20RNA = []
+    for index in range(len(incrEnsRNA[0])):
+        incrWithoExp20RNA.append(scipy.stats.spearmanr(incrEnsRNA[0][index], PY))
+        incrWithExp20RNA.append(scipy.stats.spearmanr(incrEnsRNA[1][index], PY))
+
+    arne = [incrWithExp20RNA, incrWithoExp20RNA]
+
+    output = {}
+    output['RNA_{0} msat-corrected'.format(maxlen)] = arne[0]
+    output['RNA_{0} uncorrected'.format(maxlen)] = arne[1]
+
+    return output
+
+def New_Correlatvalues(lizt, ITSs):
+    """
+    New values for dinucleotide pyrophosphate addition have been published. How
+    do these data correlate with your values?
+
+    For easiest correlation, make the ladder.
+    """
+
+    """ Printing the probability ladder for the ITS data. When nt = 5 on the
+    x-axis the correlation coefficient of the corresponding y-value is the
+    correlation coefficient of the binding energies of the ITS[0:5] sequences with PY.
+    nt = 20 is the full length ITS binding energy-PY correlation coefficient.  """
+    maxlen = 20
+    pline = 'yes'
+
+    # use all energy functions from new article
+    from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
+
+    name2func = [('r_f', resistant_fraction), ('k1', k1), ('k1_mins', kminus1),
+                 ('Keq', Keq_EC8_EC9)]
+    name2func = [('r_f', resistant_fraction), ('k1', k1), ('k1_mins', kminus1),
+                 ('Keq', Keq_EC8_EC9)]
+
+    fig, ax = plt.subplots()
+    for name, energy_func in name2func:
+        arne = NewSimpleCorr(lizt, energy_func, maxlen=maxlen)
+        # The first element is the energy of the first 3 nucleotides
+        start = 3
+        end = maxlen+1
+        incrX = range(start, end)
+
+        toplot1 = arne['RNA_{0} uncorrected'.format(maxlen)]
+        corr1 = [tup[0] for tup in toplot1]
+
+        ax.plot(incrX, corr1, label=name, linewidth=2)
+
+    xticklabels = [str(integer) for integer in range(3,21)]
+    yticklabels = [str(integer) for integer in np.arange(-1, 1, 0.1)]
+
+    ax.set_xticks(range(3,21))
+    ax.set_xticklabels(xticklabels)
+    ax.set_xlabel("Nucleotide from transcription start", size=26)
+    ax.set_ylabel("Correlation coefficient, $r$", size=26)
+
+    if pline == 'yes':
+        pval = PvalDeterminer(toplot1)
+        ax.axhline(y=pval, color='r', label='p = 0.05 threshold', linewidth=2)
+
+    ax.legend(loc='upper left')
+    ax.set_yticks(np.arange(-1, 1, 0.1))
+    ax.set_yticklabels(yticklabels)
+
+    # awkward way of setting the tick font sizes
+    for l in ax.get_xticklabels():
+        l.set_fontsize(18)
+    for l in ax.get_yticklabels():
+        l.set_fontsize(18)
+
+    fig.set_figwidth(9)
+    fig.set_figheight(10)
+
+    plt.show()
+
+    debug()
+    #for fig_dir in fig_dirs:
+        #for formt in ['pdf', 'eps', 'png']:
+            #name = 'simplified_ladder.' + formt
+
+            #odir = os.path.join(fig_dir, formt)
+
+            #if not os.path.isdir(odir):
+                #os.makedirs(odir)
+
+            #fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(2, lizt, ITSs) # strip promoters (0 for nostrip)
-    PaperResults(lizt, ITSs)
+    #PaperResults(lizt, ITSs)
 
     #NewEnergyAnalyzer(ITSs) # going back to see the energy-values again
     #RedlistInvestigator(ITSs)
@@ -1276,10 +1434,12 @@ def main():
     #HsuRandomTester(ITSs)
     #PurineLadder(ITSs)
 
-    genome_wide()
+    #genome_wide()
 
-    #return lizt, ITSs
+    New_Correlatvalues(lizt, ITSs)
 
+
+############ Small test to correlate rna-dna and dna-dna energies ############
 #dna = Energycalc.NNDD
 #rna = Energycalc.NNRD
 
@@ -1295,6 +1455,7 @@ def main():
 #plt.plot([-3, 0], [-3, 0])
 #plt.show()
 #debug()
+############ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX ############
 
 if __name__ == '__main__':
     main()
