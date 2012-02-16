@@ -1134,7 +1134,6 @@ def genome_wide():
     # parse the promoters and get the energies
     sig_energies = {}
     sig_jumbl_energies = {}
-
     #
     clen = 20
 
@@ -1422,11 +1421,109 @@ def New_Correlatvalues(lizt, ITSs):
     """
     New values for dinucleotide pyrophosphate addition have been published. How
     do these data correlate with your values?
-
     For easiest correlation, make the ladder.
     """
     new_ladder(lizt)
 
+def new_genome():
+    """
+    For the -20,+20 of promoters, calculate the average of all your
+    scoring-dicts for each position.
+    """
+    sigprom_dir = 'sequence_data/ecoli/sigma_promoters'
+    sig_paths = glob(sigprom_dir+'/*')
+
+    sig_dict = {}
+    for path in sig_paths:
+        fdir, fname = os.path.split(path)
+        sig_dict[fname[8:15]] = path
+
+    from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
+    from Energycalc import NNRD, NNDD
+
+    #name2func = [('r_f', resistant_fraction), ('k1', k1), ('k1_mins', kminus1),
+                 #('Keq', Keq_EC8_EC9), ('RNA-DNA', NNRD), ('DNA-DNA', NNDD)]
+    name2func = [('r_f', resistant_fraction), ('RNA-DNA', NNRD), ('DNA-DNA', NNDD)]
+
+    names = [name for name, func in name2func]
+
+    # parse through all promoters, adding energy
+    for sigma, sigpath in sig_dict.items():
+
+        # one figure for each sigma
+        plt.ion()
+        fig, ax = plt.subplots()
+
+        row_nr = sum((1 for line in open(sigpath, 'rb')))
+        col_nr = 80
+
+        # dictionary for names with matrix for values
+        # there are 81 entries and each sigpath has a different length
+        vals = dict((name, np.zeros((row_nr, col_nr))) for name in names)
+
+        # you need to know the colum number for the 2d array
+        seq_logo = open(sigma+'_logo.fasta', 'wb')
+        for row_pos, line in enumerate(open(sigpath, 'rb')):
+
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+            if seq == '':
+                continue
+
+            seq_logo.write('>{0}\n{1}\n'.format(pr_id, seq.upper()))
+            #if 'TIM' not in evidence:
+                #continue
+
+            # not needed.
+            #before = seq[-62:-21].upper()
+            #after = seq[-21:].upper()
+            indiv = list(seq.upper()) # list of individual nucleotides
+            dinucs = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
+
+            for col_pos, dinuc in enumerate(dinucs):
+                for name, func in name2func:
+                    vals[name][row_pos, col_pos] = func[dinuc]
+
+        seq_logo.close()
+        # plot the damn things
+        # why do the matrix numbers change????
+        for name, data_matrix in vals.items():
+            means = np.mean(data_matrix, axis=0)
+
+            # subtract the mean from the mean!
+            norm_mean = means - np.mean(means)
+
+            ax.plot(norm_mean, label=name, linewidth=2)
+
+            #stds = np.std(data_matrix, axis=0)
+            #ax.plot(stds, label=name + '_std')
+
+        ax.legend(loc='upper left')
+        ax.set_title(sigma)
+
+    # get energies for 10000 random locations in e coli genome
+    ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
+    ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
+    drawlen = len(ecoli_seq) - clen
+
+    gc_count_rand = []
+
+    debug()
+    rand_at = []
+    randenergies = []
+    jumbl_randenergies = []
+    for rnr in range(100000):
+        rand_pos = np.random.random_integers(drawlen)
+        randseq = ecoli_seq[rand_pos:rand_pos+clen]
+
+        gc_count_sigma.append(its.count('G') + its.count('C'))
+        gc_count_rand.append(randseq.count('G') + randseq.count('C'))
+
+        rand_at.append(randseq.count('A') + randseq.count('T'))
+
+        randenergies.append(Energycalc.RNA_DNAenergy(randseq))
+
+        jumbl_rs = ''.join([randseq[np.random.randint(clen)] for v in range(clen)])
+        jumbl_randenergies.append(Energycalc.RNA_DNAenergy(jumbl_rs))
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
@@ -1441,11 +1538,47 @@ def main():
 
     #genome_wide()
 
-    New_Correlatvalues(lizt, ITSs)
-    # RESULTS you have new correlation values that are better
-    # New title: The duration of abortive transcription initiation is regulated
-    # by the rate of incorporation of p
+    new_genome()
 
+    #New_Correlatvalues(lizt, ITSs)
+    # RESULTS you have new correlation values that are better
+
+    # for scatter-plot: include error bars for both PY and measurements :) They
+    # are bound to form a nice shape.
+
+    # maybe it's time for another visit at the AB values? Is there high abortive
+    # probability just at certain dinucleotides which correspond to those whose
+    # translocation is short?
+
+# Background
+
+# Abortive iniitiaton, found everywhere 
+# Previous attempts; correlation with purines; attempt to correlate with RNA-DNA
+# and DNA-DNA values using a thermodynamic model. Here we show that the best
+# correlators are kinetic parameters for pyrophosphorylation
+# How does this change the angle?
+
+# 1) Mechanism for ITS-dependent abortive initiation is not known.
+# 2) It has been suggested that the RNA-DNA hybrid is not involved in abortive
+# initiation. Others have suggested that the DNA-DNA hybrid could play a part.
+# It is known that promoters have higher DNA-DNA energies than random DNA.
+# 3) Previous model has used DNA-DNA and RNA-DNA parameters, inspired by other
+# models of translation elongation.
+# 4) We show that the di-nucleotide dependent pyrophosphatase correlates
+# strongly with duration of abortive cycling. We also show that for the
+# previously suggested DNA-DNA there is no correlation, in agreement with recent
+# results. For the RNA-DNA parameter there is some correlation, but weaker than
+# for pyrophosphatase. This must be discussed.
+
+# What did you conclude about the sum? Maybe ignore them.
+
+# This explains the ITS-sequence dependence of abortive cycling. A model is
+# where abortion of transcription initiation happens stochastically; the more
+# likely pausing occurs in early transcription, the more likely it is that
+# transcription will be aborted.
+# idea: put all +/- promoters in a matrix and calculate the di-nucleotide/
+# RNA-DNA / DNA-DNA energies for these values.
+# Include the same but for random positions in the genome
 
 ############ Small test to correlate rna-dna and dna-dna energies ############
 #dna = Energycalc.NNDD
