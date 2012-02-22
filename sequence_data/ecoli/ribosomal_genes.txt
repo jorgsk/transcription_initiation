@@ -1,0 +1,91 @@
+EG10260	b0595	entB	EntB monomer	P0ADI4	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	626917	627774	entG				enterochelin (enterobactin)	Non-ribosomal peptide synthetase	membrane	cytoplasm
+EG10264	b0586	entF	aryl carrier protein / serine activating enzyme		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	613380	617261					enterochelin (enterobactin)	Coenzyme A and its modification	Non-ribosomal peptide synthetase	Fe aquisition
+EG30070	b3855	rrfA	5S ribosomal RNA (rrfA)		#<TU0-14533 instance frame in ECOBASE[F] @ #x1025686bc2>	4038540	4038659					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30071	b3971	rrfB	rrfB 5S ribosomal RNA		#<TU0-14528 instance frame in ECOBASE[F] @ #x1025686f82>	4169660	4169779					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30072	b3759	rrfC	rrfC 5S ribosomal RNA		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3944723	3944842					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30073	b3274	rrfD	rrfD 5S ribosomal RNA		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3421809	3421690					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30074	b4010	rrfE	rrfE 5S ribosomal RNA		#<TU0-14530 instance frame in ECOBASE[F] @ #x1025686e02>	4211063	4211182					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30075	b2588	rrfG	rrfG 5S ribosomal RNA		#<TU0-14510 instance frame in ECOBASE[F] @ #x1025687ac2>	2724210	2724091					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30076	b0205	rrfH	rrfH 5S ribosomal RNA		#<TU0-14524 instance frame in ECOBASE[F] @ #x10256871c2>	228756	228875					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30077	b3854	rrlA	23S ribosomal RNA (rrlA)		#<TU0-14533 instance frame in ECOBASE[F] @ #x1025686bc2>	4035542	4038446					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30078	b3970	rrlB	rrlB 23S ribosomal RNA		#<TU0-14528 instance frame in ECOBASE[F] @ #x1025686f82>	4166664	4169567					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30079	b3758	rrlC	rrlC 23S ribosomal RNA		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3941727	3944630					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30080	b3275	rrlD	rrlD 23S ribosomal RNA		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3424805	3421902					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30081	b4009	rrlE	rrlE 23S ribosomal RNA		#<TU0-14530 instance frame in ECOBASE[F] @ #x1025686e02>	4208066	4210969					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30082	b2589	rrlG	rrlG 23S ribosomal RNA		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	2727206	2724303					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30083	b0204	rrlH	rrlH 23S ribosomal RNA		#<TU0-14524 instance frame in ECOBASE[F] @ #x10256871c2>	225759	228662					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30084	b3851	rrsA	16S ribosomal RNA (rrsA)		#<TU0-14486 instance frame in ECOBASE[F] @ #x1025688842>	4033554	4035095					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30085	b3968	rrsB	rrsB 16S ribosomal RNA		#<TU0-3364 instance frame in ECOBASE[F] @ #x102567a502>	4164682	4166223					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30086	b3756	rrsC	rrsC 16S ribosomal RNA		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3939831	3941372					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30087	b3278	rrsD	rrsD 16S ribosomal RNA		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3426784	3425243					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30088	b4007	rrsE	rrsE 16S ribosomal RNA		#<TU0-14487 instance frame in ECOBASE[F] @ #x1025688782>	4206170	4207711					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30089	b2591	rrsG	rrsG 16S ribosomal RNA		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	2729179	2727638					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30090	b0201	rrsH	rrsH 16S ribosomal RNA		#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	223771	225312					rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG30091	b3272	rrfF	rrfF 5S ribosomal RNA		#<TU0-42221 instance frame in ECOBASE[F] @ #x10256511c2>	3421564	3421445	rrfDbeta	rrfD-beta	rrvD		rRNA, stable RNA	translation	ribosomes	cytoplasm
+EG10864	b3984	rplA	50S ribosomal subunit protein L1	P0A7L0	#<TU0-6512 instance frame in ECOBASE[F] @ #x1026c5b602>	4176902	4177606	rpy				ribosomal proteins	translation	ribosomes	cytoplasm
+EG10881	b1716	rplT	50S ribosomal subunit protein L20	P0A7L3	#<TU0-14257 instance frame in ECOBASE[F] @ #x10256901c2>	1797773	1797417	pdzA				ribosomal proteins	translation	ribosomes	cytoplasm
+EG10907	b3306	rpsH	30S ribosomal subunit protein S8	P0A7W7	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3444567	3444175					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10892	b3703	rpmH	50S ribosomal subunit protein L34	P0A7P5	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3882359	3882499	rimA	ssaF			ribosomal proteins	translation	ribosomes	cytoplasm
+EG10919	b0023	rpsT	30S ribosomal subunit protein S20	P0A7U7	#<TU0-7844 instance frame in ECOBASE[F] @ #x1026c2e842>	21078	20815	supS	sup(s20)	supS20		ribosomal proteins	translation	ribosomes	cytoplasm
+EG10865	b3317	rplB	50S ribosomal subunit protein L2	P60422	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3449386	3448565					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10866	b3320	rplC	50S ribosomal subunit protein L3	P60438	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3450948	3450319					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10867	b3319	rplD	50S ribosomal subunit protein L4	P60723	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3450308	3449703	eryA				ribosomal proteins	translation	ribosomes	translation attenuation and efficiency
+EG10868	b3308	rplE	50S ribosomal subunit protein L5	P62399	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3445460	3444921					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10869	b3305	rplF	50S ribosomal subunit protein L6	P0AG55	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3444162	3443629					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10870	b4203	rplI	50S ribosomal subunit protein L9	P0A7R1	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	4424131	4424580					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10871	b3985	rplJ	50S ribosomal subunit protein L10	P0A7J3	#<TU0-6512 instance frame in ECOBASE[F] @ #x1026c5b602>	4178019	4178516					ribosomal proteins	translation	ribosomes	translation attenuation and efficiency
+EG10872	b3983	rplK	50S ribosomal subunit protein L11	P0A7J7	#<TU0-6512 instance frame in ECOBASE[F] @ #x1026c5b602>	4176470	4176898	relC				ribosomal proteins	translation	ribosomes	cytoplasm
+EG10873	b3986	rplL	50S ribosomal subunit protein L7		#<TU0-8464 instance frame in ECOBASE[F] @ #x1026c3e7a2>	4178583	4178948					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10874	b3231	rplM	50S ribosomal subunit protein L13	P0AA10	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3376673	3376245					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10875	b3310	rplN	50S ribosomal subunit protein L14	P0ADY3	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3446171	3445800					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10876	b3301	rplO	50S ribosomal subunit protein L15	P02413	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3442561	3442127					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10877	b3313	rplP	50S ribosomal subunit protein L16	P0ADY7	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3447191	3446781					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10878	b3294	rplQ	50S ribosomal subunit protein L17	P0AG44	#<TU0-14658 instance frame in ECOBASE[F] @ #x1025683682>	3438021	3437638					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10879	b3304	rplR	50S ribosomal subunit protein L18	P0C018	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3443619	3443266					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10880	b2606	rplS	50S ribosomal subunit protein L19	P0A7K6	#<TU0-42056 instance frame in ECOBASE[F] @ #x1025658f02>	2742552	2742205					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10882	b3315	rplV	50S ribosomal subunit protein L22	P61175	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3448255	3447923	eryB				ribosomal proteins	translation	ribosomes	cytoplasm
+EG10883	b3318	rplW	50S ribosomal subunit protein L23	P0ADZ0	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3449706	3449404					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10884	b3309	rplX	50S ribosomal subunit protein L24	P60624	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3445789	3445475					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10885	b2185	rplY	50S ribosomal subunit protein L25	P68919	#<TU0-41966 instance frame in ECOBASE[F] @ #x102565d582>	2280539	2280823					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10886	b3637	rpmB	50S ribosomal subunit protein L28	P0A7M2	#<TU0-5601 instance frame in ECOBASE[F] @ #x1026c4f282>	3809697	3809461					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10887	b3312	rpmC	50S ribosomal subunit protein L29	P0A7M6	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3446781	3446590					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10888	b3302	rpmD	50S ribosomal subunit protein L30	P0AG51	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3442744	3442565					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10889	b3936	rpmE	50S ribosomal subunit protein L31	P0A7M9	#<TU0-8506 instance frame in ECOBASE[F] @ #x1026c3de62>	4125036	4125248					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10890	b1089	rpmF	50S ribosomal subunit protein L32	P0A7N4	#<TU0-1 instance frame in ECOBASE[F] @ #x10231fac12>	1146590	1146763					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10891	b3636	rpmG	50S ribosomal subunit protein L33	P0A7N9	#<TU0-5601 instance frame in ECOBASE[F] @ #x1026c4f282>	3809440	3809273					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10900	b0911	rpsA	30S ribosomal subunit protein S1	P0AG67	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	961218	962891	ssyF				ribosomal proteins	translation	ribosomes	cytoplasm
+EG10901	b0169	rpsB	30S ribosomal subunit protein S2	P0A7V0	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	189874	190599					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10902	b3314	rpsC	30S ribosomal subunit protein S3	P0A7V3	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3447905	3447204					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10903	b3296	rpsD	30S ribosomal subunit protein S4	P0A7V8	#<TU0-14658 instance frame in ECOBASE[F] @ #x1025683682>	3439697	3439077	ramA	sud(2)	sud2		ribosomal proteins	translation	ribosomes	cytoplasm
+EG10904	b3303	rpsE	30S ribosomal subunit protein S5	P0A7W1	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3443251	3442748	spc	eps	spcA		ribosomal proteins	translation	ribosomes	cytoplasm
+EG10905	b4200	rpsF	30S ribosomal subunit protein S6	P02358	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	4423141	4423536	sdgH				ribosomal proteins	translation	ribosomes	cytoplasm
+EG10906	b3341	rpsG	30S ribosomal subunit protein S7	P02359	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3472103	3471564					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10908	b3230	rpsI	30S ribosomal subunit protein S9	P0A7X3	#<TU0-42202 instance frame in ECOBASE[F] @ #x1025652182>	3376229	3375837					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10909	b3321	rpsJ	30S ribosomal subunit protein S10	P0A7R5	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3451292	3450981	nusE				ribosomal proteins	translation	ribosomes	transcriptional level
+EG10910	b3297	rpsK	30S ribosomal subunit protein S11	P0A7R9	#<TU0-14658 instance frame in ECOBASE[F] @ #x1025683682>	3440120	3439731					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10911	b3342	rpsL	30S ribosomal subunit protein S12	P0A7S3	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3472574	3472200	asuB	strA			ribosomal proteins	translation	ribosomes	cytoplasm
+EG10912	b3298	rpsM	30S ribosomal subunit protein S13	P0A7S9	#<TU0-14658 instance frame in ECOBASE[F] @ #x1025683682>	3440493	3440137					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10913	b3307	rpsN	30S ribosomal subunit protein S14	P0AG59	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3444906	3444601					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10914	b3165	rpsO	30S ribosomal subunit protein S15	P0ADZ4	#<TU0-8474 instance frame in ECOBASE[F] @ #x1026c0cea2>	3309706	3309437	secC				ribosomal proteins	translation	ribosomes	cytoplasm
+EG10915	b2609	rpsP	30S ribosomal subunit protein S16	P0A7T3	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	2744207	2743959					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10916	b3311	rpsQ	30S ribosomal subunit protein S17	P0AG63	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3446590	3446336	neaA				ribosomal proteins	translation	ribosomes	cytoplasm
+EG10917	b4202	rpsR	30S ribosomal subunit protein S18	P0A7T7	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	4423862	4424089					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10918	b3316	rpsS	30S ribosomal subunit protein S19	P0A7U3	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3448548	3448270					ribosomal proteins	translation	ribosomes	cytoplasm
+EG10920	b3065	rpsU	30S ribosomal subunit protein S21	P68679	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3208803	3209018					ribosomal proteins	translation	ribosomes	cytoplasm
+EG11231	b1717	rpmI	50S ribosomal subunit protein L35	P0A7Q1	#<TU0-14257 instance frame in ECOBASE[F] @ #x10256901c2>	1798023	1797826					ribosomal proteins	translation	ribosomes	cytoplasm
+EG11232	b3299	rpmJ	50S ribosomal subunit protein L36	P0A7Q6	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3440756	3440640	secX				ribosomal proteins	translation	ribosomes	cytoplasm
+EG11508	b1480	sra	30S ribosomal subunit protein S22	P68191	#<TU0-7141 instance frame in ECOBASE[F] @ #x1026c31be2>	1553987	1553850	rpsV				ribosomal proteins	translation	ribosomes	cytoplasm
+EG50001	b3186	rplU	50S ribosomal subunit protein L21	P0AG48	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3331473	3331162					ribosomal proteins	translation	ribosomes	cytoplasm
+EG50002	b3185	rpmA	50S ribosomal subunit protein L27	P0A7L8	#<TU0-42189 instance frame in ECOBASE[F] @ #x1025652b42>	3331141	3330884	rpz				ribosomal proteins	translation	ribosomes	cytoplasm
+EG10850	b4373	rimI	ribosomal-protein-S18-alanine N-acetyltransferase	P0A944	#<TU0-14216 instance frame in ECOBASE[F] @ #x1025691f02>	4606208	4606654					posttranslational modification	cytoplasm		
+EG10851	b1066	rimJ	ribosomal-protein-S5-alanine N-acetyltransferase	P0A948	#<TU0-8281 instance frame in ECOBASE[F] @ #x1026c1ff82>	1124785	1125369	tcp				posttranslational modification	cytoplasm		
+EG10853	b1427	rimL	ribosomal-protein-L12-serine acetyltransferase	P13857	#<TU0-6423 instance frame in ECOBASE[F] @ #x1026c125a2>	1496962	1497501					posttranslational modification	cytoplasm		
+EG11497	b3259	prmA	methyltransferase for 50S ribosomal subunit protein L11	P0A8T1	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	3407092	3407973	yhdI	prm-1			ribosomal proteins	posttranslational modification	cytoplasm	
+EG10852	b0852	rimK	ribosomal protein S6 modification protein	P0C0U4	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	891190	892092	nek				posttranslational modification			
+G6435	b0835	rimO	ribosomal protein S12 D88 methylthiotransferase	P0AEI4	#<TU0-8632 instance frame in ECOBASE[F] @ #x1026c1bd02>	877258	875933	yliG				posttranslational modification			
+G6468	b0905	ycaO	protein involved in &beta;-methylthiolation of ribosomal protein S12	P75838	#<TU0-13084 instance frame in ECOBASE[F] @ #x10231ebe52>	955855	954095					posttranslational modification			
+EG11153	b2608	rimM	ribosome maturation protein	P0A7X6	#<COLI-K12 instance frame in ECOBASE[F] @ #x1025685b22>	2743940	2743392	yfjA				ribosomal proteins	ribosomes		
+G6167	b0296	ykgM	predicted ribosomal protein	P0A7N1	#<TU0-12881 instance frame in ECOBASE[F] @ #x10231f49d2>	312001	311738					adaptations			
+G7358	b2619	ratA	50S ribosomal subunit-binding toxin of a predicted toxin-antitoxin pair	P0AGL5	#<TU0-13685 instance frame in ECOBASE[F] @ #x10256a9182>	2752786	2752310	yfjG				cell killing			
+G7319	b2511	der	50S ribosomal subunit stability factor	P0A6P5	#<TU-8385 instance frame in ECOBASE[F] @ #x10231fc7d2>	2635378	2633906	engA	yfgK			ribosomes			
+G0-10434	b4506	ykgO	predicted ribosomal protein		#<TU0-12881 instance frame in ECOBASE[F] @ #x10231f49d2>	311738	311598								

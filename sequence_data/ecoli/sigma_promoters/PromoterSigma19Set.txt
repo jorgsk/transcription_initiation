@@ -1,0 +1,1 @@
+ECK120010548	fecAp	reverse	4514750	Sigma19	tggataaacatttcaccactgtaaggaaaataattcttatttcgattgtcctttttacccTtctcgttcgactcatagctg	[HIPP|W|Human inference of promoter position],[TIM|S|Transcription initiation mapping],[RPF|S|RNA polymerase footprinting]

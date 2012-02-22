@@ -71,7 +71,7 @@ def PYHsu(filename):
 
     return b
 
-def Rahmi104():
+def Rahmi104(adapt):
     """ Read Rahmi's 104 sequences and return as dictionary. """
 #    Read the fixed Rahmi csv data and return a dict. 
     f = open(homedir+'/sequence_data/Rahmi/full_sequences_Fixed_for_all_FINAL','rt')
@@ -84,7 +84,25 @@ def Rahmi104():
         dicie[line[0]]['Uninduced'] = float(line[2])
         sequence = line[3].replace('-','') # removing nucleotide deletion markers
         dicie[line[0]]['Sequence'] = sequence
-    return dicie
+
+    # adapt to the format of Hsu
+    if adapt:
+        lazt = []
+        for name, subdict in dicie.items():
+
+            # make entry in format accepted by downstream analysis
+            entry = []
+            entry.append(name)
+            entry.append(subdict['Sequence'][:20].replace('U', 'T'))
+            entry.append(subdict['Induced'])
+            entry = entry + [1 for i in range(9)]
+
+            lazt.append(entry)
+
+        return lazt
+
+    else:
+        return dicie
 
 def MinusTen():
     """ Reading the minus 10 elements of E. coli K12 as found on regulonDB. """

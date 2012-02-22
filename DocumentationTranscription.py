@@ -603,12 +603,13 @@ def StripSet(awaynr, lizt, ITSs):
 
 class ITS(object):
     """ Storing the ITSs in a class for better handling. """
-    def __init__(self, name, sequence, PY, PY_std):
+    def __init__(self, name, sequence, PY, PY_std, msat):
         # Set the initial important data.
         self.name = name
         self.sequence = sequence
         self.PY = PY
         self.PY_std = PY_std
+        self.msat = int(msat)
         self.rna_dna1_10 = Energycalc.RNA_DNAenergy(self.sequence[:10])
         self.rna_dna1_15 = Energycalc.RNA_DNAenergy(self.sequence[:15])
         self.rna_dna1_20 = Energycalc.RNA_DNAenergy(self.sequence)
@@ -895,14 +896,39 @@ def ReadAndFixData():
     """ Read Hsu paper-data and Hsu normalized data. """
 
     # labels of Hsu data
-    _labels = ['Name','Sequence','PY','PYst','RPY','RPYst','RIF','RIFst','APR','APRst','MSAT','R']
+    #_labels = ['Name','Sequence','PY','PYst','RPY','RPYst','RIF','RIFst','APR','APRst','MSAT','R']
 
     # Selecting the dataset you want to use
     #
-    #lazt = Filereader.PYHsu(hsu1) # Unmodified Hsu data
+    lazt = Filereader.PYHsu(hsu1) # Unmodified Hsu data
     #lazt = Filereader.PYHsu(hsu2) # Normalized Hsu data by scaling
-    lazt = Filereader.PYHsu(hsu3) # Normalized Hsu data by omitting experiment3
-    #lazt = Filereader.PYHsu(hsu4) # 2007 data, 10 sequences
+    #lazt = Filereader.PYHsu(hsu3) # Normalized Hsu data by omitting experiment3
+    #lazt = Filereader.PYHsu(hsu4) # 2007 data, 10 sequences, skipping N25, N25anti
+    #lazt2 = Filereader.PYHsu(hsu4) # 2007 data, 10 sequences, skipping N25, N25anti
+    #biotech = '/Rahmi/full_sequences_standardModified'
+
+    #lazt = Filereader.Rahmi104(adapt=True)
+
+    # you should normalize these with the RBS calculator
+
+    # conversion between lazt2 and lazt
+    # n25 -> 4.2
+    # anti -> 1.1
+
+    # n25 -> 6.0
+    # anti -> 1.4
+
+    # multiply by 1.35 (6.0/4.2 + 1.4/1.1)/2 =
+    #for l in lazt2:
+        #l[2] = l[2]*1.33
+    #debug()
+
+    # RESULT if you normalize between them, they can be joined nicely, although
+    # each does well on its own.
+    #lazt = lazt + lazt2
+
+
+    # Both 2006 and 2007 data, but discard n25 and n25-anti from 
 
     # Selecting the columns I want from Hsu. Removing all st except PYst.
     # list=[Name 0, Sequence 1, PY 2, PYstd 3, RPY 4, RIFT 5, APR 6, MSAT 7, R 8]
@@ -912,7 +938,7 @@ def ReadAndFixData():
     # Storing Name, sequence, and PY.
     ITSs = []
     for row in lizt:
-        ITSs.append(ITS(row[0], row[1], row[2], row[3]))
+        ITSs.append(ITS(row[0], row[1], row[2], row[3], row[7]))
 
     return lizt, ITSs
 
@@ -1017,7 +1043,7 @@ def PaperResults(lizt, ITSs):
 
     # Scatter plot of 1-20 RNA-DNA and DNA-DNA
     #simple_corr_scatter(ITSs, stds='yes')
-    simple_corr_scatter(ITSs, stds='no')
+    #simple_corr_scatter(ITSs, stds='no')
     # Plots for the simplified model
 
     #ladPlot(lizt) # ladder plot simplified
@@ -1263,89 +1289,83 @@ def genome_wide():
 
     welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
 
-def dimer_calc(energy_function, seq):
+def dimer_calc(energy_function, seq, operators):
     """
     Use the dictionary 'energy_function' to cacluate the value of seq
     """
-    def repl(n):
-        if n == 'T':
-            return 'U'
-        return n
 
-    indiv = [repl(l) for l in list(seq)] # splitting sequence into individual letters
+    indiv = [l for l in list(seq)] # splitting sequence into individual letters
 
     # getting dinucleotides
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
-    energy = sum([energy_function[nei] for nei in neigh])
 
-    return energy
+    # If only one energy term just return the sum
+    if not operators:
+        return sum([energy_function[nei] for nei in neigh])
+    else:
 
-def NewSimpleCorr(seqdata, energy_function, maxlen=20):
+        def sig(sign, val):
+            if sign == '+':
+                return val
+            elif sign == '-':
+                return -val
+
+        vals = []
+        # zip the operators with the enery function and change sign after
+        # applying the energy function
+        for nei in neigh:
+            # add all the energy terms there
+            ens = [sig(sign, enf[nei]) for enf, sign in zip(energy_function,
+                                                              operators)]
+            # apply the operators to the terms
+            vals.append(sum(ens))
+
+        return sum(vals)
+
+
+def NewSimpleCorr(seqdata, energy_function, maxlen=20, operators=False):
     """Calculate the correlation between RNA-DNA and DNA-DNA energies with PY
-    for incremental positions of the correlation window (0:3) to (0:20). Two
-    versions are returned: one where sequence-average expected energies are
-    added after msat and one where nothing is done for msat.
-    The rev='yes' option only gives meaningful result for
-    incremental without adding expected values."""
+    for incremental positions of the correlation window (0:3) to (0:20)
+
+    If operators != False, it must be (+,+), (+,-,+) etc, which specify the sign
+    of the energy functions.
+    """
 
     rowdata = [[row[val] for row in seqdata] for val in range(len(seqdata[0]))]
     seqs = rowdata[1]
 
     PY = rowdata[2]
 
-    msat = rowdata[-2]
     # Calculating incremental energies from 3 to 20 with and without expected
     # energies added after msat in incr[1]. incr[0] has incremental energies
     # without adding expected energies after msat. NOTE E(4nt)+E(5nt)=E(10nt)
     # causes diffLen+1
-
-    incrEnsRNA = [[], []] # 0 is withOut exp, 1 is With exp
     start = 3 #nan for start 0,1, and 2. start =3 -> first is seq[0:3] (0,1,2)
+
+    incrEnsRNA = []
     for index, sequence in enumerate(seqs):
-        incrRNA = [[], []]
+        incrRNA = []
 
         for top in range(start, maxlen+1):
             # Setting the subsequences from which energy should be calculated
             rnaRan = sequence[0:top]
 
-            tempRNA = dimer_calc(energy_function, rnaRan)
+            # add the 'energy'
+            incrRNA.append(dimer_calc(energy_function, rnaRan, operators))
 
-            incrRNA[0].append(tempRNA)
-
-            # you are beyond msat -> calculate average energy
-            if top > msat[index]:
-                diffLen = top-msat[index]
-                #RNA
-                baseEnRNA = dimer_calc(energy_function, sequence[:int(msat[index])])
-                diffEnRNA = Energycalc.RNA_DNAexpected(diffLen+1)
-                incrRNA[1].append(baseEnRNA + diffEnRNA)
-
-            else:
-                incrRNA[1].append(tempRNA)
-        #RNA
-        incrEnsRNA[0].append(incrRNA[0])
-        incrEnsRNA[1].append(incrRNA[1])
+        incrEnsRNA.append(incrRNA)
 
     #RNA
-    incrEnsRNA[0] = np.array(incrEnsRNA[0]).transpose() #transposing
-    incrEnsRNA[1] = np.array(incrEnsRNA[1]).transpose() #transposing
+    incrEnsRNA = np.array(incrEnsRNA).transpose() #transposing
 
     # Calculating the different statistics
 
     #RNA
-    incrWithExp20RNA = []
-    incrWithoExp20RNA = []
-    for index in range(len(incrEnsRNA[0])):
-        incrWithoExp20RNA.append(scipy.stats.spearmanr(incrEnsRNA[0][index], PY))
-        incrWithExp20RNA.append(scipy.stats.spearmanr(incrEnsRNA[1][index], PY))
+    stats = []
+    for index in range(len(incrEnsRNA)):
+        stats.append(scipy.stats.spearmanr(incrEnsRNA[index], PY))
 
-    arne = [incrWithExp20RNA, incrWithoExp20RNA]
-
-    output = {}
-    output['RNA_{0} msat-corrected'.format(maxlen)] = arne[0]
-    output['RNA_{0} uncorrected'.format(maxlen)] = arne[1]
-
-    return output
+    return stats
 
 def new_ladder(lizt):
     """ Printing the probability ladder for the ITS data. When nt = 5 on the
@@ -1356,30 +1376,36 @@ def new_ladder(lizt):
     pline = 'yes'
 
     # use all energy functions from new article
-    from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
+    #from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
 
-    name2func = [('r_f', resistant_fraction), ('k1', k1), ('k1_mins', kminus1),
-                 ('Keq', Keq_EC8_EC9)]
+    from Energycalc import reKeq, NNRD, NNDD, super_en
+
+    name2func = [('RNA-DNA', NNRD), ('DNA-DNA', NNDD), ('Translocation', reKeq),
+                ('RNA-DNA - Translocation', super_en)]
     # The r_f, k1, and K_eq correlate (r_f positively and k1 and K_eq negatively
-    name2func = [('r_f', resistant_fraction)]
 
     plt.ion()
     fig, ax = plt.subplots()
-    for name, energy_func in name2func:
-        arne = NewSimpleCorr(lizt, energy_func, maxlen=maxlen)
+
+    colors = ['b', 'g', 'c', 'k']
+
+    for indx, (name, energy_func) in enumerate(name2func):
+        corr = NewSimpleCorr(lizt, energy_func, maxlen=maxlen)
+
         # The first element is the energy of the first 3 nucleotides
         start = 3
         end = maxlen+1
         incrX = range(start, end)
 
-        toplot1 = arne['RNA_{0} uncorrected'.format(maxlen)]
-        corr1 = [tup[0] for tup in toplot1]
+        r_vals = [tup[0] for tup in corr]
 
-        ax.plot(incrX, corr1, label=name, linewidth=2)
-
+        ax.plot(incrX, r_vals, label=name, linewidth=2, color=colors[indx])
 
     xticklabels = [str(integer) for integer in range(3,21)]
-    yticklabels = [str(integer) for integer in np.arange(-1, 1, 0.1)]
+    yticklabels = [str(integer) for integer in np.arange(-1, 1.1, 0.1)]
+    #yticklabels = [str(integer) for integer in np.arange(0, 1, 0.1)]
+    # make the almost-zero into a zero
+    yticklabels[10] = '0'
 
     ax.set_xticks(range(3,21))
     ax.set_xticklabels(xticklabels)
@@ -1387,11 +1413,13 @@ def new_ladder(lizt):
     ax.set_ylabel("Correlation coefficient, $r$", size=26)
 
     if pline == 'yes':
-        pval = PvalDeterminer(toplot1)
-        ax.axhline(y=pval, color='r', label='p = 0.05 threshold', linewidth=2)
+        pval = PvalDeterminer(corr)
+        ax.axhline(y=pval, ls='--', color='r', label='p = 0.05 threshold', linewidth=2)
+        ax.axhline(y=-pval, ls='--', color='r', linewidth=2)
 
-    ax.legend(loc='upper left')
-    ax.set_yticks(np.arange(-1, 1, 0.1))
+    ax.legend(loc='lower left')
+    ax.set_yticks(np.arange(-1, 1.1, 0.1))
+    #ax.set_yticks(np.arange(0, 1, 0.1))
     ax.set_yticklabels(yticklabels)
 
     # awkward way of setting the tick font sizes
@@ -1402,6 +1430,13 @@ def new_ladder(lizt):
 
     fig.set_figwidth(9)
     fig.set_figheight(10)
+
+    # you need a grid to see your awsome 0.8 + correlation coefficient
+    ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+              alpha=0.5)
+
+    ax.set_title('Cummulative correlation of dinucletide parameters with abortive '\
+             'initiation')
 
     plt.show()
 
@@ -1417,14 +1452,6 @@ def new_ladder(lizt):
             #fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
 
-def New_Correlatvalues(lizt, ITSs):
-    """
-    New values for dinucleotide pyrophosphate addition have been published. How
-    do these data correlate with your values?
-    For easiest correlation, make the ladder.
-    """
-    new_ladder(lizt)
-
 def new_genome():
     """
     For the -20,+20 of promoters, calculate the average of all your
@@ -1438,92 +1465,690 @@ def new_genome():
         fdir, fname = os.path.split(path)
         sig_dict[fname[8:15]] = path
 
-    from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
-    from Energycalc import NNRD, NNDD
+    #from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
+    from Energycalc import NNRD, NNDD, super_en, reKeq
 
-    #name2func = [('r_f', resistant_fraction), ('k1', k1), ('k1_mins', kminus1),
-                 #('Keq', Keq_EC8_EC9), ('RNA-DNA', NNRD), ('DNA-DNA', NNDD)]
-    name2func = [('r_f', resistant_fraction), ('RNA-DNA', NNRD), ('DNA-DNA', NNDD)]
-
+    name2func = [('Keq', reKeq), ('RNA-DNA', NNRD), ('DNA-DNA', NNDD), ('Combo',
+                                                                       super_en)]
     names = [name for name, func in name2func]
 
-    # parse through all promoters, adding energy
+    ## parse through all promoters, adding energy
+    #rprm = ['rpsJ', 'rplK', 'rplN', 'rpsM', 'rpsL', 'rpsA', 'rpsA', 'rpsP', 'rpsT',
+            #'rpsT', 'thrS', 'infC', 'infC', 'rpmI', 'rpoZ', 'rplJ', 'rpsU', 'rrnB']
+
+    housekeeping = ('pgi', 'icd', 'arcA', 'aroE', 'rpoS', 'mdh', 'mtlD',
+                    'gyrB')
+
+    plt.ion()
+
+    # collect the gene-> energy
+    energies = {}
+
+    its = 10
     for sigma, sigpath in sig_dict.items():
 
-        # one figure for each sigma
-        plt.ion()
-        fig, ax = plt.subplots()
+        #if sigma not in ['Sigma70']:
+            #continue
 
+        # you need to know the colum number for the 2d array
         row_nr = sum((1 for line in open(sigpath, 'rb')))
+        # a shorter col_nr than 80 makes the sequence shorter in the 5' end
         col_nr = 80
 
         # dictionary for names with matrix for values
-        # there are 81 entries and each sigpath has a different length
-        vals = dict((name, np.zeros((row_nr, col_nr))) for name in names)
+        vals = dict((name, np.zeros((row_nr, col_nr-1))) for name in names)
+        fulls = dict((name, []) for name in names)
 
-        # you need to know the colum number for the 2d array
-        seq_logo = open(sigma+'_logo.fasta', 'wb')
+
+        # seq_logo = open(sigma+'_logo.fasta', 'wb')
         for row_pos, line in enumerate(open(sigpath, 'rb')):
 
             (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
             if seq == '':
                 continue
 
-            seq_logo.write('>{0}\n{1}\n'.format(pr_id, seq.upper()))
-            #if 'TIM' not in evidence:
+            #seq_logo.write('>{0}\n{1}\n'.format(pr_id, seq.upper()))
+            #if 'without human' in evidence:
                 #continue
 
-            # not needed.
-            #before = seq[-62:-21].upper()
-            #after = seq[-21:].upper()
-            indiv = list(seq.upper()) # list of individual nucleotides
+            #if name[:3] in housekeeping or name[:4] in housekeeping:
+                #pass
+            #else:
+                #continue
+
+            # try to average if more than 1 promoter assigned to a gene
+            if name.endswith('p'):
+                energies[name[:-1]] = Energycalc.super_f(seq[-20:-10].upper())
+
+            # there are 80 nt in the strand
+            indiv = list(seq.upper()[-col_nr:]) # list of individual nucleotides
             dinucs = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
+            # calculate its of each promoter
+            for name, func in name2func:
+                if its < 20:
+                    fulls[name].append(sum((func[din] for din in dinucs[-20:its-20])))
+                elif its == 20:
+                    fulls[name].append(sum((func[din] for din in dinucs[-20:])))
+
+
+            # calculate the energies of all promoter dinucleotides
             for col_pos, dinuc in enumerate(dinucs):
                 for name, func in name2func:
                     vals[name][row_pos, col_pos] = func[dinuc]
 
-        seq_logo.close()
-        # plot the damn things
-        # why do the matrix numbers change????
-        for name, data_matrix in vals.items():
-            means = np.mean(data_matrix, axis=0)
+        #seq_logo.close()
 
-            # subtract the mean from the mean!
-            norm_mean = means - np.mean(means)
+        # get random its-len energies
+        #rand_di_en, rand_its_en = get_random_energies(names, name2func, its)
 
-            ax.plot(norm_mean, label=name, linewidth=2)
+        #for name, data in fulls.items():
+            #print name, np.mean(data), np.std(data)
 
-            #stds = np.std(data_matrix, axis=0)
-            #ax.plot(stds, label=name + '_std')
+        #fug, ux = plt.subplots()
+        #ux.hist(fulls['Combo'], bins=51, label = 'Combo')
+        #ux.hist(fulls['Keq'], bins=51, label = 'Keq (translocation)')
+        #ux.hist(fulls['RNA-DNA'], bins=51, label = 'RNA-DNA')
+        #ux.set_title('"Energies" of first {0} nt of ITS'.format(its))
+        #ux.legend()
+        #print len([g for g in fulls['Combo'] if g < -31])/float(len(fulls['Combo']))
+        #debug()
 
-        ax.legend(loc='upper left')
-        ax.set_title(sigma)
+        # plot the dinucleotide energy of the promoters
+        #dinuc_en_plot(vals, rand_di_en, sigma)
 
+
+    # correlation between propensities and gene expression
+    expression_plot(energies)
+
+    #ontology_plot(energies)
+
+def ontology_plot(energies):
+
+    ontology_handle = open('sequence_data/ecoli/genes.col', 'rb')
+    ontology_handle.next() # skip header
+
+    term2gene = {}
+    gene2term = {}
+    terms = {}
+
+    for line in ontology_handle:
+        #descr = ' '.join(line.split('\t')[-4:])
+        term = line.split('\t')[-4]
+        gene = line.split('\t')[2]
+
+        if term in term2gene:
+            term2gene[term].append(gene)
+        else:
+            term2gene[term] = [gene]
+
+        if gene in gene2term:
+            gene2term[gene].append(term)
+        else:
+            gene2term[gene] = [term]
+
+        #print line.split('\t')
+        #debug()
+        if term in terms:
+            terms[term] += 1
+        else:
+            terms[term] = 1
+
+        #print line.split('\t')
+
+    for t, v in terms.items():
+        if v > 30:
+            print t, v
+
+    term2en = {}
+
+    for term, genes in term2gene.items():
+        if terms[term] > 30:
+
+            # skip the empty one
+            if term == '':
+                continue
+
+            if term not in term2en:
+                term2en[term] = []
+
+            for gene in genes:
+                if gene in energies:
+                    term2en[term].append(energies[gene])
+
+    # filter out those with less than xx
+    filteredterm2en = {}
+
+    for term, ens in term2en.items():
+        if len(ens) > 15:
+            filteredterm2en[term] = ens
+
+    boxes = filteredterm2en.values()
+    boxes.append(energies.values())
+
+    titles = filteredterm2en.keys()
+    titles.append('All')
+
+    fig, ax = plt.subplots()
+    ax.boxplot(boxes)
+    ax.set_xticklabels(titles, rotation=14)
+
+    ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+              alpha=0.5)
+
+def expression_plot(energies):
+    # get ribomomal genes
+    ribs = []
+    rib_handle = open('sequence_data/ecoli/ribosomal_genes.txt', 'rb')
+
+    for line in rib_handle:
+        if line.split()[4] == 'ribosomal':
+            ribs.append(line.split()[2])
+
+    # Read the gene -> DPKM values
+    dpkm_handle = open('sequence_data/ecoli/expression/dpkm.txt', 'rb')
+    dpkm_handle.next() # skip the header
+
+    dpkms = {}
+
+    for line in dpkm_handle:
+        # some lines have 6 and some have 3 entries
+        try:
+            gene, dpkm, rpkm, d, d, d = line.split()
+        except ValueError:
+            gene, dpkm, rpkm = line.split()
+
+        dpkms[gene] = float(dpkm)
+
+    set1 = set(dpkms.keys())
+    set2 = set(energies.keys())
+
+    both = set1.intersection(set2)
+
+    print 'dpkms len ', len(set1)
+    print 'energies len ', len(set2)
+    print 'both len ', len(both)
+
+    # get the values of both
+    ens = []
+    dpk = []
+    cols = []
+
+    for name, en in energies.items():
+        if name in dpkms:
+            #if dpkms[name] > 500:
+            ens.append(en)
+            dpk.append(dpkms[name])
+
+            # classify the ribosomes
+            if name in ribs:
+                cols.append(1)
+            else:
+                cols.append(0)
+        else:
+            ens.append(en)
+            # add 0 if not found
+            dpk.append(0)
+
+            if name in ribs:
+                cols.append(1)
+            else:
+                cols.append(0)
+
+    # annotate the figure and move on to the ribosomal genes
+    fig, ax = plt.subplots()
+
+    color_en = [e for indx, e in enumerate(ens) if cols[indx]]
+    color_dp = [e for indx, e in enumerate(dpk) if cols[indx]]
+
+    corrs = scipy.stats.spearmanr(ens, dpk)
+    header = 'r = {0:.2f}, p = {1:.3f}'.format(corrs[0], corrs[1])
+    ax.set_title(header, size=22)
+    ax.set_xlabel('ITS abortive-initiation propensity', size=20)
+    ax.set_ylabel('DPKM expression measure', size=20)
+    fig.suptitle('No relationship between in vitro abortive propensity and'\
+                 ' gene expression\n (ribosomal genes in red)', size=22)
+
+    ax.scatter(ens, dpk)
+
+    ax.scatter(color_en, color_dp, c='red')
+
+    fig2, ax2 = plt.subplots()
+    ax2.hist(ens, bins=40)
+
+    # TODO read the gene file and extract ontological terms for each gene
+    # plot the propensities for each class as box plots
+    # when that is done you can be sure there is nothing more
+
+
+
+def dinuc_en_plot(vals, rand_di_en, sigma):
+    """
+    """
+    fig, ax = plt.subplots()
+
+    for name, data_matrix in vals.items():
+        means = np.mean(data_matrix, axis=0)
+
+        # subtract the mean from the mean!
+        # NOTE you should subtract the genome-wide mean
+        norm_mean = means - rand_di_en[name][0]
+
+        ax.plot(norm_mean, label=name, linewidth=2)
+
+        #stds = np.std(data_matrix, axis=0)
+        #ax.plot(stds, label=name + '_std')
+
+    ax.set_xticks(range(0,81,10))
+    xticklabels = [str(integer) for integer in range(0,81, 10)]
+    # remove most vals
+    newticks = []
+    for tick in xticklabels:
+        if int(tick) < 60:
+            newticks.append(str(int(tick)-60))
+        elif int(tick) >= 60:
+            newticks.append('+'+str(int(tick)-60))
+
+    newticks[6] = 'TSS'
+    ax.set_xticklabels(newticks)
+
+    ax.legend(loc='upper left')
+    ax.set_title('Position averaged "energies" all E coli '+ sigma + ' promoters')
+
+def get_random_energies(names, name2func, its):
+    """
+    Return the mean and std of energy functions at random dinucleotide sites and
+    15-mers
+    """
     # get energies for 10000 random locations in e coli genome
     ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
     ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
-    drawlen = len(ecoli_seq) - clen
+    drawlen = len(ecoli_seq) - its
 
-    gc_count_rand = []
+    sample_nr = 10000
+    random_di_vals = dict((name, []) for name in names)
+    random_15_vals = dict((name, []) for name in names)
 
-    debug()
-    rand_at = []
-    randenergies = []
-    jumbl_randenergies = []
-    for rnr in range(100000):
+    for rnr in range(sample_nr):
         rand_pos = np.random.random_integers(drawlen)
-        randseq = ecoli_seq[rand_pos:rand_pos+clen]
+        randDi = ecoli_seq[rand_pos:rand_pos+2]
+        rand15 = ecoli_seq[rand_pos:rand_pos+its+1] # adjust by 1 because of dinucs
 
-        gc_count_sigma.append(its.count('G') + its.count('C'))
-        gc_count_rand.append(randseq.count('G') + randseq.count('C'))
+        for nme, func in name2func:
+            random_di_vals[nme].append(func[randDi])
 
-        rand_at.append(randseq.count('A') + randseq.count('T'))
+            # split up 
+            indiv = list(rand15) # list of individual nucleotides
+            dinucs = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
-        randenergies.append(Energycalc.RNA_DNAenergy(randseq))
+            random_15_vals[nme].append(sum([func[nei] for nei in dinucs]))
 
-        jumbl_rs = ''.join([randseq[np.random.randint(clen)] for v in range(clen)])
-        jumbl_randenergies.append(Energycalc.RNA_DNAenergy(jumbl_rs))
+    outp_di = {}
+    outp_15 = {}
+    for name in names:
+        di_vals = random_di_vals[name]
+        f15_vals = random_15_vals[name]
+
+        outp_di[name] = (np.mean(di_vals), np.std(di_vals))
+        outp_15[name] = (np.mean(f15_vals), np.std(f15_vals))
+
+    return outp_di, outp_15
+
+
+def new_scatter(lizt, ITSs):
+    """
+    Scatter plots at 5, 10, 13, 15, and 20
+    """
+
+    #stds = 'no'
+    stds = 'yes'
+
+    plt.ion()
+
+    rows = [5, 10, 15, 20, 'msat']
+    #rows = [5, 10, 15, 20]
+    #rows = [20]
+    fig, axes = plt.subplots(len(rows), 3, sharey=True)
+
+    for row_nr, maxnuc in enumerate(rows):
+        name = '1_{0}_scatter_comparison'.format(maxnuc)
+
+        if maxnuc == 'msat':
+            rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            keq = [Energycalc.Keq(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            added = [Energycalc.super_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+
+        else:
+            rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
+            dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
+            keq = [Energycalc.Keq(s.sequence[:maxnuc]) for s in ITSs]
+            added = [Energycalc.super_f(s.sequence[:maxnuc]) for s in ITSs]
+
+        energies = [('RNA-DNA', rna_dna), ('Translocation', keq),
+                    ('RNA-DNA - Translocation', added)]
+
+        PYs = [itr.PY for itr in ITSs]
+        PYs_std = [itr.PY_std for itr in ITSs]
+
+        fmts = ['ro', 'go', 'bo']
+
+        for col_nr, (name, data) in enumerate(energies):
+
+            # can't use [0,4] notation when only 1 row ..
+            if len(rows) == 1:
+                ax = axes[col_nr]
+            else:
+                ax = axes[row_nr, col_nr]
+
+            if stds == 'yes':
+                ax.errorbar(data, PYs, yerr=PYs_std, fmt=fmts[col_nr])
+            else:
+                ax.scatter(data, PYs, color=fmts[col_nr][:1])
+
+            corrs = scipy.stats.spearmanr(data, PYs)
+
+            if col_nr == 0:
+                ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=18)
+            if row_nr == 0:
+                #ax.set_xlabel("DNA-DNA energy ($\Delta G$)", size=20)
+                header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
+                ax.set_title(header, size=15)
+            else:
+                header = 'r = {0:.2f}, p = {1:.1e}'.format(corrs[0], corrs[1])
+                ax.set_title(header, size=15)
+
+            # awkward way of setting the tick sizes
+            for l in ax.get_xticklabels():
+                l.set_fontsize(12)
+            for l in ax.get_yticklabels():
+                l.set_fontsize(12)
+
+        fig.set_figwidth(20)
+        fig.set_figheight(60)
+
+    for formt in ['pdf', 'eps', 'png']:
+
+        if stds == 'yes':
+            fname = name + '_stds.' + formt
+        else:
+            fname = name + '.' + formt
+
+        for fig_dir in fig_dirs:
+            odir = os.path.join(fig_dir, formt)
+
+            if not os.path.isdir(odir):
+                os.makedirs(odir)
+
+            fpath = os.path.join(odir, fname)
+
+            fig.savefig(fpath, transparent=True, format=formt)
+
+def get_start_codons():
+    """
+    Return start codons sorted in two dicts
+    """
+    startC_path = '/home/jorgsk/phdproject/5UTR/hsuVitro/sequence_data/'\
+            'ecoli/gtf/e_coli_start_codons.bed'
+
+    mehdict = {'+': [], '-': []}
+
+    for line in open(startC_path, 'rb'):
+        (d, beg, end, strand) = line.split()
+        if strand == '+':
+            mehdict[strand].append(int(end))
+        if strand == '-':
+            mehdict[strand].append(int(beg))
+
+    out_dict = {}
+    for strand, starts in mehdict.items():
+        out_dict[strand] = sorted(starts)
+
+    return out_dict
+
+def get_candidates(sigpath, start_codons):
+    """
+    """
+
+    candidates = {}
+    for line in open(sigpath, 'rb'):
+
+        (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+        if seq == '':
+            continue
+
+        # skip purely computationally derived ones
+        #if "without human" in evidence:
+            #continue
+
+        candidates[name] = []
+
+        TTS = int(pos)
+
+        if strand == 'forward':
+            for val in start_codons['+']:
+                if val < TTS:
+                    continue
+                else:
+                    if val - TTS > 400:
+                        break
+                    else:
+                        if candidates[name] == []:
+                            if val not in candidates[name]:
+                                candidates[name].append(val)
+                        # add two sites if they are really close
+                        elif val - TTS < 100:
+                            if val not in candidates[name]:
+                                candidates[name].append(val)
+
+        if strand == 'reverse':
+            for val in reversed(start_codons['-']):
+                if val > TTS:
+                    continue
+                else:
+                    if TTS - val > 400:
+                        break
+                    else:
+                        if candidates[name] == []:
+                            # don't add twice
+                            if val not in candidates[name]:
+                                candidates[name].append(val)
+                        elif TTS - val < 100:
+                            # don't add twice
+                            if val not in candidates[name]:
+                                candidates[name].append(val)
+
+    return candidates
+
+def new_long5UTR(lizt):
+    """
+    For each promoter's TTS, find the closest start codon. If it's further away
+    than 40 nt, keep it for analysis.
+    """
+    sigprom_dir = 'sequence_data/ecoli/sigma_promoters'
+    sig_paths = glob(sigprom_dir+'/*')
+
+    # e coli genome
+    ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
+    ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
+
+    # strand-dictionary for start_codons
+    start_codons = get_start_codons()
+
+    #favored = ['TA', 'TC', 'TG']
+    not_favored = ['AT', 'CT', 'GT']
+    oppos = ['TA', 'TC', 'TG']
+
+    dinucfreq = {}
+    dinucfreq_random = {}
+    counts = 0
+
+    # Keq energy
+
+    # paths for the sigma files
+    sig_dict = {}
+    for path in sig_paths:
+        fdir, fname = os.path.split(path)
+        sig_dict[fname[8:15]] = path
+
+    # candidates with start codon within 400 nt
+    sig_cand = {}
+
+    for sigma, sigpath in sig_dict.items():
+
+        candidates = get_candidates(sigpath, start_codons)
+        sig_cand[sigma] = candidates
+
+        favs = [0, 0, 0, 0]
+        opposite = [0, 0, 0, 0]
+        non_favs = [0, 0, 0, 0]
+        #energy = [0, 0, 0, 0]
+
+        for line in open(sigpath, 'rb'):
+
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+            if seq == '':
+                continue
+
+            # skip if not there if not human curated or not found
+            if name not in candidates:
+                continue
+
+            # parse over the regions (1,20), (21,40), (41, 60), (61, 80)
+            # TODO ignore the first nucleotide; it's got nothing to ... no,
+            # that's not right. The first will be important.
+            # the first G/A is definitely driving your values, since
+            # G/A-starting dinucleotides are generally not favored.
+            # When I don't consider the first one, the bias is gone and there
+            # are slightly more favored than non-favored
+            # WHen I ignore the first nucleotide there is no difference
+            # whatsoever.
+            # NOTE hey, there is actually still a difference in the energy -->
+            # its higher even if I exclude the 0th base. Anyway, find a way to
+            # present this for each position and leave it like that. It's enough
+            # that you explained Hsu's dataset.
+
+            # Q: what about PPi concentations in vitro (hsu + translocatino
+            # expreiment) contra in vivo?
+
+            # What can you do about that? Maybe there is no such force acting.
+            # This could mean that it plays a role in abortive initiation, but
+            # gre-factors could rescue it, relieving the evolutionary pressure
+            # on the ITS region.
+
+            pos = int(pos)
+            #for indx, reg in enumerate([(-1, 19), (19, 39), (39, 59), (59, 79)]):
+            #for indx, reg in enumerate([(-1, 9), (9, 19), (19, 29), (29, 39)]):
+            for indx, reg in enumerate([(0, 10), (10, 20), (20, 30), (30, 40)]):
+                if strand == 'forward':
+                    subseq = ecoli_seq[pos+reg[0]:pos+reg[1]]
+                else:
+                    continue
+
+                if indx == 0 and subseq not in seq.upper():
+                    debug()
+
+                #energy[indx] += Energycalc.Keq(subseq)
+                #energy[indx] += Energycalc.res_frac(subseq)
+
+                idv = list(subseq) # splitting sequence into individual letters
+                dins = [idv[cnt] + idv[cnt+1] for cnt in range(9)]
+
+                for di in dins:
+                    if di in not_favored:
+                        non_favs[indx] += 1
+                    if di in oppos:
+                        opposite[indx] += 1
+                    else:
+                        favs[indx] += 1
+
+                    if indx == 1:
+                        if di in dinucfreq:
+                            dinucfreq[di] += 1
+                        else:
+                            dinucfreq[di] = 1
+
+                        counts += 1
+
+                if indx == 1:
+                    # shuffle idv nucletodies to shuffle the dinucletodies
+                    random.shuffle(idv)
+                    sdins = [idv[cnt] + idv[cnt+1] for cnt in range(9)]
+
+                    for sd in sdins:
+                        if di in dinucfreq_random:
+                            dinucfreq_random[di] += 1
+                        else:
+                            dinucfreq_random[di] = 1
+
+                # count how many of the favored dinucleotides
+                #for f in favored:
+                    #favs[indx] += din.count(f)
+
+                #for n in not_favored:
+                    #non_favs[indx] += din.count(n)
+
+
+        #print sigma
+        #print 'favs', favs
+        #print 'non-favs', non_favs
+        #print 'opposite', opposite
+        #print 'Non-fav ratios:'
+        #print np.array(non_favs)/np.array(favs)
+        #print 'Opposite non-fav ratios:'
+        #print np.array(opposite)/np.array(favs)
+        #print ''
+        #print energy
+        #print ''
+        #print ''
+
+    # Do the correlation with both Keq and super for the dinucleotides from +1
+    # to +10
+
+
+    from Energycalc import resistant_fraction, super_en
+
+    # check both original and shuffled data
+    for dinucdict, headr in [(dinucfreq, 'Dinucleotides'), (dinucfreq_random,
+                                                            'Shuffled dinucleotides')]:
+
+        fig, axes = plt.subplots(2)
+        titles = ['Resistant fraction', 'RNA-DNA + Translocation']
+        labels = dinucfreq.keys()
+
+        for ax, ydict, title in zip(axes, (resistant_fraction, super_en), titles):
+            x, y = dinucfreq.values(), ydict.values()
+            #x, y = dinucfreq_random.values(), ydict.values()
+            ax.scatter(x, y)
+
+            corrs = scipy.stats.spearmanr(x, y)
+            header = 'r = {0:.2f}, p = {1:.3f}'.format(corrs[0], corrs[1])
+            ax.set_title(header, size=22)
+
+            ax.set_ylabel(title, size=22)
+
+            ymin, ymax = ax.get_ylim()
+            ylen = np.abs(ymax - ymin)
+            ax.set_ylim((ymin - ylen*0.1, ymax +ylen*0.4))
+
+            # set circles
+            for label, xx, yy in zip(labels, x, y):
+                label = label.replace('T', 'U')
+                colr = 'yellow'
+                if label.endswith('U'):
+                    colr = 'red'
+                ax.annotate(label,
+                        xy=(xx, yy), xytext=(-20,20),
+                        textcoords='offset points', ha='right', va='bottom',
+                        bbox=dict(boxstyle='round, pad=0.5', fc=colr, alpha=0.5),
+                        arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0')
+                        )
+
+            # dinucleotide count at bottom
+            axes[1].set_xlabel('Dinucleotide count +1,+10 of E coli promoters', size=22)
+
+            fig.suptitle('{0}: no correlation between dinucleotide counts and resistant'\
+                         ' fraction or optimal parameters'.format(headr), size=20)
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
@@ -1538,10 +2163,31 @@ def main():
 
     #genome_wide()
 
-    new_genome()
+    #new_genome()
 
-    #New_Correlatvalues(lizt, ITSs)
-    # RESULTS you have new correlation values that are better
+    #new_ladder(lizt)
+
+    #new_scatter(lizt, ITSs)
+
+    #new_long5UTR(lizt)
+
+    debug()
+
+
+    # RESULT no dinucleotide correlation whatsoever. The distribution is
+    # determined simply by the nucleotide distribution, as can bee seen by the
+    # shuffled dataset.
+
+    # You have ribosomal genes + DPKM values for e coli genes
+    # Is there any covariance between DPKM and ribosomal gene for the energy
+    # terms you've found? I suggest using only 1-promoter genes
+
+    # last thing to check: abortive probabilities. Would be awzm if they match.
+    new_AP(lizt, ITSs)
+    # Also ... see if zig70 promoters are mostly above the cutoff you see in the
+    # scatterplot; check 5, 10, and 15.
+
+    # RESULTS energy[:msat]/msat gives .8 correlation
 
     # for scatter-plot: include error bars for both PY and measurements :) They
     # are bound to form a nice shape.
@@ -1549,6 +2195,9 @@ def main():
     # maybe it's time for another visit at the AB values? Is there high abortive
     # probability just at certain dinucleotides which correspond to those whose
     # translocation is short?
+
+    # The fact that there is no clear selection pressure for ref_val could mean
+    # a lot of things.
 
 # Background
 
@@ -1584,6 +2233,12 @@ def main():
 #dna = Energycalc.NNDD
 #rna = Energycalc.NNRD
 
+#fix, ax = plt.subplots()
+#dna = Energycalc.resistant_fraction
+##dna = Energycalc.Keq_EC8_EC9
+#rna = Energycalc.NNRD
+##rna = Energycalc.resistant_fraction
+
 #dna_en = []
 #rna_en = []
 
@@ -1592,10 +2247,9 @@ def main():
         #dna_en.append(dna[term])
         #rna_en.append(rna[term])
 
-#plt.scatter(dna_en, rna_en)
-#plt.plot([-3, 0], [-3, 0])
-#plt.show()
-#debug()
+#ax.scatter(dna_en, rna_en)
+#ax.plot([-3, 0], [-3, 0])
+#ax.show()
 ############ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX ############
 
 if __name__ == '__main__':
