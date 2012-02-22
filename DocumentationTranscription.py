@@ -927,7 +927,6 @@ def ReadAndFixData():
     # each does well on its own.
     #lazt = lazt + lazt2
 
-
     # Both 2006 and 2007 data, but discard n25 and n25-anti from 
 
     # Selecting the columns I want from Hsu. Removing all st except PYst.
