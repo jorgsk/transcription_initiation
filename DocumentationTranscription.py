@@ -21,6 +21,10 @@ import Energycalc
 import Orderrank
 from glob import glob
 
+np.set_printoptions(precision=2)
+np.set_printoptions(suppress=True)
+
+
 def run_from_ipython():
     try:
         __IPYTHON__active
@@ -1486,8 +1490,8 @@ def new_genome():
     its = 10
     for sigma, sigpath in sig_dict.items():
 
-        #if sigma not in ['Sigma70']:
-            #continue
+        if sigma not in ['Sigma70']:
+            continue
 
         # you need to know the colum number for the 2d array
         row_nr = sum((1 for line in open(sigpath, 'rb')))
@@ -1848,7 +1852,7 @@ def new_scatter(lizt, ITSs):
             corrs = scipy.stats.spearmanr(data, PYs)
 
             if col_nr == 0:
-                ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=18)
+                ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=15)
             if row_nr == 0:
                 #ax.set_xlabel("DNA-DNA energy ($\Delta G$)", size=20)
                 header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
@@ -1860,28 +1864,30 @@ def new_scatter(lizt, ITSs):
             # awkward way of setting the tick sizes
             for l in ax.get_xticklabels():
                 l.set_fontsize(12)
+                #l.set_fontsize(6)
             for l in ax.get_yticklabels():
                 l.set_fontsize(12)
+                #l.set_fontsize(6)
 
-        fig.set_figwidth(20)
-        fig.set_figheight(60)
+        fig.set_figwidth(2)
+        fig.set_figheight(6)
 
-    for formt in ['pdf', 'eps', 'png']:
+    #for formt in ['pdf', 'eps', 'png']:
 
-        if stds == 'yes':
-            fname = name + '_stds.' + formt
-        else:
-            fname = name + '.' + formt
+        #if stds == 'yes':
+            #fname = name + '_stds.' + formt
+        #else:
+            #fname = name + '.' + formt
 
-        for fig_dir in fig_dirs:
-            odir = os.path.join(fig_dir, formt)
+        #for fig_dir in fig_dirs:
+            #odir = os.path.join(fig_dir, formt)
 
-            if not os.path.isdir(odir):
-                os.makedirs(odir)
+            #if not os.path.isdir(odir):
+                #os.makedirs(odir)
 
-            fpath = os.path.join(odir, fname)
+            #fpath = os.path.join(odir, fname)
 
-            fig.savefig(fpath, transparent=True, format=formt)
+            #fig.savefig(fpath, transparent=True, format=formt)
 
 def get_start_codons():
     """
@@ -2149,6 +2155,310 @@ def new_long5UTR(lizt):
             fig.suptitle('{0}: no correlation between dinucleotide counts and resistant'\
                          ' fraction or optimal parameters'.format(headr), size=20)
 
+def new_AP(lizt, ITSs):
+    """
+    Check of the abortive probabilities correlate with your dinucleotide
+    propensities
+    """
+    abortive_path = 'Hsu_original_data/AbortiveProbabilities/'\
+            'abortiveProbabilities__FIXED.csv'
+
+    abort_handle = open(abortive_path, 'rb')
+
+    promoters = abort_handle.next()
+    prom_order = [p for p in promoters.split(',')[:-1] if p != '']
+
+    abortProbs = dict((p, []) for p in prom_order)
+
+    dummy = abort_handle.next()
+
+    for line in abort_handle:
+        # iterate over the promoter - AP data
+        for prom, datum in zip(prom_order, line.split(',')[1::2]):
+            if datum == '':
+                abortProbs[prom].append('-')
+            else:
+                abortProbs[prom].append(int(float(datum)))
+
+    # what you have is from 2 to 20
+
+    # add all abortives and all propensities
+    APs = []
+    props = []
+
+    for ITS in ITSs:
+        indiv = list(ITS.sequence[1:ITS.msat]) # Skip the first dinuc
+        neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
+
+        # shift by one
+        for dinuc, AP in zip(neigh, abortProbs[ITS.name]):
+            APs.append(AP)
+            props.append(Energycalc.super_en[dinuc])
+
+    print scipy.stats.spearmanr(APs, props)
+
+def new_promoter_strength():
+    """
+    Promoter consensus scores have been published. Use them to compare with the
+    propensity of the downstream ITS
+
+    Map the transcription start site of the Prediction file to the stat sites of
+    the verified promoters. Then just compare scores. You
+    """
+
+    promoter_scores = 'sequence_data/ecoli/PromoterPredictionSigma70Set.txt'
+    promoters =  'sequence_data/ecoli/sigma_promoters/PromoterSigma70Set.txt'
+
+    # First get the verified ones, and index them by their start site
+
+    realz = {}
+
+    for line in open(promoters, 'rb'):
+        (reg_id, prom_id, strand, TSS, promoter, seq, info) = line.split('\t')
+        realz[TSS] = (prom_id, strand, seq)
+
+    checkme = {}
+    for line in open(promoter_scores, 'rb'):
+        if line.startswith('#'):
+            continue
+
+        (beg, end, name, strand, prom_name, TSS, score, d, d, d) = line.split()
+
+        min1 = str(int(TSS)-1)
+        min2 = str(int(TSS)-2)
+        plus1 = str(int(TSS)+1)
+        plus2 = str(int(TSS)+2)
+
+        if TSS in realz:
+            checkme[prom_name] = (score, realz[TSS][2])
+        elif min1 in realz:
+            checkme[prom_name] = (score, realz[min1][2])
+        elif min2 in realz:
+            checkme[prom_name] = (score, realz[min2][2])
+        elif plus1 in realz:
+            checkme[prom_name] = (score, realz[plus1][2])
+        elif plus2 in realz:
+            checkme[prom_name] = (score, realz[plus2][2])
+
+    scores = []
+    props = []
+
+    for prom, (score, seq) in checkme.items():
+        scores.append(float(score))
+
+        propensity = Energycalc.super_f(seq[-20:-10].upper())
+
+        props.append(propensity)
+
+    print scipy.stats.spearmanr(scores, props)
+    debug()
+
+def get_pr_nr(promoters):
+    """
+    Count the number of promoters with a 1promoter-1gene connection
+    """
+    proms = set([])
+
+    for line in open(promoters, 'rb'):
+        (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+        if seq == '':
+            continue
+
+        # add the gene name if if only 1 promoter for this gene
+        if name.endswith('p'):
+            proms.add(name[:-1])
+
+    return proms
+
+def get_expression(expr_path):
+    """
+    Return a dict with gene -> dpkm
+    """
+    # Read the gene -> DPKM values
+    dpkm_handle = open(expr_path, 'rb')
+    dpkm_handle.next() # skip the header
+
+    dpkms = {}
+
+    for line in dpkm_handle:
+        # some lines have 6 and some have 3 entries
+        try:
+            gene, dpkm, rpkm, d, d, d = line.split()
+        except ValueError:
+            gene, dpkm, rpkm = line.split()
+
+        dpkms[gene] = float(dpkm)
+
+    return dpkms
+
+
+def reverseComplement(sequence):
+    complement = {'A':'T','C':'G','G':'C','T':'A','N':'N'}
+    return "".join([complement[nt] for nt in sequence[::-1]])
+
+def get_its_plus_20(pos, strand, ecoli):
+    """
+    """
+
+    if strand == 'forward':
+        return ecoli[pos+20:pos+40]
+    if strand == 'reverse':
+        return reverseComplement(ecoli[pos-40:pos-20])
+
+def pca():
+    """
+    Do PCA on the promoter data. It's not sure what you're going to get out, but
+    hopefully it will satisfy Martin to move on.
+
+    Each column in your data-matrix should be some variable that could be
+    connected. Proposed variables:
+
+        x1  : Expression of downstream gene
+        x2  : Keq of first 20 nucleotides
+        x3  : RNA-DNA energy of first 20 nucleotides
+        x4  : DNA-DNA energy of first 20 nucleotides
+        x5  : *U-dinucleotide frequency in first 20 nucleotides
+        x6  : Keq of +20 to +40 nucleotides
+        x7  : RNA-DNA energy of +20 to +40 nucleotides
+        x8  : DNA-DNA energy of +20 to +40 nucleotides
+        x9  : *U-dinucleotide frequency of the +20 to +40 nucleotides
+
+    Critisism of PCA approach:
+
+        1) RNA-DNA and Keq are not normally distributed across promoters
+        2) (Check if gene expression is normally distributed)
+        3) *U Frequency is not normally distributed
+        4) From in-vitro data: the relationship between RNA-DNA/Keq and abortive
+        initiation is exponential -- not linear.
+
+        PCA assumes each variable to be gaussian in distribution -- it assumes
+        that the mean and variance are enough to explain the data. This is not
+        true for the energy parameters.
+
+        PCA also assumes a linear relationship between the variables. In vitro,
+        the relationship between Keq and abortive initiation is nonlinear.
+
+        Therefore, several of the assumptions behind the mathematics of PCA are
+        broken, and we cannot trust the result as much.
+
+        Further, the variance of the different measurements vary a lot.
+    """
+
+    promoters_path =  'sequence_data/ecoli/sigma_promoters/PromoterSigma70Set.txt'
+    expression_path = 'sequence_data/ecoli/expression/dpkm.txt'
+
+    ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
+    ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
+
+    from Energycalc import Keq, RNA_DNAenergy, DNA_DNAenergy
+
+    # Prepare a data-matrix with 8 columns and as many sigma70 promoters as
+    # there is expression data from for which only a single promoter is known
+
+    # get genes for which there is expression data
+    expression = get_expression(expression_path)
+
+    # get promoters for which there is a 1-1 promoter-gene relationsihp 
+    promoters = get_pr_nr(promoters_path)
+
+    pr_remain = promoters.intersection(set(expression.keys()))
+    # count the intersection of the two; let it be 
+
+        #x1  : Expression of downstream gene
+        #x2  : Keq of first 20 nucleotides
+        #x3  : RNA-DNA energy of first 20 nucleotides
+        #x4  : DNA-DNA energy of first 20 nucleotides
+        #x5  : *U-dinucleotide frequency in first 20 nucleotides
+
+    empty_matrix = np.zeros([len(pr_remain), 9])
+
+    # seq_logo = open(sigma+'_logo.fasta', 'wb')
+    row_pos = 0
+    for line in open(promoters_path, 'rb'):
+
+        (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+
+        gene_name = name[:-1]
+        pos = int(pos)
+
+        if seq == '' or gene_name not in pr_remain:
+            continue
+
+        ITSseq = seq.upper()[-20:]
+        dins = [ITSseq[b] + ITSseq[b+1] for b in range(19)]
+
+        ITSseqp20 = get_its_plus_20(pos, strand, ecoli_seq)
+        dinsp20 = [ITSseqp20[b] + ITSseqp20[b+1] for b in range(19)]
+
+        # 1 expression of gene
+        empty_matrix[row_pos,0] = expression[gene_name]
+
+        # 2 Keq of first 20 nucs
+        empty_matrix[row_pos,1] = Keq(ITSseq)
+
+        # 3 RNA-DNA of first 20 nucs
+        empty_matrix[row_pos,2] = RNA_DNAenergy(ITSseq)
+
+        # 4 DNA-DNA of first 20 nucs
+        empty_matrix[row_pos,3] = DNA_DNAenergy(ITSseq)
+
+        # 5 *U dinuc frequency in first 20 nucs
+        empty_matrix[row_pos,4] = sum((1 for d in dins if d[1] == 'T'))/19
+
+        # 6 Keq of first 20 nucs
+        empty_matrix[row_pos,5] = Keq(ITSseqp20)
+
+        # 7 RNA-DNA of first 20 nucs
+        empty_matrix[row_pos,6] = RNA_DNAenergy(ITSseqp20)
+
+        # 8 DNA-DNA of first 20 nucs
+        empty_matrix[row_pos,7] = DNA_DNAenergy(ITSseqp20)
+
+        # 9 *U dinuc frequency in first 20 nucs
+        empty_matrix[row_pos,8] = sum((1 for d in dinsp20 if d[1] == 'T'))/19
+
+        row_pos += 1 # increment to the next gene/promoter
+
+    eigvecs, projection, eigvals = princomp(empty_matrix)
+
+    debug()
+
+def princomp(A):
+    """ Perform principal components analysis
+     (PCA) on the n-by-p data matrix A
+     Rows of A correspond to observations, columns to variables.
+
+    Returns
+
+    coeff :
+    is a p-by-p matrix, each column containing coefficients
+    for one principal component.
+    score :
+    the principal component scores; that is, the representation
+    of A in the principal component space. Rows of SCORE
+    correspond to observations, columns to components.
+
+    latent :
+    a vector containing the eigenvalues
+    of the covariance matrix of A.
+    """
+
+    #A = np.array([[5,8,9,19], [2,5,6, 20], [4, 6,7, 18], [8, 13, 11, 25],
+                #[1,2,5,13], [5,7,9, 21], [0, 2,8, 18], [1, 2, 11, 20],
+                #[3,5,8,12], [3,5,4, 20], [8, 16,17, 12], [2, 3, 1, 20]])
+
+    mean = np.mean(A, axis=0)
+    std = np.std(A, axis=0)
+
+    M = ((A - mean)/std).T # subtract the mean and divide by std
+
+    # computing eigenvalues and eigenvectors of covariance matrix
+    [latent, coeff] = np.linalg.eig(np.cov(M))
+
+    score = np.dot(coeff.T, M) # projection of the data in the new space
+
+    return coeff, score, latent
+
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
@@ -2170,8 +2480,13 @@ def main():
 
     #new_long5UTR(lizt)
 
-    debug()
+    # TODO take the new file you found; correlate the promoter score with
+    # the abortive propensity for those promoters that overlap the
+    # experimentally verified ones (+/- a base?)
+    #new_promoter_strength()
 
+    # TODO PCA will not rest until you have done it, it seems.
+    pca()
 
     # RESULT no dinucleotide correlation whatsoever. The distribution is
     # determined simply by the nucleotide distribution, as can bee seen by the
@@ -2181,10 +2496,9 @@ def main():
     # Is there any covariance between DPKM and ribosomal gene for the energy
     # terms you've found? I suggest using only 1-promoter genes
 
+    # NOTE nothing on the AP ... maybe you got them wrong or somth. Dozntmatter.
     # last thing to check: abortive probabilities. Would be awzm if they match.
-    new_AP(lizt, ITSs)
-    # Also ... see if zig70 promoters are mostly above the cutoff you see in the
-    # scatterplot; check 5, 10, and 15.
+    #new_AP(lizt, ITSs)
 
     # RESULTS energy[:msat]/msat gives .8 correlation
 
@@ -2253,7 +2567,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-    #lizt, ITSs = main()
 
 # IDEA: If there is a selection pressure for RNA-DNA energy at the ITS, it
 # should be visible in promoters all over. Check annotated ITS versus random
