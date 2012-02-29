@@ -68,6 +68,13 @@ fig_dirs = (fig_dir1, fig_dir2)
 def welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha):
     """
     Got this from the scipy mailinglist, guy named Angus
+
+    n1 = # of samples in sample 1
+    mean1 = mean of sample 1
+    sem1 = standard error of mean of sample 1
+    sem1 is the sample standard deviation divided by the square root of n1
+
+    sem1 = np.std(n1)/sqrt(n1)
     """
 
     # calculate standard variances of the means
@@ -1552,7 +1559,7 @@ def new_genome():
 
 
     # correlation between propensities and gene expression
-    expression_plot(energies)
+    #expression_plot(energies)
 
     #ontology_plot(energies)
 
@@ -1811,12 +1818,14 @@ def new_scatter(lizt, ITSs):
             dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
             keq = [Energycalc.Keq(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
             added = [Energycalc.super_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #PCA = [Energycalc.pca_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
 
         else:
             rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
             dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
             keq = [Energycalc.Keq(s.sequence[:maxnuc]) for s in ITSs]
             added = [Energycalc.super_f(s.sequence[:maxnuc]) for s in ITSs]
+            #PCA = [Energycalc.pca_f(s.sequence[:maxnuc]) for s in ITSs]
 
         energies = [('RNA-DNA', rna_dna), ('Translocation', keq),
                     ('RNA-DNA - Translocation', added)]
@@ -2671,7 +2680,194 @@ def hsu_pca(lizt):
     """
     Run a PCA on RNA-DNA, DNA-DNA, Keq and Purine %
     """
-    # TODO !
+    from operator import attrgetter
+    # these are the attributes you want to extract
+    #attrs = ('purine_count', 'DNADNA_en', 'RNADNA_en', 'super_en')
+    #attrs = ('DNADNA_en', 'RNADNA_en', 'keq_en')
+    attrs = ('RNADNA_en', 'keq_en')
+    f = attrgetter(*attrs)
+    seqs = {}
+
+    # make a n x m matrix (m = 4, n = len(seqs)
+    X = np.zeros([len(lizt), len(attrs)])
+
+    its_len = 15
+
+    for li in lizt:
+        name = li[0]
+        seq = li[1][:its_len]
+        py = li[2]
+
+        seqs[name] = [Sequence(seq, name), py]
+
+    pys = []
+    for row_nr, (name, (seqObj, py)) in enumerate(seqs.items()):
+        # can you inita again witha shorter seq?
+
+        # extract the relevant attributes and make as row in matrix
+        X[row_nr] = np.array(f(seqObj))
+        pys.append(py)
+
+    # subtract the mean of nXm matrix and transpose
+    Xn = (X - np.mean(X, axis=0)).T
+
+    plt.scatter(*X.T, c=pys)
+    #debug()
+
+    # calculate covariance
+    covXn = np.cov(Xn)
+
+    # get eigenvectors of covariance
+    eigvals, eigvecs = np.linalg.eig(covXn)
+
+    E = eigvecs.T
+
+    new_X = dot(E, X.T)
+
+    plt.scatter(*new_X, c=pys)
+
+    # plot the data in the new directions and color with py values
+
+    # can we make weights based on the  PCA?
+    # Then it should be
+    # array([ 16.84,   0.36,   7.5 ])
+    # array([[-0.32, -0.31, -0.9 ],
+       #[-0.85,  0.5 ,  0.13],
+       #[-0.41, -0.81,  0.42]])
+       #array([[-0.97,  0.23],
+
+    # just for 2 :
+    #array([[-0.97,  0.23],
+       #[-0.23, -0.97]])
+    #ipdb> eigvals
+    #array([  6.09,  15.39])
+
+
+    #_sum = 15.39 + 6.1
+    # 15.39/_sum = w1
+    # 6.1/_sum = w2
+
+    #super_f = w1*(rna_term*(-0.23) + Keq_term*(-0.97)
+    # + w2*(rna_term*(-0.97) + Keq_term*(0.23)
+    # =  rna_term*(w1(-0.23) + w2*(-0.97)) + Keq_term*(w1*(-0.97) + w2*(0.23)
+    # RESULT no benefit from doing PCA weighting of the RNA-DNA and Keq
+    # variables (or, you did it wrong, but hey, I did it.)
+
+def get_activdowns():
+    """
+    Return lists of activated and downregulated genes for both wt and
+    overexpressed GreA
+    """
+    activ_both = 'sequence_data/greA/activated_grA_native_and_overexpressed.txt'
+    activ_onlyOver = 'sequence_data/greA/activated_grA_only_overexpressed.txt'
+    down_both = 'sequence_data/greA/downRegulated_grA_native_and_overexpressed.txt'
+    down_onlyOver ='sequence_data/greA/downRegulated_grA_only_overexpressed.txt'
+
+    # get activated genes 
+    activs = set([])
+    for line in open(activ_both, 'rb'):
+        activs.add(line.split()[0])
+    for line in open(activ_onlyOver, 'rb'):
+        activs.add(line.split()[0])
+
+    # get downregulated genes
+    downs = set([])
+    for line in open(down_both, 'rb'):
+        downs.add(line.split()[0])
+    for line in open(down_onlyOver, 'rb'):
+        downs.add(line.split()[0])
+
+    return list(activs), list(downs)
+
+
+def greA_filter():
+    """
+    Check the promoters for the genes which are sensitve to GreA. Maybe you'll
+    find some super_f pattern there which you otherwise don't see. Compare both
+    up and down groups to each other and to the genome average
+    """
+
+    # get GreA activated and downregulated genes
+    activated, downregulated = get_activdowns()
+
+    # get sigma-promoters
+    sigprom_dir = 'sequence_data/ecoli/sigma_promoters'
+    sig_paths = glob(sigprom_dir+'/*')
+
+    sig_dict = {}
+    for path in sig_paths:
+        fdir, fname = os.path.split(path)
+        sig_dict[fname[8:15]] = path
+
+    # the length of the ITS you should consider
+    its = 10
+    energies = {'activated': [], 'downReg': [], 'others': []}
+    for sigma, sigpath in sig_dict.items():
+
+        for row_pos, line in enumerate(open(sigpath, 'rb')):
+
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+            if seq == '':
+                continue
+
+            # as a first approximation, skip those that have more than 1
+            # promoter
+            if not name.endswith('p'):
+                continue
+
+            # do a double check to see if you have acrDp, acrDp2 or acrDp12
+            if name[-1] != 'p':
+                gene_name = name[:-2]
+                if gene_name[-1] == 'p':
+                    gene_name = gene_name[:-1]
+
+            else:
+                gene_name = name[:-1]
+
+            sequence = seq[-21:].upper()
+
+            seqObj = Sequence(sequence[:its], name=gene_name, shuffle=False)
+
+            if gene_name in activated:
+                energies['activated'].append(seqObj.super_en)
+            elif gene_name in downregulated:
+                energies['downReg'].append(seqObj.super_en)
+            else:
+                energies['others'].append(seqObj.super_en)
+
+    mean_std= dict((k, (np.mean(vals), np.std(vals))) for k, vals in
+                 energies.items())
+
+    alpha = 0.05
+
+    from itertools import combinations
+    testers = ['activated', 'others', 'downReg']
+
+    for key1, key2 in combinations(testers, r=2):
+
+        print "{0} vs {1}".format(key1, key2)
+        n1 = len(energies[key1])
+        mean1, std1 = mean_std[key1]
+        sem1 = std1/np.sqrt(n1)
+        n2 = len(energies[key2])
+        mean2, std2 = mean_std[key2]
+        sem2 = std2/np.sqrt(n2)
+        welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
+        print ''
+        print ''
+
+
+    # The result is not strong, but you can probably find that it's
+    # "statistically significant". Or actually I'm not sure: both results are
+    # well within the standard deviations of both.
+    # RESULT you see something that makes sense finally.
+
+    # the attributes you'd like
+    #attrs = ('DNADNA_en', 'RNADNA_en', 'keq_en', 'super_en')
+
+    # are the genes regulated by GreA different in the # of promoters compared
+    # to random genes?
+    debug()
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
@@ -2696,6 +2892,8 @@ def main():
 
     #frequency_change()
 
+    greA_filter()
+
     #hsu_pca(lizt)
     # NOTE it's not clear what I should do now. There is this odd TTT repeating
     # going on. You should relate to super_en. In super_en the AA and TT have
@@ -2708,6 +2906,7 @@ def main():
     # Next: is there any nucleotide or di-nucleotide difference between +1 to
     # +10, +10 to +20 or between +1+20 and +20 to + 40
     #pca()
+    #my_pca() # re-do your pca work and plot the PY as color codes
 
     # You have ribosomal genes + DPKM values for e coli genes
     # Is there any covariance between DPKM and ribosomal gene for the energy
@@ -2747,7 +2946,7 @@ class Sequence(object):
     # how many times do you want to shuffle the original sequence?
     _shuffle_freq = 50
 
-    def __init__(self, sequence, name='noname'):
+    def __init__(self, sequence, name='noname', shuffle=True):
 
         self.seq = sequence
         self.name = name
@@ -2761,6 +2960,7 @@ class Sequence(object):
 
         self.dinuc_freq = self._lookup_frequency(self._dinucs,
                                                  provided_seq=self._dinucPairs)
+        self.purine_count = sequence.count('A') + sequence.count('G')
 
         # how to solve the repeats? :S how to get all repeats??
         # RESULT repeats are well handled by str.count since it considers
@@ -2773,23 +2973,24 @@ class Sequence(object):
         self.RNADNA_en = Energycalc.RNA_DNAenergy(sequence)
         self.DNADNA_en = Energycalc.DNA_DNAenergy(sequence)
 
-        # make 20 randomly shuffled versions of the sequence
-        self._randomSeq = [''.join(random.sample(sequence, len(sequence))) for _
-                         in range(self._shuffle_freq)]
+        if shuffle:
+            # make 20 randomly shuffled versions of the sequence
+            self._randomSeq = [''.join(random.sample(sequence, len(sequence))) for _
+                             in range(self._shuffle_freq)]
 
-        # shuffled frequencies: the average of the lookup frequency for each random sequence
-        self.shuf_nuc_freq = self._dict_average(
-            [self._lookup_frequency(self._nucs, provided_seq=rs)
-             for rs in self._randomSeq])
+            # shuffled frequencies: the average of the lookup frequency for each random sequence
+            self.shuf_nuc_freq = self._dict_average(
+                [self._lookup_frequency(self._nucs, provided_seq=rs)
+                 for rs in self._randomSeq])
 
-        # need to provide dinucletoide list instead of sequence string
-        self.shuf_dinuc_freq = self._dict_average(
-            [self._lookup_frequency(self._dinucs, provided_seq=self._dinucer(rs))
-             for rs in self._randomSeq])
+            # need to provide dinucletoide list instead of sequence string
+            self.shuf_dinuc_freq = self._dict_average(
+                [self._lookup_frequency(self._dinucs, provided_seq=self._dinucer(rs))
+                 for rs in self._randomSeq])
 
-        self.shuf_repeat_freq = self._dict_average(
-            [self._lookup_frequency(self._repeats, provided_seq=rs)
-             for rs in self._randomSeq])
+            self.shuf_repeat_freq = self._dict_average(
+                [self._lookup_frequency(self._repeats, provided_seq=rs)
+                 for rs in self._randomSeq])
 
     def _dinucer(self, sequence):
         """
