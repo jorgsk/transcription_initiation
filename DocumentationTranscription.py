@@ -23,7 +23,7 @@ from glob import glob
 
 np.set_printoptions(precision=2)
 np.set_printoptions(suppress=True)
-
+from numpy import dot
 
 def run_from_ipython():
     try:
@@ -68,6 +68,13 @@ fig_dirs = (fig_dir1, fig_dir2)
 def welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha):
     """
     Got this from the scipy mailinglist, guy named Angus
+
+    n1 = # of samples in sample 1
+    mean1 = mean of sample 1
+    sem1 = standard error of mean of sample 1
+    sem1 is the sample standard deviation divided by the square root of n1
+
+    sem1 = np.std(n1)/sqrt(n1)
     """
 
     # calculate standard variances of the means
@@ -912,31 +919,22 @@ def ReadAndFixData():
     #biotech = '/Rahmi/full_sequences_standardModified'
 
     #lazt = Filereader.Rahmi104(adapt=True)
-
     # you should normalize these with the RBS calculator
-
-    # conversion between lazt2 and lazt
-    # n25 -> 4.2
-    # anti -> 1.1
-
-    # n25 -> 6.0
-    # anti -> 1.4
-
-    # multiply by 1.35 (6.0/4.2 + 1.4/1.1)/2 =
-    #for l in lazt2:
-        #l[2] = l[2]*1.33
-    #debug()
-
-    # RESULT if you normalize between them, they can be joined nicely, although
-    # each does well on its own.
-    #lazt = lazt + lazt2
-
-    # Both 2006 and 2007 data, but discard n25 and n25-anti from 
 
     # Selecting the columns I want from Hsu. Removing all st except PYst.
     # list=[Name 0, Sequence 1, PY 2, PYstd 3, RPY 4, RIFT 5, APR 6, MSAT 7, R 8]
     lizt = [[row[0], row[1], row[2], row[3], row[4], row[6], row[8], row[10],
              row[11]] for row in lazt]
+
+    # name seq PY X X X X X X
+    # From Stepanova 2009
+    #lizt = [['WT', 'GCCCTCGATATGGGGATTTTTA', 46, 0, 0, 0, 0, 0, 0],
+            #['T7', 'GTCGAGAGGGACACGGCGAATA', 89, 0, 0, 0, 0, 0, 0],
+            #['WT', 'GTCTGAGATATGGGGATTTTA', 95, 0, 0, 0, 0, 0, 0],
+            #['WT', 'GCCCTGTCGCGGGGGATTTTA', 53, 0, 0, 0, 0, 0, 0],
+            #['WT', 'GCCCTGGATATGTCAGTTTTA', 76, 0, 0, 0, 0, 0, 0],
+            #['WT', 'GCCCTGGATATGGGGATGGCA', 62, 0, 0, 0, 0, 0, 0]]
+
     # Making a list of instances of the ITS class. Each instance is an itr.
     # Storing Name, sequence, and PY.
     ITSs = []
@@ -1502,7 +1500,6 @@ def new_genome():
         vals = dict((name, np.zeros((row_nr, col_nr-1))) for name in names)
         fulls = dict((name, []) for name in names)
 
-
         # seq_logo = open(sigma+'_logo.fasta', 'wb')
         for row_pos, line in enumerate(open(sigpath, 'rb')):
 
@@ -1562,7 +1559,7 @@ def new_genome():
 
 
     # correlation between propensities and gene expression
-    expression_plot(energies)
+    #expression_plot(energies)
 
     #ontology_plot(energies)
 
@@ -1821,12 +1818,14 @@ def new_scatter(lizt, ITSs):
             dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
             keq = [Energycalc.Keq(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
             added = [Energycalc.super_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #PCA = [Energycalc.pca_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
 
         else:
             rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
             dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
             keq = [Energycalc.Keq(s.sequence[:maxnuc]) for s in ITSs]
             added = [Energycalc.super_f(s.sequence[:maxnuc]) for s in ITSs]
+            #PCA = [Energycalc.pca_f(s.sequence[:maxnuc]) for s in ITSs]
 
         energies = [('RNA-DNA', rna_dna), ('Translocation', keq),
                     ('RNA-DNA - Translocation', added)]
@@ -2411,60 +2410,476 @@ def its_data():
         # 5 *U dinuc frequency in first 20 nucs
         empty_matrix[row_pos,4] = sum((1 for d in dins if d[1] == 'T'))/19
 
-        # 6 Keq of first 20 nucs
+        # 6 Keq of 20:40 nucs
         empty_matrix[row_pos,5] = Keq(ITSseqp20)
 
-        # 7 RNA-DNA of first 20 nucs
+        # 7 RNA-DNA of 20:40 nucs
         empty_matrix[row_pos,6] = RNA_DNAenergy(ITSseqp20)
 
-        # 8 DNA-DNA of first 20 nucs
+        # 8 DNA-DNA of 20:40 nucs
         empty_matrix[row_pos,7] = DNA_DNAenergy(ITSseqp20)
 
-        # 9 *U dinuc frequency in first 20 nucs
+        # 9 *U dinuc frequency in 20:40 nucs
         empty_matrix[row_pos,8] = sum((1 for d in dinsp20 if d[1] == 'T'))/19
 
         row_pos += 1 # increment to the next gene/promoter
 
+<<<<<<< HEAD
     #eigvecs, projection, eigvals = princomp(empty_matrix)
 
     # I must return this as an mXn matrix, without column 1
     return empty_matrix[:,1:].T
+=======
+    return empty_matrix
 
-def princomp(A):
-    """ Perform principal components analysis
-     (PCA) on the n-by-p data matrix A
-     Rows of A correspond to observations, columns to variables.
+    #eigvecs, projection, eigvals = princomp(empty_matrix[:,1:])
 
-    Returns
+def frequency_change():
+    """
+    Difference in nucleotide and dinucleotide concentration in +1 to +10 and
+    +10 to +20 and +20 to +40
 
-    coeff :
-    is a p-by-p matrix, each column containing coefficients
-    for one principal component.
-    score :
-    the principal component scores; that is, the representation
-    of A in the principal component space. Rows of SCORE
-    correspond to observations, columns to components.
+    On a personal note, is there a preference for repeats in the sequences
+    compared to normal? I see many repeats. How's this compared to random e coli
+    seq? + 20? Check 3-4-5 repeats
+    """
+    # e coli sequence
+    ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
+    ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
 
-    latent :
-    a vector containing the eigenvalues
-    of the covariance matrix of A.
+    sigprom_dir = 'sequence_data/ecoli/sigma_promoters'
+    sig_paths = glob(sigprom_dir+'/*')
+
+    sig_dict = {}
+    for path in sig_paths:
+        fdir, fname = os.path.split(path)
+        sig_dict[fname[8:15]] = path
+
+    # Separate high-expressors from low-expressors
+    # Read the gene -> DPKM values
+    dpkm_handle = open('sequence_data/ecoli/expression/dpkm.txt', 'rb')
+    dpkm_handle.next() # skip the header
+
+    dpkms = {}
+
+    for line in dpkm_handle:
+        # some lines have 6 and some have 3 entries
+        try:
+            gene, dpkm, rpkm, d, d, d = line.split()
+        except ValueError:
+            gene, dpkm, rpkm = line.split()
+
+        dpkms[gene] = float(dpkm)
+
+    mean_dpkm = np.mean(dpkms.values())
+    std_dpkm = np.std(dpkms.values())
+
+    #print sum((1 for i in dpkms.values() if i < 100))
+
+    # remember to do the forward/reverse thing ...
+    seqs = []
+
+    nr = 0
+
+    repeaters = {}
+    apeaters = {}
+
+    for sigma, sigpath in sig_dict.items():
+
+        #if sigma not in ['Sigma70']:
+            #continue
+
+        for row_pos, line in enumerate(open(sigpath, 'rb')):
+
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+            if seq == '':
+                continue
+
+            # get only those with 1 promoter <-> 1 gene
+            if not name.endswith('p'):
+                continue
+
+            gene_name = name[:-1]
+
+            if 'TTTTT' in seq.upper() and gene_name in dpkms:
+                repeaters[gene_name] = dpkms[gene_name]
+
+            if 'AAAAA' in seq.upper() and gene_name in dpkms:
+                apeaters[gene_name] = dpkms[gene_name]
+
+            # get the expressed ones and those with low dpkm
+            #if gene_name not in dpkms or dpkms[gene_name] < mean_dpkm:
+            #if gene_name not in dpkms or dpkms[gene_name] > mean_dpkm:
+                #continue
+
+            nr += 1
+
+            pos = int(pos)
+
+            if strand == 'forward':
+                seqs.append(ecoli_seq[pos-1:pos+40])
+
+            elif strand == 'reverse':
+                seqs.append(reverseComplement(ecoli_seq[pos-40:pos]))
+
+
+    print np.mean(repeaters.values()), 'Ts'
+    print np.mean(apeaters.values()), 'As'
+    print mean_dpkm, 'mean'
+
+    debug()
+    print nr
+    # compare nucleotide and dinucleotide frequency between first +1, +10 and
+    # +10 to +20, and then 
+
+    # nucs
+    nucs = ('G', 'A', 'T', 'C')
+
+    # dinucs
+    dinucs = tuple(set([''.join([n1, n2]) for n1 in nucs for n2 in nucs]))
+
+    # repeats
+    repeats = tuple((''.join([n for val in range(i)]) for n in nucs
+                     for i in range(3,6)))
+
+    # for each of the groups, make
+    # make a 2X3 plot; each one with two bar-plots of the change in frequency of
+    # all these parameters
+    # No compare the ITS to +20, +40, shuffled, random.
+    # put in dict like this nucs, dinusc, repeats are individual dicts with the
+    # same keys :['ITS compared to +20 to +40'], ['ITS compared to shuffled
+    # ITS'], ['ITS compared to random e coli 20-mers']
+    # Actually make a 3X3, it will be easier to vizuzalizizuze
+
+    # Note this is all very messy.
+    data = dict()
+    data['Nucleotides'] = [[0 for i in range(len(nucs))] for i in range(4)]
+    data['Di-nucleotides'] = [[0 for i in range(len(dinucs))] for i in range(4)]
+    data['Repeats'] = [[0 for i in range(len(repeats))] for i in range(4)]
+
+    # Relate the data-entries with their respective dicst
+    data2tuple = (('Nucleotides', nucs), ('Di-nucleotides', dinucs),
+                 ('Repeats', repeats))
+
+    # Test the +1 to +20 vs +10 to +20
+
+    # caclulate the ITS, +20 to +40 and shuffled
+    # Rely on the order of the original tuples for the order in the lists
+    for seq in seqs:
+
+        # Fill up 0 the 1 then 2 then 3 (cols first then row in 'data')
+        #seq_parts = [seq[:20], seq[-20:]]
+        #seq_parts = [seq[:10], seq[10:20]]
+        seq_parts = [seq[:10], seq[-10:]]
+
+        for indx, seq_part in enumerate(seq_parts):
+
+            for key, tup in data2tuple:
+                # add the count, but you must modify the list ...
+                if key == 'Di-nucleotides':
+                    i = list(seq_part) # splitting sequence into individual letters
+                    lookup = [i[cnt] + i[cnt+1] for cnt in range(len(i)-1)]
+                else:
+                    lookup = seq_part
+
+                for tup_ind, entry in enumerate(tup):
+                    data[key][indx][tup_ind] += lookup.count(entry)
+
+    # shuffle each of the ITS 'shufs' times and do the average count
+    shufs = 50
+    for seq in seqs:
+        #its = list(seq[:20])
+        its = list(seq[:10])
+
+        for key, tup in data2tuple:
+            # shuffle 100 times
+            temp_shuff = [0 for i in range(len(tup))]
+            for d in range(shufs):
+                random.shuffle(its)
+                if key == 'Di-nucleotides':
+                    i = list(its) # splitting sequence into individual letters
+                    lookup = [i[cnt] + i[cnt+1] for cnt in range(len(i)-1)]
+
+                for tup_ind, entry in enumerate(tup):
+                    temp_shuff[tup_ind] += ''.join(its).count(entry)
+
+            # append the average count
+            for tup_ind, entry in enumerate(tup):
+                data[key][2][tup_ind] += temp_shuff[tup_ind]/float(shufs)
+
+    # Average by seqlen
+    seqslen = float(len(seqs))
+    avrg_data = dict()
+    for key, lists2avrg in data.items():
+        avrg_data[key] = []
+        for entry in lists2avrg:
+            avrg_data[key].append([v/seqslen for v in entry])
+
+    # Sample 10k random 20 mers and add them to the averaged ensemble
+    rand_nr = 50000
+    elen = len(ecoli_seq)-20
+    randpos = (random.randrange(elen) for i in range(rand_nr))
+
+    # make a generator of random sequences
+    #rand_seqs = [ecoli_seq[pos:pos+20] for pos in randpos]
+    rand_seqs = [ecoli_seq[pos:pos+10] for pos in randpos]
+
+    for key, tup in data2tuple:
+        temp_one = [0 for i in range(len(tup))]
+
+        for rand_seq in rand_seqs:
+            # add the count
+            for tup_ind, entry in enumerate(tup):
+                temp_one[tup_ind] += rand_seq.count(entry)
+
+        for tup_ind, val in enumerate(temp_one):
+            avrg_data[key][3][tup_ind] = val/float(rand_nr)
+
+    # PLOT THE DAMN THINGS
+    plt.ion()
+    #plt.ioff()
+
+    #fig, axes = plt.subplots(3,3)
+    fig, axes = plt.subplots(2,3)
+
+    #ind2title = ((0, 'ITS'), (1, '+20 to +40'), (2, 'Shuffled ITS'),
+                  #(3, 'Random 20-mer'))
+    #ind2title = ((0, '+20 to +40'), (1, 'Shuffled ITS'), (2, 'Random 20-mer'))
+    ind2title = ((0, '+20 to +40'), (1, 'Shuffled ITS'))
+
+    ind3title = dict((t1, t2) for t1, t2 in ind2title)
+    da2tup = dict((t1, t2) for t1, t2 in data2tuple)
+
+    for col_nr, (key, listz) in enumerate(avrg_data.items()):
+        its_data = listz[0]
+
+        for row_nr, title in ind2title:
+
+            ax = axes[row_nr, col_nr]
+            other_data = listz[row_nr+1]
+
+            x_center = range(1, len(its_data)+1)
+
+            # 16 ones. I will plot bars at 0.5 and 1 of with 0.5.
+            its_xpos = [c-0.25 for c in x_center]
+
+            ax.bar(its_xpos, its_data, width=0.25, label='ITS', color='g')
+
+            if row_nr == 0:
+                colr = 'c'
+            if row_nr == 1:
+                colr = 'b'
+
+            ax.bar(x_center, other_data, width=0.25, label='ITS', color=colr)
+
+            ax.set_xticks(x_center)
+
+            ax.set_xticklabels(da2tup[key])
+
+            ax.set_yticks([])
+
+            if row_nr == 0:
+                ax.set_title(key, size=20)
+
+            if col_nr == 0:
+                ax.set_ylabel(ind3title[row_nr], color=colr, size=18)
+
+            if col_nr == 2:
+                ax.set_xticklabels(da2tup[key], rotation=20)
+
+
+def hsu_pca(lizt):
+    """
+    Run a PCA on RNA-DNA, DNA-DNA, Keq and Purine %
+    """
+    from operator import attrgetter
+    # these are the attributes you want to extract
+    #attrs = ('purine_count', 'DNADNA_en', 'RNADNA_en', 'super_en')
+    #attrs = ('DNADNA_en', 'RNADNA_en', 'keq_en')
+    attrs = ('RNADNA_en', 'keq_en')
+    f = attrgetter(*attrs)
+    seqs = {}
+
+    # make a n x m matrix (m = 4, n = len(seqs)
+    X = np.zeros([len(lizt), len(attrs)])
+
+    its_len = 15
+
+    for li in lizt:
+        name = li[0]
+        seq = li[1][:its_len]
+        py = li[2]
+
+        seqs[name] = [Sequence(seq, name), py]
+
+    pys = []
+    for row_nr, (name, (seqObj, py)) in enumerate(seqs.items()):
+        # can you inita again witha shorter seq?
+
+        # extract the relevant attributes and make as row in matrix
+        X[row_nr] = np.array(f(seqObj))
+        pys.append(py)
+
+    # subtract the mean of nXm matrix and transpose
+    Xn = (X - np.mean(X, axis=0)).T
+
+    plt.scatter(*X.T, c=pys)
+    #debug()
+
+    # calculate covariance
+    covXn = np.cov(Xn)
+
+    # get eigenvectors of covariance
+    eigvals, eigvecs = np.linalg.eig(covXn)
+
+    E = eigvecs.T
+
+    new_X = dot(E, X.T)
+
+    plt.scatter(*new_X, c=pys)
+
+    # plot the data in the new directions and color with py values
+
+    # can we make weights based on the  PCA?
+    # Then it should be
+    # array([ 16.84,   0.36,   7.5 ])
+    # array([[-0.32, -0.31, -0.9 ],
+       #[-0.85,  0.5 ,  0.13],
+       #[-0.41, -0.81,  0.42]])
+       #array([[-0.97,  0.23],
+
+    # just for 2 :
+    #array([[-0.97,  0.23],
+       #[-0.23, -0.97]])
+    #ipdb> eigvals
+    #array([  6.09,  15.39])
+
+
+    #_sum = 15.39 + 6.1
+    # 15.39/_sum = w1
+    # 6.1/_sum = w2
+
+    #super_f = w1*(rna_term*(-0.23) + Keq_term*(-0.97)
+    # + w2*(rna_term*(-0.97) + Keq_term*(0.23)
+    # =  rna_term*(w1(-0.23) + w2*(-0.97)) + Keq_term*(w1*(-0.97) + w2*(0.23)
+    # RESULT no benefit from doing PCA weighting of the RNA-DNA and Keq
+    # variables (or, you did it wrong, but hey, I did it.)
+
+def get_activdowns():
+    """
+    Return lists of activated and downregulated genes for both wt and
+    overexpressed GreA
+    """
+    activ_both = 'sequence_data/greA/activated_grA_native_and_overexpressed.txt'
+    activ_onlyOver = 'sequence_data/greA/activated_grA_only_overexpressed.txt'
+    down_both = 'sequence_data/greA/downRegulated_grA_native_and_overexpressed.txt'
+    down_onlyOver ='sequence_data/greA/downRegulated_grA_only_overexpressed.txt'
+
+    # get activated genes 
+    activs = set([])
+    for line in open(activ_both, 'rb'):
+        activs.add(line.split()[0])
+    for line in open(activ_onlyOver, 'rb'):
+        activs.add(line.split()[0])
+
+    # get downregulated genes
+    downs = set([])
+    for line in open(down_both, 'rb'):
+        downs.add(line.split()[0])
+    for line in open(down_onlyOver, 'rb'):
+        downs.add(line.split()[0])
+
+    return list(activs), list(downs)
+
+
+def greA_filter():
+    """
+    Check the promoters for the genes which are sensitve to GreA. Maybe you'll
+    find some super_f pattern there which you otherwise don't see. Compare both
+    up and down groups to each other and to the genome average
     """
 
-    #A = np.array([[5,8,9,19], [2,5,6, 20], [4, 6,7, 18], [8, 13, 11, 25],
-                #[1,2,5,13], [5,7,9, 21], [0, 2,8, 18], [1, 2, 11, 20],
-                #[3,5,8,12], [3,5,4, 20], [8, 16,17, 12], [2, 3, 1, 20]])
+    # get GreA activated and downregulated genes
+    activated, downregulated = get_activdowns()
 
-    mean = np.mean(A, axis=0)
-    std = np.std(A, axis=0)
+    # get sigma-promoters
+    sigprom_dir = 'sequence_data/ecoli/sigma_promoters'
+    sig_paths = glob(sigprom_dir+'/*')
 
-    M = ((A - mean)/std).T # subtract the mean and divide by std
+    sig_dict = {}
+    for path in sig_paths:
+        fdir, fname = os.path.split(path)
+        sig_dict[fname[8:15]] = path
 
-    # computing eigenvalues and eigenvectors of covariance matrix
-    [latent, coeff] = np.linalg.eig(np.cov(M))
+    # the length of the ITS you should consider
+    its = 10
+    energies = {'activated': [], 'downReg': [], 'others': []}
+    for sigma, sigpath in sig_dict.items():
 
-    score = np.dot(coeff.T, M) # projection of the data in the new space
+        for row_pos, line in enumerate(open(sigpath, 'rb')):
 
-    return coeff, score, latent
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+            if seq == '':
+                continue
+
+            # as a first approximation, skip those that have more than 1
+            # promoter
+            if not name.endswith('p'):
+                continue
+
+            # do a double check to see if you have acrDp, acrDp2 or acrDp12
+            if name[-1] != 'p':
+                gene_name = name[:-2]
+                if gene_name[-1] == 'p':
+                    gene_name = gene_name[:-1]
+
+            else:
+                gene_name = name[:-1]
+
+            sequence = seq[-21:].upper()
+
+            seqObj = Sequence(sequence[:its], name=gene_name, shuffle=False)
+
+            if gene_name in activated:
+                energies['activated'].append(seqObj.super_en)
+            elif gene_name in downregulated:
+                energies['downReg'].append(seqObj.super_en)
+            else:
+                energies['others'].append(seqObj.super_en)
+
+    mean_std= dict((k, (np.mean(vals), np.std(vals))) for k, vals in
+                 energies.items())
+
+    alpha = 0.05
+
+    from itertools import combinations
+    testers = ['activated', 'others', 'downReg']
+
+    for key1, key2 in combinations(testers, r=2):
+
+        print "{0} vs {1}".format(key1, key2)
+        n1 = len(energies[key1])
+        mean1, std1 = mean_std[key1]
+        sem1 = std1/np.sqrt(n1)
+        n2 = len(energies[key2])
+        mean2, std2 = mean_std[key2]
+        sem2 = std2/np.sqrt(n2)
+        welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
+        print ''
+        print ''
+
+
+    # The result is not strong, but you can probably find that it's
+    # "statistically significant". Or actually I'm not sure: both results are
+    # well within the standard deviations of both.
+    # RESULT you see something that makes sense finally.
+
+    # the attributes you'd like
+    #attrs = ('DNADNA_en', 'RNADNA_en', 'keq_en', 'super_en')
+
+    # are the genes regulated by GreA different in the # of promoters compared
+    # to random genes?
+    debug()
 
 def my_pca():
     """
@@ -2546,17 +2961,25 @@ def main():
 
     #new_long5UTR(lizt)
 
-    # TODO take the new file you found; correlate the promoter score with
-    # the abortive propensity for those promoters that overlap the
-    # experimentally verified ones (+/- a base?)
+    #frequency_change()
+
+    # RESULT a weak signal when filtering by greA
+    # That can be a plot
+    greA_filter()
+
+    # Next plot the damn expression colors on the PCA plots
+
+    my_pca()
+    #hsu_pca(lizt)
+    # NOTE it's not clear what I should do now. There is this odd TTT repeating
+    # going on. You should relate to super_en. In super_en the AA and TT have
+    # totally opposite meanings. TTTT and AAAA are both associated with lower
+    # rpkm.
+
     #new_promoter_strength()
 
-    # TODO PCA will not rest until you have done it, it seems.
-    my_pca()
-
-    # RESULT no dinucleotide correlation whatsoever. The distribution is
-    # determined simply by the nucleotide distribution, as can bee seen by the
-    # shuffled dataset.
+    #pca()
+    #my_pca() # re-do your pca work and plot the PY as color codes
 
     # You have ribosomal genes + DPKM values for e coli genes
     # Is there any covariance between DPKM and ribosomal gene for the energy
@@ -2575,8 +2998,107 @@ def main():
     # probability just at certain dinucleotides which correspond to those whose
     # translocation is short?
 
-    # The fact that there is no clear selection pressure for ref_val could mean
-    # a lot of things.
+
+class Sequence(object):
+    """
+    Add a sequence; calculate energy parameters and nucleotide composition.
+    Shuffle sequence and do the same.
+    """
+
+    # Hidden variables you only want to initiate once
+    # nucs
+    _nucs = ('G', 'A', 'T', 'C')
+
+    # dinucs
+    _dinucs = tuple(set([''.join([_n1, _n2]) for _n1 in _nucs for _n2 in _nucs]))
+
+    # repeats
+    _repeats = tuple((''.join([n for val in range(i)]) for n in _nucs
+                     for i in range(3,6)))
+
+    # how many times do you want to shuffle the original sequence?
+    _shuffle_freq = 50
+
+    def __init__(self, sequence, name='noname', shuffle=True):
+
+        self.seq = sequence
+        self.name = name
+        self.ID = name
+
+        # get the dinucleotide pairs
+        self._dinucPairs = self._dinucer(sequence)
+
+        # frequencies of nucleotides, dinucleotides, and repeats
+        self.nuc_freq = self._lookup_frequency(self._nucs)
+
+        self.dinuc_freq = self._lookup_frequency(self._dinucs,
+                                                 provided_seq=self._dinucPairs)
+        self.purine_count = sequence.count('A') + sequence.count('G')
+
+        # how to solve the repeats? :S how to get all repeats??
+        # RESULT repeats are well handled by str.count since it considers
+        # non-overlapping repeats
+        self.repeat_freq = self._lookup_frequency(self._repeats)
+
+        # the four energy terms
+        self.super_en = Energycalc.super_f(sequence)
+        self.keq_en = Energycalc.Keq(sequence)
+        self.RNADNA_en = Energycalc.RNA_DNAenergy(sequence)
+        self.DNADNA_en = Energycalc.DNA_DNAenergy(sequence)
+
+        if shuffle:
+            # make 20 randomly shuffled versions of the sequence
+            self._randomSeq = [''.join(random.sample(sequence, len(sequence))) for _
+                             in range(self._shuffle_freq)]
+
+            # shuffled frequencies: the average of the lookup frequency for each random sequence
+            self.shuf_nuc_freq = self._dict_average(
+                [self._lookup_frequency(self._nucs, provided_seq=rs)
+                 for rs in self._randomSeq])
+
+            # need to provide dinucletoide list instead of sequence string
+            self.shuf_dinuc_freq = self._dict_average(
+                [self._lookup_frequency(self._dinucs, provided_seq=self._dinucer(rs))
+                 for rs in self._randomSeq])
+
+            self.shuf_repeat_freq = self._dict_average(
+                [self._lookup_frequency(self._repeats, provided_seq=rs)
+                 for rs in self._randomSeq])
+
+    def _dinucer(self, sequence):
+        """
+        Return dicnueltode pairs for the sequeence
+        """
+        self._sal = list(sequence)
+        return [self._sal[cnt] + self._sal[cnt+1] for cnt in range(len(self._sal)-1)]
+
+    def _lookup_frequency(self, lookup, provided_seq=False):
+        """
+        Count the occurences of lookup keys in either self.sequence or a
+        provided sequence / list for counting from
+        """
+
+        if not provided_seq:
+            return dict((din, self.seq.count(din)) for din in lookup)
+        else:
+            return dict((din, provided_seq.count(din)) for din in lookup)
+
+
+    def _dict_average(self, in_dicts):
+        """
+        Return the average of all counts of keys in the incoming dicts
+        """
+
+        _adder = {}
+        for indict in in_dicts:
+            for k, v in indict.items():
+                if k in _adder:
+                    _adder[k] += v
+                else:
+                    _adder[k] = v
+
+        return dict((k, v/float(self._shuffle_freq)) for k, v in _adder.items())
+
 
 # Background
 
