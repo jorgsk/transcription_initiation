@@ -2892,7 +2892,11 @@ def main():
 
     #frequency_change()
 
+    # RESULT a weak signal when filtering by greA
+    # That can be a plot
     greA_filter()
+
+    # Next plot the damn expression colors on the PCA plots
 
     #hsu_pca(lizt)
     # NOTE it's not clear what I should do now. There is this odd TTT repeating
@@ -2902,9 +2906,6 @@ def main():
 
     #new_promoter_strength()
 
-    # RESULT nada.
-    # Next: is there any nucleotide or di-nucleotide difference between +1 to
-    # +10, +10 to +20 or between +1+20 and +20 to + 40
     #pca()
     #my_pca() # re-do your pca work and plot the PY as color codes
 
