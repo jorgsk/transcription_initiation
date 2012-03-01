@@ -2305,8 +2305,11 @@ def get_its_plus_20(pos, strand, ecoli):
     if strand == 'reverse':
         return reverseComplement(ecoli[pos-40:pos-20])
 
-def pca():
+def its_data():
     """
+    Just return the ITS data. PCA will be done elsewhere.
+
+    OUTDATED INFO:
     Do PCA on the promoter data. It's not sure what you're going to get out, but
     hopefully it will satisfy Martin to move on.
 
@@ -2356,12 +2359,14 @@ def pca():
     # there is expression data from for which only a single promoter is known
 
     # get genes for which there is expression data
-    expression = get_expression(expression_path)
+    #expression = get_expression(expression_path)
 
     # get promoters for which there is a 1-1 promoter-gene relationsihp 
     promoters = get_pr_nr(promoters_path)
 
-    pr_remain = promoters.intersection(set(expression.keys()))
+    #pr_remain = promoters.intersection(set(expression.keys()))
+    # Ignore the expression thing -- I think it's not related 
+    pr_remain = promoters
     # count the intersection of the two; let it be 
 
         #x1  : Expression of downstream gene
@@ -2391,7 +2396,8 @@ def pca():
         dinsp20 = [ITSseqp20[b] + ITSseqp20[b+1] for b in range(19)]
 
         # 1 expression of gene
-        empty_matrix[row_pos,0] = expression[gene_name]
+        #empty_matrix[row_pos,0] = expression[gene_name]
+        empty_matrix[row_pos,0] = 1 # ignoring this parameter anyway
 
         # 2 Keq of first 20 nucs
         empty_matrix[row_pos,1] = Keq(ITSseq)
@@ -2419,9 +2425,10 @@ def pca():
 
         row_pos += 1 # increment to the next gene/promoter
 
-    eigvecs, projection, eigvals = princomp(empty_matrix)
+    #eigvecs, projection, eigvals = princomp(empty_matrix)
 
-    debug()
+    # I must return this as an mXn matrix, without column 1
+    return empty_matrix[:,1:].T
 
 def princomp(A):
     """ Perform principal components analysis
@@ -2459,6 +2466,65 @@ def princomp(A):
 
     return coeff, score, latent
 
+def my_pca():
+    """
+    PCA. My way.
+    """
+
+    # Get the data matrx; it should be in m X n orientation
+    #X = np.array([[11,3,66,7,4,5], [33,4,2,66,7,8], [55,7,2,99,22,2]])
+    X = its_data()
+
+    m, n = X.shape
+    # Transpose to subtract means easily. Then revert back.
+    Xn = (X.T - np.mean(X.T, axis=0)).T
+
+    # Alternatively, average by the std ...
+    #Xn = (Xn.T - np.std(Xn.T, axis=0)).T
+
+    # Calculate the covariance matrix of Xn
+    CovXn = np.dot(Xn, Xn.T)/(n-1)
+
+    # Get the eigenvalues and eigenvectos
+    eigVals, eigVecs = np.linalg.eig(CovXn)
+
+    # cumulative eigvals
+    var_sum = sum(eigVals)
+    cum_eig = [float(format(sum(eigVals[:i])/var_sum, '.2f'))
+               for i in range(1, len(eigVals)-1)]
+
+    # Get the eigenvectors as row vectors
+    rowEig = eigVecs.T
+
+    Y = np.dot(rowEig, X)
+
+    plt.ion()
+    fig, axes = plt.subplots(2)
+
+    axes[0].scatter(Y[0,:], Y[1,:])
+    axes[0].set_ylabel('PC 1')
+    axes[0].set_xlabel('PC 2')
+    axes[1].scatter(Y[2,:], Y[3,:])
+    axes[1].set_ylabel('PC 3')
+    axes[1].set_xlabel('PC 4')
+
+    fig2, ax2 = plt.subplots()
+    ax2.plot((range(1, len(cum_eig)+1)), [1-float(c) for c in cum_eig])
+    ax2.set_xlabel('Principal component')
+    ax2.set_ylabel('Fraction of variance explained')
+    ax2.set_ylim(0,1)
+    ax2.set_xlim(0.5,len(cum_eig)+0.5)
+    debug()
+
+PCe1 = [ 0.67,  0.37,  0.35,  0.02,  0.39,  0.28,  0.26,  0.01]
+PCe2 = [ 0.49,  0.18,  0.16,  0.01, -0.64, -0.41, -0.35, -0.01]
+PCe3 = [-0.34,  0.42,  0.23, -0.01, -0.56,  0.52,  0.26, -0.01]
+PCe4 = [-0.43,  0.59,  0.34, -0.01,  0.33, -0.45, -0.21,  0.01]
+
+
+    # Plot the first two components against each other,
+    # Then the second two
+
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
@@ -2486,7 +2552,7 @@ def main():
     #new_promoter_strength()
 
     # TODO PCA will not rest until you have done it, it seems.
-    pca()
+    my_pca()
 
     # RESULT no dinucleotide correlation whatsoever. The distribution is
     # determined simply by the nucleotide distribution, as can bee seen by the
