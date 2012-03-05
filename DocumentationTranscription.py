@@ -2252,20 +2252,22 @@ def new_promoter_strength():
     print scipy.stats.spearmanr(scores, props)
     debug()
 
-def get_pr_nr(promoters):
+def get_pr_nr(sig_paths):
     """
     Count the number of promoters with a 1promoter-1gene connection
     """
     proms = set([])
 
-    for line in open(promoters, 'rb'):
-        (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
-        if seq == '':
-            continue
+    for path in sig_paths:
 
-        # add the gene name if if only 1 promoter for this gene
-        if name.endswith('p'):
-            proms.add(name[:-1])
+        for line in open(path, 'rb'):
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+            if seq == '':
+                continue
+
+            # add the gene name if if only 1 promoter for this gene
+            if name.endswith('p'):
+                proms.add(name[:-1])
 
     return proms
 
@@ -2306,7 +2308,9 @@ def get_its_plus_20(pos, strand, ecoli):
 
 def its_data():
     """
-    Just return the ITS data. PCA will be done elsewhere.
+    Just return the ITS data.
+
+    Now outputting x1 separately from the others
 
     OUTDATED INFO:
     Do PCA on the promoter data. It's not sure what you're going to get out, but
@@ -2346,7 +2350,8 @@ def its_data():
         Further, the variance of the different measurements vary a lot.
     """
 
-    promoters_path =  'sequence_data/ecoli/sigma_promoters/PromoterSigma70Set.txt'
+    promoters_dir =  'sequence_data/ecoli/sigma_promoters/'
+    sig_paths = glob(promoters_dir+'/*')
     expression_path = 'sequence_data/ecoli/expression/dpkm.txt'
 
     ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
@@ -2358,81 +2363,70 @@ def its_data():
     # there is expression data from for which only a single promoter is known
 
     # get genes for which there is expression data
-    #expression = get_expression(expression_path)
+    expression = get_expression(expression_path)
 
     # get promoters for which there is a 1-1 promoter-gene relationsihp 
-    promoters = get_pr_nr(promoters_path)
+    promoters = get_pr_nr(sig_paths)
 
-    #pr_remain = promoters.intersection(set(expression.keys()))
-    # Ignore the expression thing -- I think it's not related 
-    pr_remain = promoters
-    # count the intersection of the two; let it be 
+    # Get the promoters that have expressed genes
+    pr_remain = promoters.intersection(set(expression.keys()))
 
-        #x1  : Expression of downstream gene
-        #x2  : Keq of first 20 nucleotides
-        #x3  : RNA-DNA energy of first 20 nucleotides
-        #x4  : DNA-DNA energy of first 20 nucleotides
-        #x5  : *U-dinucleotide frequency in first 20 nucleotides
+    # Optionally ignore the expression thing -- I think it's not related 
+    #pr_remain = promoters
 
     empty_matrix = np.zeros([len(pr_remain), 9])
 
     # seq_logo = open(sigma+'_logo.fasta', 'wb')
     row_pos = 0
-    for line in open(promoters_path, 'rb'):
+    for sigpath in sig_paths:
+        for line in open(sigpath, 'rb'):
 
-        (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
 
-        gene_name = name[:-1]
-        pos = int(pos)
+            gene_name = name[:-1]
+            pos = int(pos)
 
-        if seq == '' or gene_name not in pr_remain:
-            continue
+            if seq == '' or gene_name not in pr_remain:
+                continue
 
-        ITSseq = seq.upper()[-20:]
-        dins = [ITSseq[b] + ITSseq[b+1] for b in range(19)]
+            ITSseq = seq.upper()[-20:]
+            dins = [ITSseq[b] + ITSseq[b+1] for b in range(19)]
 
-        ITSseqp20 = get_its_plus_20(pos, strand, ecoli_seq)
-        dinsp20 = [ITSseqp20[b] + ITSseqp20[b+1] for b in range(19)]
+            ITSseqp20 = get_its_plus_20(pos, strand, ecoli_seq)
+            dinsp20 = [ITSseqp20[b] + ITSseqp20[b+1] for b in range(19)]
 
-        # 1 expression of gene
-        #empty_matrix[row_pos,0] = expression[gene_name]
-        empty_matrix[row_pos,0] = 1 # ignoring this parameter anyway
+            # 1 expression of gene
+            empty_matrix[row_pos,0] = expression[gene_name]
+            #empty_matrix[row_pos,0] = 1 # ignoring this parameter anyway
 
-        # 2 Keq of first 20 nucs
-        empty_matrix[row_pos,1] = Keq(ITSseq)
+            # 2 Keq of first 20 nucs
+            empty_matrix[row_pos,1] = Keq(ITSseq)
 
-        # 3 RNA-DNA of first 20 nucs
-        empty_matrix[row_pos,2] = RNA_DNAenergy(ITSseq)
+            # 3 RNA-DNA of first 20 nucs
+            empty_matrix[row_pos,2] = RNA_DNAenergy(ITSseq)
 
-        # 4 DNA-DNA of first 20 nucs
-        empty_matrix[row_pos,3] = DNA_DNAenergy(ITSseq)
+            # 4 DNA-DNA of first 20 nucs
+            empty_matrix[row_pos,3] = DNA_DNAenergy(ITSseq)
 
-        # 5 *U dinuc frequency in first 20 nucs
-        empty_matrix[row_pos,4] = sum((1 for d in dins if d[1] == 'T'))/19
+            # 5 *U dinuc frequency in first 20 nucs
+            empty_matrix[row_pos,4] = sum((1 for d in dins if d[1] == 'T'))/19
 
-        # 6 Keq of 20:40 nucs
-        empty_matrix[row_pos,5] = Keq(ITSseqp20)
+            # 6 Keq of 20:40 nucs
+            empty_matrix[row_pos,5] = Keq(ITSseqp20)
 
-        # 7 RNA-DNA of 20:40 nucs
-        empty_matrix[row_pos,6] = RNA_DNAenergy(ITSseqp20)
+            # 7 RNA-DNA of 20:40 nucs
+            empty_matrix[row_pos,6] = RNA_DNAenergy(ITSseqp20)
 
-        # 8 DNA-DNA of 20:40 nucs
-        empty_matrix[row_pos,7] = DNA_DNAenergy(ITSseqp20)
+            # 8 DNA-DNA of 20:40 nucs
+            empty_matrix[row_pos,7] = DNA_DNAenergy(ITSseqp20)
 
-        # 9 *U dinuc frequency in 20:40 nucs
-        empty_matrix[row_pos,8] = sum((1 for d in dinsp20 if d[1] == 'T'))/19
+            # 9 *U dinuc frequency in 20:40 nucs
+            empty_matrix[row_pos,8] = sum((1 for d in dinsp20 if d[1] == 'T'))/19
 
-        row_pos += 1 # increment to the next gene/promoter
+            row_pos += 1 # increment to the next gene/promoter
 
-<<<<<<< HEAD
-    #eigvecs, projection, eigvals = princomp(empty_matrix)
-
-    # I must return this as an mXn matrix, without column 1
-    return empty_matrix[:,1:].T
-=======
-    return empty_matrix
-
-    #eigvecs, projection, eigvals = princomp(empty_matrix[:,1:])
+    # Return as mXn matrix, with expression separate
+    return empty_matrix[:,0].T, empty_matrix[:,1:].T
 
 def frequency_change():
     """
@@ -2884,11 +2878,14 @@ def greA_filter():
 def my_pca():
     """
     PCA. My way.
+
+    UPD: add the information about expression
     """
 
     # Get the data matrx; it should be in m X n orientation
     #X = np.array([[11,3,66,7,4,5], [33,4,2,66,7,8], [55,7,2,99,22,2]])
-    X = its_data()
+    expression, X = its_data()
+    log2exp = np.log2(expression)
 
     m, n = X.shape
     # Transpose to subtract means easily. Then revert back.
@@ -2911,15 +2908,16 @@ def my_pca():
     # Get the eigenvectors as row vectors
     rowEig = eigVecs.T
 
+    # Re-represent the data in the new basis
     Y = np.dot(rowEig, X)
 
     plt.ion()
     fig, axes = plt.subplots(2)
 
-    axes[0].scatter(Y[0,:], Y[1,:])
+    axes[0].scatter(Y[0,:], Y[1,:], c=log2exp)
     axes[0].set_ylabel('PC 1')
     axes[0].set_xlabel('PC 2')
-    axes[1].scatter(Y[2,:], Y[3,:])
+    axes[1].scatter(Y[2,:], Y[3,:], c=log2exp)
     axes[1].set_ylabel('PC 3')
     axes[1].set_xlabel('PC 4')
 
@@ -2929,12 +2927,11 @@ def my_pca():
     ax2.set_ylabel('Fraction of variance explained')
     ax2.set_ylim(0,1)
     ax2.set_xlim(0.5,len(cum_eig)+0.5)
-    debug()
 
-PCe1 = [ 0.67,  0.37,  0.35,  0.02,  0.39,  0.28,  0.26,  0.01]
-PCe2 = [ 0.49,  0.18,  0.16,  0.01, -0.64, -0.41, -0.35, -0.01]
-PCe3 = [-0.34,  0.42,  0.23, -0.01, -0.56,  0.52,  0.26, -0.01]
-PCe4 = [-0.43,  0.59,  0.34, -0.01,  0.33, -0.45, -0.21,  0.01]
+#PCe1 = [ 0.67,  0.37,  0.35,  0.02,  0.39,  0.28,  0.26,  0.01]
+#PCe2 = [ 0.49,  0.18,  0.16,  0.01, -0.64, -0.41, -0.35, -0.01]
+#PCe3 = [-0.34,  0.42,  0.23, -0.01, -0.56,  0.52,  0.26, -0.01]
+#PCe4 = [-0.43,  0.59,  0.34, -0.01,  0.33, -0.45, -0.21,  0.01]
 
 
     # Plot the first two components against each other,
@@ -2965,10 +2962,12 @@ def main():
 
     # RESULT a weak signal when filtering by greA
     # That can be a plot
-    greA_filter()
+    # TODO make the plot, including the standard deviations :S
+    # You have to do it at work; you haven't included the data in the repository
+    # :S
+    #greA_filter()
 
     # Next plot the damn expression colors on the PCA plots
-
     my_pca()
     #hsu_pca(lizt)
     # NOTE it's not clear what I should do now. There is this odd TTT repeating
@@ -2977,9 +2976,6 @@ def main():
     # rpkm.
 
     #new_promoter_strength()
-
-    #pca()
-    #my_pca() # re-do your pca work and plot the PY as color codes
 
     # You have ribosomal genes + DPKM values for e coli genes
     # Is there any covariance between DPKM and ribosomal gene for the energy
