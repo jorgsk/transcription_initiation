@@ -1910,8 +1910,10 @@ def get_start_codons():
 
     return out_dict
 
-def get_candidates(sigpath, start_codons):
+def get_candidates(sigpath, start_codons, min_len=0, max_len=400):
     """
+    Return for each promoter all the transcription start sites between min_len
+    and max_len
     """
 
     candidates = {}
@@ -1930,37 +1932,32 @@ def get_candidates(sigpath, start_codons):
         TTS = int(pos)
 
         if strand == 'forward':
+            # start_codons is sorted by lowest first
             for val in start_codons['+']:
-                if val < TTS:
+                # skip until you get to the TTS + maybe a min len
+                if val < TTS + min_len:
                     continue
                 else:
-                    if val - TTS > 400:
+                    # If you passed by more than max_len nt, just stop
+                    if val - TTS > max_len:
                         break
                     else:
-                        if candidates[name] == []:
-                            if val not in candidates[name]:
-                                candidates[name].append(val)
-                        # add two sites if they are really close
-                        elif val - TTS < 100:
-                            if val not in candidates[name]:
-                                candidates[name].append(val)
+                        if val not in candidates[name]:
+                            candidates[name].append(val)
 
         if strand == 'reverse':
             for val in reversed(start_codons['-']):
-                if val > TTS:
+                # skip until you have reached min_len downstream the TTS
+                if val > TTS - min_len:
                     continue
                 else:
-                    if TTS - val > 400:
+                    # if too far away, stop
+                    if TTS - val > max_len:
                         break
                     else:
-                        if candidates[name] == []:
+                        if val not in candidates[name]:
+                            candidates[name].append(val)
                             # don't add twice
-                            if val not in candidates[name]:
-                                candidates[name].append(val)
-                        elif TTS - val < 100:
-                            # don't add twice
-                            if val not in candidates[name]:
-                                candidates[name].append(val)
 
     return candidates
 
@@ -1976,7 +1973,7 @@ def new_long5UTR(lizt):
     ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
     ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
 
-    # strand-dictionary for start_codons
+    # strand-dictionary for position of all start_codons in e coli
     start_codons = get_start_codons()
 
     #favored = ['TA', 'TC', 'TG']
@@ -1995,13 +1992,9 @@ def new_long5UTR(lizt):
         fdir, fname = os.path.split(path)
         sig_dict[fname[8:15]] = path
 
-    # candidates with start codon within 400 nt
-    sig_cand = {}
-
     for sigma, sigpath in sig_dict.items():
 
         candidates = get_candidates(sigpath, start_codons)
-        sig_cand[sigma] = candidates
 
         favs = [0, 0, 0, 0]
         opposite = [0, 0, 0, 0]
@@ -2297,14 +2290,109 @@ def reverseComplement(sequence):
     complement = {'A':'T','C':'G','G':'C','T':'A','N':'N'}
     return "".join([complement[nt] for nt in sequence[::-1]])
 
-def get_its_plus_20(pos, strand, ecoli):
+def get_plus_20(pos, strand, ecoli):
     """
+    Return the sequence +20 in the 3' direction of ops
     """
 
     if strand == 'forward':
         return ecoli[pos+20:pos+40]
     if strand == 'reverse':
         return reverseComplement(ecoli[pos-40:pos-20])
+
+def get_reversed_data():
+    """
+    Return energy data for all promoters in a m X n matrix, where m is the
+    number of promoters and n is the measure you want. This is to support a
+    promoter-as-variable PCA.
+
+    Proposed variables:
+
+        x1 : promoter 1 ...
+        .
+        .
+        .
+        xn : promoter n
+
+    Proposed samples:
+
+        Energy of dinucleotide1
+        Energy of dinucleotide2
+        .
+        .
+        .
+        Energy of dinucleotide39
+
+    That means that the vectors I'll end up with will be linear combinations of
+    genes, which explain the largest variation in the samples. This is some kind
+    of clustering approach. They will be clustered if they have special patterns
+    in the dinucleotide energies. Well well.
+    """
+
+    promoters_dir =  'sequence_data/ecoli/sigma_promoters/'
+    sig_paths = glob(promoters_dir+'/*')
+    expression_path = 'sequence_data/ecoli/expression/dpkm.txt'
+
+    ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
+    ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
+
+    from Energycalc import super_en, Keq_EC8_EC9
+
+    # get genes for which there is expression data
+    expression = get_expression(expression_path)
+    # TODO start here and get the new matrix up and running
+
+    # get promoters for which there is a 1-1 promoter-gene relationsihp 
+    promoters = get_pr_nr(sig_paths)
+
+    # Get the promoters that have expressed genes
+    pr_remain = promoters.intersection(set(expression.keys()))
+
+    # Optionally ignore the expression thing -- I think it's not related 
+    #pr_remain = promoters
+
+    # You should return a m (promoter) x n (measures) matrix. Let's use the
+    # Keq of the first 20 dinucleotdies, which will be 19
+
+    #ind = list(sequence) # splitting sequence into individual letters
+    #neigh = [ind[c] + ind[c+1] for c in range(len(ind)-1)]
+
+    en_dict = Keq_EC8_EC9
+    #en_dict = super_en
+
+    empty_matrix = np.zeros([len(pr_remain), 38])
+
+    expre = []
+
+    # seq_logo = open(sigma+'_logo.fasta', 'wb')
+    row_pos = 0
+    for sigpath in sig_paths:
+        for line in open(sigpath, 'rb'):
+
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+
+            gene_name = name[:-1]
+            pos = int(pos)
+
+            if seq == '' or gene_name not in pr_remain:
+                continue
+
+            ITSseq = seq.upper()[-20:]
+            dins = [ITSseq[b] + ITSseq[b+1] for b in range(19)]
+
+            ITSseqp20 = get_plus_20(pos, strand, ecoli_seq)
+            dinsp20 = [ITSseqp20[b] + ITSseqp20[b+1] for b in range(19)]
+
+            ens = [en_dict[d] for d in dins + dinsp20]
+
+            empty_matrix[row_pos] = np.array(ens)
+
+            expre.append(expression[gene_name])
+
+            row_pos += 1
+
+    return expre, empty_matrix
+
 
 def its_data():
     """
@@ -2392,7 +2480,7 @@ def its_data():
             ITSseq = seq.upper()[-20:]
             dins = [ITSseq[b] + ITSseq[b+1] for b in range(19)]
 
-            ITSseqp20 = get_its_plus_20(pos, strand, ecoli_seq)
+            ITSseqp20 = get_plus_20(pos, strand, ecoli_seq)
             dinsp20 = [ITSseqp20[b] + ITSseqp20[b+1] for b in range(19)]
 
             # 1 expression of gene
@@ -2495,11 +2583,11 @@ def frequency_change():
 
             gene_name = name[:-1]
 
-            if 'TTTTT' in seq.upper() and gene_name in dpkms:
-                repeaters[gene_name] = dpkms[gene_name]
+            #if 'TTTTT' in seq.upper() and gene_name in dpkms:
+                #repeaters[gene_name] = dpkms[gene_name]
 
-            if 'AAAAA' in seq.upper() and gene_name in dpkms:
-                apeaters[gene_name] = dpkms[gene_name]
+            #if 'AAAAA' in seq.upper() and gene_name in dpkms:
+                #apeaters[gene_name] = dpkms[gene_name]
 
             # get the expressed ones and those with low dpkm
             #if gene_name not in dpkms or dpkms[gene_name] < mean_dpkm:
@@ -2516,12 +2604,10 @@ def frequency_change():
             elif strand == 'reverse':
                 seqs.append(reverseComplement(ecoli_seq[pos-40:pos]))
 
-
     print np.mean(repeaters.values()), 'Ts'
     print np.mean(apeaters.values()), 'As'
     print mean_dpkm, 'mean'
 
-    debug()
     print nr
     # compare nucleotide and dinucleotide frequency between first +1, +10 and
     # +10 to +20, and then 
@@ -2563,8 +2649,8 @@ def frequency_change():
 
         # Fill up 0 the 1 then 2 then 3 (cols first then row in 'data')
         #seq_parts = [seq[:20], seq[-20:]]
-        #seq_parts = [seq[:10], seq[10:20]]
-        seq_parts = [seq[:10], seq[-10:]]
+        seq_parts = [seq[:10], seq[10:20]]
+        #seq_parts = [seq[:10], seq[-10:]]
 
         for indx, seq_part in enumerate(seq_parts):
 
@@ -2807,19 +2893,39 @@ def greA_filter():
 
     # the length of the ITS you should consider
     its = 10
-    energies = {'activated': [], 'downReg': [], 'others': []}
+    energies = {'activated': [], 'down-regulated': [], 'others': []}
+    sObjs = {}
+    #genz = ['tnaA', 'cspA', 'cspD', 'rplK', 'rpsA', 'rpsU', 'lacZ', 'ompX']
+    genz = ['ompX']
+
+    dupes = {'activated': {}, 'down-regulated': {}, 'others': {}}
+    # all start codons
+    start_codons = get_start_codons()
+
     for sigma, sigpath in sig_dict.items():
 
+        # get those genes that have a long (+40 nt) 5UTR
+        # as not to compete with codon sequence and/or shine-dalgarno
+        threshold = 40
+        candidates = get_candidates(sigpath, start_codons, threshold)
+
         for row_pos, line in enumerate(open(sigpath, 'rb')):
+
+            dupe = False
 
             (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
             if seq == '':
                 continue
 
+            if name not in candidates:
+                continue
+            if candidates[name] == []:
+                continue
+
             # as a first approximation, skip those that have more than 1
             # promoter
             if not name.endswith('p'):
-                continue
+                dupe = True
 
             # do a double check to see if you have acrDp, acrDp2 or acrDp12
             if name[-1] != 'p':
@@ -2834,20 +2940,78 @@ def greA_filter():
 
             seqObj = Sequence(sequence[:its], name=gene_name, shuffle=False)
 
-            if gene_name in activated:
-                energies['activated'].append(seqObj.super_en)
-            elif gene_name in downregulated:
-                energies['downReg'].append(seqObj.super_en)
+            sObjs[seqObj.name] = seqObj
+
+            if not dupe:
+                if gene_name in activated:
+                    energies['activated'].append(seqObj.super_en)
+                elif gene_name in downregulated:
+                    energies['down-regulated'].append(seqObj.super_en)
+                else:
+                    energies['others'].append(seqObj.super_en)
             else:
-                energies['others'].append(seqObj.super_en)
+                if gene_name in activated:
+                    if gene_name in dupes['activated']:
+                        dupes['activated'][gene_name].append(seqObj.super_en)
+                    else:
+                        dupes['activated'][gene_name] = [seqObj.super_en]
+
+                elif gene_name in downregulated:
+                    if gene_name in dupes['down-regulated']:
+                        dupes['down-regulated'][gene_name].append(seqObj.super_en)
+                    else:
+                        dupes['down-regulated'][gene_name] = [seqObj.super_en]
+                else:
+                    if gene_name in dupes['others']:
+                        dupes['others'][gene_name].append(seqObj.super_en)
+                    else:
+                        dupes['others'][gene_name] = [seqObj.super_en]
+                # add to dupe dict for later resolving
 
     mean_std= dict((k, (np.mean(vals), np.std(vals))) for k, vals in
                  energies.items())
+    median_std= dict((k, (np.median(vals), np.std(vals))) for k, vals in
+                 energies.items())
 
-    alpha = 0.05
+    # NOTE there is a small difference, but it's not much.
+    # Idea for testing also the genes with more than 1 promoter. Choose the one
+    # with highest/lowst super_en, but do it in a way that is comparable with
+    # the others! Like: for all of them, choose the lowest or highest. Maybe
+    # then ... if you even out the effect, you'll get the p-value benefit.
+    #mins = {}
+    #maxes = {}
+    #for key, subdict in dupes.items():
+        #mins[key] = []
+        #maxes[key] = []
+        #for gene, vals in subdict.items():
+            #mins[key].append(min(vals))
+            #maxes[key].append(max(vals))
+
+    fig1, ax1 = plt.subplots()
+
+    cols = ['b', 'g', 'r']
+
+    for ind, (name, ens) in enumerate(energies.items()):
+        if cols[ind] == 'r':
+            al = 0.2
+        else:
+            al = 0.9
+        ax1.hist(ens, color=cols[ind], label=name, alpha=al)
+
+    ax1.legend()
+
+    # tnaA, cspA, cspD, rplK, rpsA and rpsU as well as lacZ. How do these stand
+    # out? Result: no clear pattern. 
+    # NOTE: The activated are the ones that are activated in the greA+, which
+    # means that GreA are important for their expression. This makes the most
+    # sense.
+
+    alpha = 0.02
 
     from itertools import combinations
-    testers = ['activated', 'others', 'downReg']
+    testers = ['activated', 'others', 'down-regulated']
+
+    plotdict = {}
 
     for key1, key2 in combinations(testers, r=2):
 
@@ -2859,9 +3023,52 @@ def greA_filter():
         mean2, std2 = mean_std[key2]
         sem2 = std2/np.sqrt(n2)
         welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
+
+        plotdict[key1] = (mean1, std1)
+        plotdict[key2] = (mean2, std2)
         print ''
         print ''
 
+    order = testers
+    heightsYerr = [plotdict[o] for o in order]
+    heights, errs = zip(*heightsYerr)
+    xpos = range(1,4)
+    wid = 0.5
+
+    plt.ion()
+
+    heights = [-h for h in heights]
+
+    fig, ax = plt.subplots()
+    rects = ax.bar(xpos, heights, width=wid, yerr=errs, align='center')
+
+    ax.set_xlim(1-wid,3+wid)
+
+    ax.set_xticks(xpos)
+    ax.set_xticklabels(order)
+
+    stardict = {'activated': '**\n*', 'others': '*', 'down-regulated': '**'}
+
+    for indx, name in enumerate(order):
+        xpos = indx + 1
+        height = -plotdict[name][0]
+        std = plotdict[name][1]
+
+        ax.text(xpos, height+std + 2, stardict[name], ha='center', va='center')
+
+    ax.set_ylim(0,30)
+
+    ax.set_title('Comparison of abortive initiation scores for E coli'\
+                 ' promoters\nsignificance: * $p = 0.02 and ** $p = 0.005$')
+    ax.set_ylabel('Abortive initiation score')
+    ax.set_xlabel('GreA activated, other, and GreA down-regulated genes')
+
+    #def autolabel(rects):
+    ## attach some text labels
+    #for rect in rects:
+        #height = rect.get_height()
+        #ax.text(rect.get_x()+rect.get_width()/2., 1.05*height, '%d'%int(height),
+                #ha='center', va='bottom')
 
     # The result is not strong, but you can probably find that it's
     # "statistically significant". Or actually I'm not sure: both results are
@@ -2880,44 +3087,71 @@ def my_pca():
     PCA. My way.
 
     UPD: add the information about expression
+
+    UPD2: Martin actually meant that I should use the promoters as VARIABLES!
+    This would make the energy calculations the samples.
+
+    The logic isn't so straight forward, but I imagine it like this:
+
+        instead of X1 = Energy, X1(P1) = Energy of P1
+
+        I have to think like this:
+
+            P1 = Promoter
+
+            P1(X1) = X1(P1) = Energy of P1
+
+        Maybe it doesn't matter for the mathematics, but it's kinda crazy
+
+    NOTE: for some reason the eig doesn't give the same eigenvalues as svd.
+    sticking with svd as recommended by people.
     """
 
     # Get the data matrx; it should be in m X n orientation
+    # where m are the variables (energy ...) and n are the samples (promoters
+    # ...)
     #X = np.array([[11,3,66,7,4,5], [33,4,2,66,7,8], [55,7,2,99,22,2]])
-    expression, X = its_data()
+    #expression, X = its_data()
+
+    # XXX new, get data where things are reversed. Now, this m X n matrix should
+    # have m variables -- the promoters! And n samples -- the measures!
+    # Personally this is very strange, but it could find co-varying patterns in
+    # the genes, but really, it's nuts. The interpretation is not clear at all.
+
+    expression, X = get_reversed_data()
     log2exp = np.log2(expression)
 
     m, n = X.shape
     # Transpose to subtract means easily. Then revert back.
-    Xn = (X.T - np.mean(X.T, axis=0)).T
+    #Xn = (X.T - np.mean(X.T, axis=0)).T
+    Xn = (X.T - np.mean(X.T, axis=0))
 
-    # Alternatively, average by the std ...
-    #Xn = (Xn.T - np.std(Xn.T, axis=0)).T
+    U,sgma,V = np.linalg.svd(Xn, full_matrices=False)
+    #U,sgma,V = np.linalg.svd(CovXn, full_matrices=False)
+     #Then U.T is the same as rowEig
+    var_sum = sum(sgma)
+    cum_eig = [float(format(sum(sgma[:i])/var_sum, '.2f'))
+               for i in range(1, len(sgma)-1)]
 
-    # Calculate the covariance matrix of Xn
-    CovXn = np.dot(Xn, Xn.T)/(n-1)
-
-    # Get the eigenvalues and eigenvectos
-    eigVals, eigVecs = np.linalg.eig(CovXn)
-
-    # cumulative eigvals
-    var_sum = sum(eigVals)
-    cum_eig = [float(format(sum(eigVals[:i])/var_sum, '.2f'))
-               for i in range(1, len(eigVals)-1)]
-
-    # Get the eigenvectors as row vectors
-    rowEig = eigVecs.T
+    debug()
+    # new method
+    #from pca_class import PCA, Center
+    #pc = PCA(CovXn, fraction=1)
+    #pc = PCA(Xn, fraction=1)
 
     # Re-represent the data in the new basis
-    Y = np.dot(rowEig, X)
+    #Y = np.dot(U, X.T)
 
     plt.ion()
     fig, axes = plt.subplots(2)
 
-    axes[0].scatter(Y[0,:], Y[1,:], c=log2exp)
+    #axes[0].scatter(Y[0,:], Y[1,:], c=log2exp)
+    axes[0].scatter(Y[0,:], Y[1,:])
     axes[0].set_ylabel('PC 1')
     axes[0].set_xlabel('PC 2')
-    axes[1].scatter(Y[2,:], Y[3,:], c=log2exp)
+
+    #axes[1].scatter(Y[2,:], Y[3,:], c=log2exp)
+    axes[1].scatter(Y[2,:], Y[3,:])
     axes[1].set_ylabel('PC 3')
     axes[1].set_xlabel('PC 4')
 
@@ -2936,6 +3170,26 @@ def my_pca():
 
     # Plot the first two components against each other,
     # Then the second two
+
+def pca_eig(orig_data):
+    data = np.array(orig_data)
+    data = (data - data.mean(axis=0))
+    #C = np.corrcoef(data, rowvar=0)
+    C = np.cov(data, rowvar=0)
+    w, v = np.linalg.eig(C)
+    print "Using numpy.linalg.eig"
+    print w
+    #print v
+
+def pca_svd(orig_data):
+    data = np.array(orig_data)
+    data = (data - data.mean(axis=0))
+    C = np.corrcoef(data, rowvar=0)
+    u, s, v = np.linalg.svd(C)
+    print "Using numpy.linalg.svd"
+    #print u
+    print s
+    #print v
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
@@ -2959,21 +3213,27 @@ def main():
     #new_long5UTR(lizt)
 
     #frequency_change()
+    # NOTE the poly(A) and poly(T) tracts could be regulatory elements of
+    # transcriptional slippage
 
     # RESULT a weak signal when filtering by greA
     # That can be a plot
     # TODO make the plot, including the standard deviations :S
     # You have to do it at work; you haven't included the data in the repository
     # :S
-    #greA_filter()
+    greA_filter()
 
-    # Next plot the damn expression colors on the PCA plots
-    my_pca()
+    # Now plotting the damn expression colors on the PCA plots
+    #my_pca()
     #hsu_pca(lizt)
     # NOTE it's not clear what I should do now. There is this odd TTT repeating
     # going on. You should relate to super_en. In super_en the AA and TT have
     # totally opposite meanings. TTTT and AAAA are both associated with lower
     # rpkm.
+
+    # They found promoter proximal stalling at these promoters
+    # tnaA, cspA, cspD, rplK, rpsA and rpsU as well as lacZ. How do these stand
+    # out in the crowd?
 
     #new_promoter_strength()
 
