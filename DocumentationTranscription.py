@@ -1805,19 +1805,24 @@ def new_scatter(lizt, ITSs):
 
     plt.ion()
 
-    rows = [5, 10, 15, 20, 'msat']
+    #rows = [5, 10, 15, 20, 'msat']
     #rows = [5, 10, 15, 20]
-    #rows = [20]
-    fig, axes = plt.subplots(len(rows), 3, sharey=True)
+    rows = [15]
+    #fig, axes = plt.subplots(len(rows), 3, sharey=True)
+    fig, axes = plt.subplots()
 
     for row_nr, maxnuc in enumerate(rows):
         name = '1_{0}_scatter_comparison'.format(maxnuc)
 
         if maxnuc == 'msat':
-            rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
-            dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
-            keq = [Energycalc.Keq(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
-            added = [Energycalc.super_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #keq = [Energycalc.Keq(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #added = [Energycalc.super_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:s.msat]) for s in ITSs]
+            dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:s.msat]) for s in ITSs]
+            keq = [Energycalc.Keq(s.sequence[:s.msat]) for s in ITSs]
+            added = [Energycalc.super_f(s.sequence[:s.msat]) for s in ITSs]
             #PCA = [Energycalc.pca_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
 
         else:
@@ -1827,8 +1832,9 @@ def new_scatter(lizt, ITSs):
             added = [Energycalc.super_f(s.sequence[:maxnuc]) for s in ITSs]
             #PCA = [Energycalc.pca_f(s.sequence[:maxnuc]) for s in ITSs]
 
-        energies = [('RNA-DNA', rna_dna), ('Translocation', keq),
-                    ('RNA-DNA - Translocation', added)]
+        #energies = [('RNA-DNA', rna_dna), ('Translocation', keq),
+                    #('RNA-DNA - Translocation', added)]
+        energies = [('Abortive propensity', added)]
 
         PYs = [itr.PY for itr in ITSs]
         PYs_std = [itr.PY_std for itr in ITSs]
@@ -1838,10 +1844,11 @@ def new_scatter(lizt, ITSs):
         for col_nr, (name, data) in enumerate(energies):
 
             # can't use [0,4] notation when only 1 row ..
-            if len(rows) == 1:
-                ax = axes[col_nr]
-            else:
-                ax = axes[row_nr, col_nr]
+            #if len(rows) == 1:
+                #ax = axes[col_nr]
+            #else:
+                #ax = axes[row_nr, col_nr]
+            ax = axes
 
             if stds == 'yes':
                 ax.errorbar(data, PYs, yerr=PYs_std, fmt=fmts[col_nr])
@@ -1851,10 +1858,12 @@ def new_scatter(lizt, ITSs):
             corrs = scipy.stats.spearmanr(data, PYs)
 
             if col_nr == 0:
-                ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=15)
+                #ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=15)
+                ax.set_ylabel("Productive yield of ITS variant)".format(maxnuc), size=15)
             if row_nr == 0:
-                #ax.set_xlabel("DNA-DNA energy ($\Delta G$)", size=20)
-                header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
+                ax.set_xlabel("Abortive propensity", size=20)
+                #header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
+                header = 'Spearman: r = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
                 ax.set_title(header, size=15)
             else:
                 header = 'r = {0:.2f}, p = {1:.1e}'.format(corrs[0], corrs[1])
@@ -1867,6 +1876,9 @@ def new_scatter(lizt, ITSs):
             for l in ax.get_yticklabels():
                 l.set_fontsize(12)
                 #l.set_fontsize(6)
+
+            # remove me
+            ax.set_xticklabels(range(len(data)))
 
         fig.set_figwidth(2)
         fig.set_figheight(6)
@@ -3193,7 +3205,7 @@ def pca_svd(orig_data):
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
-    #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
+    #lizt, ITSs = StripSet(4, lizt, ITSs) # strip promoters (0 for nostrip)
     #PaperResults(lizt, ITSs)
 
     #NewEnergyAnalyzer(ITSs) # going back to see the energy-values again
@@ -3208,7 +3220,7 @@ def main():
 
     #new_ladder(lizt)
 
-    #new_scatter(lizt, ITSs)
+    new_scatter(lizt, ITSs)
 
     #new_long5UTR(lizt)
 
@@ -3221,7 +3233,7 @@ def main():
     # TODO make the plot, including the standard deviations :S
     # You have to do it at work; you haven't included the data in the repository
     # :S
-    greA_filter()
+    #greA_filter()
 
     # Now plotting the damn expression colors on the PCA plots
     #my_pca()
