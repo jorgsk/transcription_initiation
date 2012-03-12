@@ -58,14 +58,6 @@ fig_dir2 = '/home/jorgsk/phdproject/The-Tome/my_papers/rna-dna-paper/figures'
 
 fig_dirs = (fig_dir1, fig_dir2)
 
-# Correlator correlates the DNA-RNA/DNA energies of the subsequences of the ITS
-# sequences with the data points of those sequences. ran = 'yes' will generate
-# random sequences instead of using the sequence from seqdata. kind can be RNA,
-# DNA or combo, where combo combines RNA and DNA energy calculations. sumit =
-# 'yes' will sum up the energy values for each ITS. sumit == 'no' wil do a
-# sliding window analysis. The sliding window may be important for correlating
-# with Abortive Probabilities.
-
 def welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha):
     """
     Got this from the scipy mailinglist, guy named Angus
@@ -102,168 +94,6 @@ def welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha):
     else:
         print "Not significantly different"
         return False
-
-def Correlator(seqdata, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=0.05, plot='no'):
-    """ Investigate correlations between DNA/DNA, RNA/DNA, and productive yield
-    (PY) values of ITS-data.
-
-    ran == 'yes' to compare the PY values to random DNA instead of experiment DNA.
-
-    kind == 'RNA', 'DNA', or 'combo', to analyze only RNA/DNA, DNA/DNA, or a
-    combination of these factors.
-
-    sumit == 'yes' to correlate with the sum of energies instead of absolute
-    energies. For example, for RNA/DNA the energy term at 18 will be the sum of
-    all energy terms up to 18, instead of the (10,18) energy term obtained with
-    sumit=='no'.
-
-    p is the threshold for reporting correlation corefficients.
-
-    msatyes == 'yes': do not return 0 in enrows for RNA/DNA bonds that are
-    unphysical according to msat. For example, 'N25' will have 0 for (10,18).
-    Instead return the expected energy of a sequence of that length. """
-
-    maxlen = 8  # max length of RNA/DNA hybrid
-    # Interchange 'rows' and 'columns' in seqdata
-    rowdata = [[row[val] for row in seqdata] for val in range(len(seqdata[0]))]
-    # rowdata = [sequence name, sequence, PY, PYstd..]
-    PYstdv = rowdata[3]
-    msat = rowdata[-2]
-    #
-    # Calculate energies of subsets of the ITS-sequences. row[-2] is the msat;
-    # NOTE encolsRNA adds Expected energy value after msat is reached!
-    encolsRNA = [Energycalc.PhysicalRNA(row[1], row[-2], msatyes, maxlen) for row in seqdata]
-    encolsDNA = [Energycalc.PhysicalDNA(row[1]) for row in seqdata]
-
-    if ran == 'yes':
-        ran = ITSgenerator_local(len(seqdata))
-        # Adding msat to sequences to mimick the real data
-        ran = [[ran[num], msat[num]] for num in range(len(ran))]
-        encolsRNA = [Energycalc.PhysicalRNA(seqs[0], seqs[1], msatyes, maxlen) for seqs in ran]
-        encolsDNA = [Energycalc.PhysicalDNA(seqs[0]) for seqs in ran]
-    # Interchange 'rows' and 'columns' in encols and add DNA range after energies
-    # enrows is the energy for each stretch [0,2], [0,3],...[11,20] for each
-    # seq. At the end of each 'enrow' is the list [0,3] to show this.
-    enrowsRNA = [[[row[val][0] for row in encolsRNA], row[val][1]] for val in
-              range(len(encolsRNA[0]))]
-    enrowsDNA = [[[row[val][0] for row in encolsDNA], row[val][1]] for val in
-              range(len(encolsDNA[0]))]
-
-    if kind == 'RNA':
-        enrows = enrowsRNA
-    elif kind == 'DNA':
-        enrows = enrowsDNA
-    elif kind == 'combo':
-        #   (-11,2)+(0,1), (-11,3)+(0,2),..., (-11,9)+(0,8), (-11,10)+(1,9),...
-        # = (0,13)+(0,1), (0,14)+(0,2),..., (0,20)+(0,8), (0,21)+(1,9)
-        # Convert the energy values to numpy arrays to _add_ them together
-        # Hippel science 1998
-        enrows = []
-        for indx in range(len(enrowsRNA)):
-            zum = np.array(enrowsRNA[indx][0]) + np.array(enrowsDNA[indx][0])
-            zumranges = [enrowsRNA[indx][1], enrowsDNA[indx][1]]
-            enrows.append([zum.tolist(), zumranges])
-
-    # Including only the relevant data in rowdata: PY(2) and MSAT(6).
-    experidata = [rowdata[2]]
-    plot_returns = [[], [], []]
-    if sumit == 'yes':
-        # Removing indices and summing energy terms for each ITS.
-        enMatrix = np.array([row[0] for row in enrows])
-        enrows = [[sum(enMatrix[:cnt]).tolist(), cnt] for cnt in range(1,20)]
-        # TODO which to plot? -1,-2,... etc
-        normalizer = (-1)*min(enrows[-1][0]) #divide by min energy
-        # energy, PY, seqnames are for plots and error report.
-        energy = np.array(enrows[-1][0])
-        energy_norm = np.array(enrows[-1][0])/normalizer
-        PY = experidata[0]
-        plot_returns = [energy_norm, PY, PYstdv]
-        if plot == 'yes':
-            Testfit.Expfit(energy_norm, PY, PYstdv) #stdv is a "main-list"
-    reslist = [] # where statistically significant correlations are stored
-    for datapoint in range(len(experidata)):
-        for subseqnr in range(len(enrows)):
-            # Separating the energies from their indeces
-            statistics = scipy.stats.spearmanr(experidata[datapoint], enrows[subseqnr][0])
-            pval = statistics[1]
-            if pval <= p:
-                corr = statistics[0]
-                reslist.append([corr, pval, datapoint, enrows[subseqnr][1]])
-
-    return reslist, plot_returns
-
-def CorrelatorPlotter(lizt, pline='yes'):
-    """ Plot the results from Correlation(). Lists are from [0,3] to [0,20] real
-    world"""
-    # Full lists. Plotdata = [energy, PY, PYstdv]
-    title = 'Correlation of energy terms with PY for a kinetic model'
-    sumit = 'yes'
-    msatyes = 'no'
-    ran = 'no'
-    RNAnoMsat, plotNo = Correlator(lizt, ran, sumit, msatyes, kind='RNA', p=1)
-    # Plot Not taking Msat into account
-    #Workhouse.StdPlotter(plotNo[0], plotNo[1], plotNo[2], 'RNA/DNA '
-                         #'energy', 'Productive yield', title)
-    msatyes = 'yes'
-    RNAyesMsat, plotYes = Correlator(lizt, ran, sumit, msatyes, kind='RNA', p=1)
-    # Plot taking Msat into account 
-    #Workhouse.StdPlotter(plotYes[0], plotYes[1], plotYes[2], 'RNA/DNA '
-                         #'energy', 'Productive yield', title)
-    DNA, DNAplot = Correlator(lizt, ran, sumit, msatyes, kind='DNA', p=1)
-    both, bothplot = Correlator(lizt, ran, sumit, msatyes, kind='combo',p=1)
-    # Just the correlation coefficients (and the pvals of one of them for interp)
-    RNAnoM = [row[0] for row in RNAnoMsat[1:]]
-    RNAyesM = [row[0] for row in RNAyesMsat]
-
-    DNA = [row[0] for row in DNA[1:]]
-    both = [row[0] for row in both[1:]]
-
-    xticklabels = [str(integer) for integer in range(3,21)]
-    yticklabels = [str(integer) for integer in np.arange(0, 0.8, 0.1)]
-    incrX = range(3,21)
-
-    fig, ax = plt.subplots()
-
-    ax.set_xticks(range(3,21))
-    ax.set_xticklabels(xticklabels)
-    ax.set_xlabel("Nucleotide from TTS", size=26)
-    ax.set_ylabel("Correlation coefficient, $r$", size=26)
-
-    ax.plot(incrX, RNAnoM,'b', label='RNA/DNA', linewidth=2)
-    ax.plot(incrX, DNA,'g', label='DNA/DNA', linewidth=2)
-    ax.plot(incrX, both,'c', label='RNA/DNA + DNA/DNA', linewidth=2)
-    if pline == 'yes':
-        pval = PvalDeterminer(RNAnoMsat)
-        ax.axhline(y=pval, color='r', label='$p$ = 0.05 threshold', linewidth=2)
-    ax.legend(loc='upper left')
-
-    ax.set_yticks(np.arange(0, 0.8, 0.1))
-    ax.set_yticklabels(yticklabels)
-
-    #ax.set_title(title, size=26)
-
-    # awkward way of setting the tick sizes
-    for l in ax.get_xticklabels():
-        l.set_fontsize(18)
-    for l in ax.get_yticklabels():
-        l.set_fontsize(18)
-
-    fig.set_figwidth(8)
-    fig.set_figheight(9)
-
-    ax.legend()
-    debug()
-
-    for fig_dir in fig_dirs:
-        for formt in ['pdf', 'eps', 'png']:
-
-            name = 'physical_ladder.' + formt
-            odir = os.path.join(fig_dir, formt)
-
-            if not os.path.isdir(odir):
-                os.makedirs(odir)
-
-            fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
 def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
     """Calculate the correlation between RNA-DNA and DNA-DNA energies with PY
@@ -378,75 +208,6 @@ def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
 
     return output
 
-def ladPlot(lizt, reverse='no', pline='yes'):
-    """ Printing the probability ladder for the ITS data. When nt = 5 on the
-    x-axis the correlation coefficient of the corresponding y-value is the
-    correlation coefficient of the binding energies of the ITS[0:5] sequences with PY.
-    nt = 20 is the full length ITS binding energy-PY correlation coefficient.  """
-    maxlen = 20
-    arne = SimpleCorr(lizt, rev=reverse, maxlen=maxlen)
-    # The first element is the energy of the first 3 nucleotides
-    start = 3
-    end = maxlen+1
-    incrX = range(start, end)
-
-    WithoExp20RNA = arne['RNA_{0} uncorrected'.format(maxlen)]
-    WithoExp20DNA = arne['DNA_{0} uncorrected'.format(maxlen)]
-    WithoExp20RNADNA = arne['RNADNA_{0} uncorrected'.format(maxlen)]
-
-    toplot1 = WithoExp20RNA #Always RNA smth
-    toplot2 = WithoExp20DNA
-    toplot3 = WithoExp20RNADNA
-
-    corr1 = [tup[0] for tup in toplot1]
-    corr2 = [tup[0] for tup in toplot2]
-    corr3 = [tup[0] for tup in toplot3]
-
-    # Making a figure the pythonic way
-    if reverse == 'yes':
-        ticklabels = [str(integer)+'-20' for integer in range(1,21-2)]
-
-    xticklabels = [str(integer) for integer in range(3,21)]
-    yticklabels = [str(integer) for integer in np.arange(0, 0.8, 0.1)]
-
-    fig, ax = plt.subplots()
-
-    ax.set_xticks(range(3,21))
-    ax.set_xticklabels(xticklabels)
-    ax.set_xlabel("Nucleotide from transcription start", size=26)
-    ax.set_ylabel("Correlation coefficient, $r$", size=26)
-    ax.plot(incrX, corr1, 'b', label='RNA-DNA', linewidth=2)
-    ax.plot(incrX, corr2, 'g', label='DNA-DNA', linewidth=2)
-    ax.plot(incrX, corr3, 'c', label='RNA-DNA + DNA-DNA', linewidth=2)
-
-    if pline == 'yes':
-        pval = PvalDeterminer(toplot1)
-        ax.axhline(y=pval, color='r', label='p = 0.05 threshold', linewidth=2)
-
-    ax.legend(loc='upper left')
-    ax.set_yticks(np.arange(0, 0.8, 0.1))
-    ax.set_yticklabels(yticklabels)
-
-    # awkward way of setting the tick font sizes
-    for l in ax.get_xticklabels():
-        l.set_fontsize(18)
-    for l in ax.get_yticklabels():
-        l.set_fontsize(18)
-
-    fig.set_figwidth(9)
-    fig.set_figheight(10)
-
-    for fig_dir in fig_dirs:
-        for formt in ['pdf', 'eps', 'png']:
-            name = 'simplified_ladder.' + formt
-
-            odir = os.path.join(fig_dir, formt)
-
-            if not os.path.isdir(odir):
-                os.makedirs(odir)
-
-            fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
-
 def ITSgenerator_local(nrseq):
     """Generate list of nrseq RNA random sequences """
     gatc = list('GATC')
@@ -534,51 +295,6 @@ def Purine_RNADNA(repnr=100, ranNr=39, rand='biased', upto=20):
     cor_mean, cor_sigma = scipy.stats.norm.fit(cor_vals)
     #return 'Mean (corr, pval): ', cor_mean, pval_mean, ' -- Sigma: ', cor_sigma, pval_sigma
     return 'Mean corr : ', cor_mean, ' -- Sigma: ', cor_sigma
-
-def EstimatorOfWrongness(lizt):
-    """ Find correlation coefficients of random sequences until each new random
-    success changes probability of getting more than 0.436 at random with less
-    than 5%. """
-    Realdata = Correlator(lizt, kind='RNA', sumit='yes')
-    realp = Realdata[0][1] # p-value of sum correlation coefficient of Hsu data
-    randseq = []
-    count = 0
-    converging = False
-    deviationold = 2 # high enough not to cause problems for the if test below 
-    while not converging:
-        count += 1 # add 1 to count for each in silico experiment
-        v = Correlator(lizt, ran='yes', kind='RNA', sumit='yes', p=realp)
-        if v != []:
-            print v
-            randseq.append(1)
-            deviation = len(randseq)/count
-            print deviation, count
-            print abs((deviationold - deviation)/deviationold)
-            # the above will append data if p-val lower or equal than realp of Hsu data
-            if abs((deviationold - deviation)/deviationold) <= 0.01:
-                converging = True
-                # When the change from one mean to the next is less than 1%
-            else: deviationold = deviation
-    return count, deviation
-
-def JustHowWrong(n, lizt):
-    """ Calculate how good the experimental sequences are compared to random """
-    HsuSeq = Correlator(lizt)
-    hsulen = len(HsuSeq)
-    randseq = []
-    for dummy in range(n):
-        randseq.append(Correlator(lizt, ran='yes'))
-    randlens = []
-    bigunz = []
-    for row in randseq:
-        randlens.append(len(row))
-        if len(row) >= hsulen:
-            bigunz.append(len(row))
-    avrglen = sum(randlens)/n
-    if len(bigunz)>0:
-        bigfreq = len(bigunz), sum(bigunz)/len(bigunz)
-        return n, avrglen, hsulen, bigfreq, randlens
-    return n, avrglen, hsulen, [], [] # randlens
 
 # TODO Should also add the correlation coefficient. How many exceed bla bla bla for
 # example.
@@ -912,11 +628,11 @@ def ReadAndFixData():
 
     # Selecting the dataset you want to use
     #
-    #lazt = Filereader.PYHsu(hsu1) # Unmodified Hsu data
+    lazt = Filereader.PYHsu(hsu1) # Unmodified Hsu data
     #lazt = Filereader.PYHsu(hsu2) # Normalized Hsu data by scaling
     #lazt = Filereader.PYHsu(hsu3) # Normalized Hsu data by omitting experiment3
     #lazt = Filereader.PYHsu(hsu4) # 2007 data, skipping N25, N25anti
-    lazt = Filereader.PYHsu(hsu5) # 2007 data, including N25, N25anti
+    #lazt = Filereader.PYHsu(hsu5) # 2007 data, including N25, N25anti
     #biotech = '/Rahmi/full_sequences_standardModified'
 
     #lazt = Filereader.Rahmi104(adapt=True)
@@ -951,173 +667,6 @@ def RandEnCheck(nr=1000):
         ranens.append(Energycalc.RNA_DNAenergy(ranseq))
     meanz = np.mean(ranens)
     return meanz
-
-def ScatterPlotter(lizt, ITSs, model='physical', stds='no'):
-    """ Scatterplots for the paper. TODO make everything thicker and bigger so
-    small versions of the figure will look good. """
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.set_xlabel("RNA-DNA energy ($\Delta G$)", size=28)
-    ax.set_ylabel("Productive yield ", size=28)
-
-    if model == 'physical':
-        RD, RDplot = Correlator(lizt, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=1)
-        one_20s = RDplot[0] # energy is normalized for the physical model
-        PYs = RDplot[1]
-        PYs_std = RDplot[2]
-        name = 'physical_scatter_PY_vs_RNADNA'
-
-    if model == 'simplified':
-        one_20s = [itr.rna_dna1_20 for itr in ITSs] # simply the 1-20 energy
-        PYs = [itr.PY for itr in ITSs]
-        PYs_std = [itr.PY_std for itr in ITSs]
-        name = 'simplified_scatter_PY_vs_RNADNA'
-
-    if stds == 'yes':
-        ax.errorbar(one_20s,PYs,yerr=PYs_std,fmt='ro')
-    else:
-        ax.scatter(one_20s, PYs)
-
-    # awkward way of setting the tick sizes
-    for l in ax.get_xticklabels():
-        l.set_fontsize(18)
-    for l in ax.get_yticklabels():
-        l.set_fontsize(18)
-
-    if model == 'simplified':
-        ax.set_xlim(-25.5,-11)
-    if model == 'physical':
-        ax.set_xlim(-1.02,-0.5)
-
-    ax.set_ylim(0,11)
-    fig.set_figwidth(9)
-    fig.set_figheight(10)
-
-    for fig_dir in fig_dirs:
-        for formt in ['pdf', 'eps', 'png']:
-            if stds == 'yes':
-                fname = name + '_stds.' + formt
-            else:
-                fname = name + '.' + formt
-
-            odir = os.path.join(fig_dir, formt)
-
-            if not os.path.isdir(odir):
-                os.makedirs(odir)
-
-            fig.savefig(os.path.join(odir, fname), transparent=True, format=formt)
-
-def PaperResults(lizt, ITSs):
-    """Produce all the results that should be included in the paper."""
-    # RESULT The science kudla paper concludes that DNA-DNA is the key :) Lol
-    # Also use them in the introduction as they propose the stressed
-    # intermediate that controls abortive initiation! Perfect.
-    #
-    # #################### Physical (or full) model RESULTS #########################
-    #
-    # D-D + R-D correlation
-    #both, bothplot = Correlator(lizt, ran='no', sumit='yes', msatyes='yes', kind='combo', p=1)
-    ## RESULT: correlation 0.39, p = 0.02 for both at 20, physical model.
-    ## RESULT: correlation 0.29, p = 0.08 for both at 20, physical model with
-    ## subtraction of forces instead of addition as is otherwise asumed.
-    #RD, RDplot = Correlator(lizt, ran='no', sumit='yes', msatyes='yes', kind='RNA', p=1)
-    ## RESULT: correlation 0.49 for, p = 0.002 just RNA at 20, physical model.
-    #DD, DDplot = Correlator(lizt, ran='no', sumit='yes', msatyes='yes', kind='DNA', p=1)
-    ## RESULT: correlation 0.28, p = 0.09 for just DNA at 20, physical model.
-    #
-    # Plots for the physical model
-    #CorrelatorPlotter(lizt) # the ladder plot
-    #ScatterPlotter(lizt, ITSs, model='physical', stds='yes') # the scatter plot
-    #ScatterPlotter(lizt, ITSs, model='physical', stds='no') # the scatter plot
-    #
-    # #################### Simplifided model RESULTS #########################
-    #
-    #simple_correlation = SimpleCorr(lizt, rev='no', maxlen=20)
-
-    #WithExp20RNA = arne[0]
-    ## RESULT correlation 0.52, p = 0.0007 at 20, RNA w/Exp en, simplified model.
-    #WithExp20DNA = arne[1]
-    ## RESULT correlation 0.13, p = 0.43 at 20, DNA w/Exp en, simplified model.
-    #WithoExp20RNA = arne[2]
-    ## RESULT correlation 0.50, p = 0.001 at 20, RNA w/o/Exp en, simplified model.
-    #WithoExp20DNA = arne[3]
-    ## RESULT correlation 0.20, p = 0.21 at 20, RNA w/o/Exp en, simplified model.
-
-    # Scatter plot of 1-20 RNA-DNA and DNA-DNA
-    #simple_corr_scatter(ITSs, stds='yes')
-    #simple_corr_scatter(ITSs, stds='no')
-    # Plots for the simplified model
-
-    #ladPlot(lizt) # ladder plot simplified
-
-    #ScatterPlotter(lizt, ITSs, model='simplified', stds='yes') # the scatter plot
-
-def simple_corr_scatter(ITSs, stds='yes'):
-    """
-    Contrast the scatterplots of the RNA-DNA energy with the DNA-DNA energy
-    """
-
-    name = '1_20_scatter_comparison_RD_DD'
-
-    fig, axes = plt.subplots(1, 2, sharey=True)
-
-    rna_one_20s = [its.rna_dna1_20 for its in ITSs] # simply the 1-20 energy
-    dna_one_20s = [its.dna_dna1_20 for its in ITSs] # simply the 1-20 energy
-
-    energies = [rna_one_20s, dna_one_20s]
-
-    PYs = [itr.PY for itr in ITSs]
-    PYs_std = [itr.PY_std for itr in ITSs]
-
-    # attempting log-transform
-    #PYs = [np.log2(val) for val in PYs]
-    #PYs_std = [np.log2(val) for val in PYs_std]
-
-    fmts = ['ro', 'go']
-
-    for ax_nr, ax in enumerate(axes):
-        this_en = energies[ax_nr]
-        if stds == 'yes':
-            ax.errorbar(this_en, PYs, yerr=PYs_std, fmt=fmts[ax_nr])
-        else:
-            ax.scatter(this_en, PYs, color=fmts[ax_nr][:1])
-
-        corrs = scipy.stats.spearmanr(this_en, PYs)
-
-        header = 'r = {0:.2f}, p = {1:.3f}'.format(corrs[0], corrs[1])
-        ax.set_title(header, size=25)
-
-        if ax_nr == 0:
-            ax.set_ylabel("Productive yield ", size=23)
-            ax.set_xlabel("RNA-DNA energy ($\Delta G$)", size=23)
-        else:
-            ax.set_xlabel("DNA-DNA energy ($\Delta G$)", size=23)
-
-        # awkward way of setting the tick sizes
-        for l in ax.get_xticklabels():
-            l.set_fontsize(18)
-        for l in ax.get_yticklabels():
-            l.set_fontsize(18)
-
-    fig.set_figwidth(20)
-    fig.set_figheight(10)
-
-    for formt in ['pdf', 'eps', 'png']:
-
-        if stds == 'yes':
-            fname = name + '_stds.' + formt
-        else:
-            fname = name + '.' + formt
-
-        for fig_dir in fig_dirs:
-            odir = os.path.join(fig_dir, formt)
-
-            if not os.path.isdir(odir):
-                os.makedirs(odir)
-
-            fpath = os.path.join(odir, fname)
-
-            fig.savefig(fpath, transparent=True, format=formt)
 
 
 def genome_wide():
@@ -2172,24 +1721,50 @@ def new_AP(lizt, ITSs):
             if datum == '':
                 abortProbs[prom].append('-')
             else:
-                abortProbs[prom].append(int(float(datum)))
-
-    # what you have is from 2 to 20
+                abortProbs[prom].append(float(datum))
 
     # add all abortives and all propensities
     APs = []
     props = []
+    pys = []
 
     for ITS in ITSs:
-        indiv = list(ITS.sequence[1:ITS.msat]) # Skip the first dinuc
+        ap = []
+        prob = []
+
+        indiv = list(ITS.sequence[:9])
         neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
-        # shift by one
-        for dinuc, AP in zip(neigh, abortProbs[ITS.name]):
-            APs.append(AP)
-            props.append(Energycalc.super_en[dinuc])
+        # not always agreement between ITS.msat and abortive probs
+        abortz = [a for a in abortProbs[ITS.name] if a != '-']
+
+        # zip them
+        for dinuc, AP in zip(neigh, abortz):
+            ap.append(AP)
+            prob.append(Energycalc.super_en[dinuc])
+            #prob.append(Energycalc.Keq_EC8_EC9[dinuc])
+
+            # compare the standard deviations
+        APs.append(np.std(ap))
+        props.append(np.std(prob))
+        pys.append(ITS.PY)
+
+        #r, pval = scipy.stats.spearmanr(ap, prob)
+
+        #fig, ax = plt.subplots()
+        #ax.bar(range(2, len(ap)+2), ap, color='b', alpha=0.7)
+        #ax.bar(range(2, len(prob)+2), prob, color='r', alpha=0.7)
+        #ax.set_title(ITS.name)
+
+            #print ITS.name
+            #print ap
+        #print scipy.stats.spearmanr(ap, prob)
+
+
 
     print scipy.stats.spearmanr(APs, props)
+    print scipy.stats.spearmanr(APs, pys)
+    debug()
 
 def new_promoter_strength():
     """
@@ -3196,9 +2771,7 @@ def pca_svd(orig_data):
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
-    #PaperResults(lizt, ITSs)
 
-    #NewEnergyAnalyzer(ITSs) # going back to see the energy-values again
     #RedlistInvestigator(ITSs)
     #RedlistPrinter(ITSs)
     #HsuRandomTester(ITSs)
@@ -3210,9 +2783,12 @@ def main():
 
     #new_ladder(lizt)
 
-    new_scatter(lizt, ITSs)
+    #new_scatter(lizt, ITSs)
 
     #new_long5UTR(lizt)
+
+    # design new sequences!
+    #new_designer(lizt)
 
     #frequency_change()
     # NOTE the poly(A) and poly(T) tracts could be regulatory elements of
@@ -3223,7 +2799,7 @@ def main():
     # TODO make the plot, including the standard deviations :S
     # You have to do it at work; you haven't included the data in the repository
     # :S
-    greA_filter()
+    #greA_filter()
 
     # Now plotting the damn expression colors on the PCA plots
     #my_pca()
@@ -3237,6 +2813,9 @@ def main():
     # tnaA, cspA, cspD, rplK, rpsA and rpsU as well as lacZ. How do these stand
     # out in the crowd?
 
+    # TODO you still need to define strong promoters and see if there's a
+    # tradeoff there. For strong promoters I would expect a shift in mean energy
+    # compared to the rest.
     #new_promoter_strength()
 
     # You have ribosomal genes + DPKM values for e coli genes
@@ -3245,7 +2824,11 @@ def main():
 
     # NOTE nothing on the AP ... maybe you got them wrong or somth. Dozntmatter.
     # last thing to check: abortive probabilities. Would be awzm if they match.
+    # TODO: plot the AP against the super_values as bar-plots
     #new_AP(lizt, ITSs)
+    # RESULT: variance of AP correlates with variance of energy
+    # Does that mean that variance of AP correlates with PY? Yes, but
+    # weakly and negatively negatively.
 
     # RESULTS energy[:msat]/msat gives .8 correlation
 
@@ -3255,6 +2838,18 @@ def main():
     # maybe it's time for another visit at the AB values? Is there high abortive
     # probability just at certain dinucleotides which correspond to those whose
     # translocation is short?
+
+    # Q: what would be interesting to test? Can we induce abortion at certain
+    # sites? What happens with a 'physical' model where rna-dna counts for 8 bp
+    # and translocation only for 1?
+
+    # Can you do smart experiments? Reproducing the original result will be
+    # piece of cake since the sequences are practically randomized already.
+
+    # What I can think of: "barriers" at different sits. But to do this you
+    # should have studied the original 'barriers' too. For example, study all
+    # sites with more than 50% probability of aborting. First you should plot
+    # them.
 
 
 class Sequence(object):
