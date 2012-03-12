@@ -13,6 +13,7 @@ import scipy.stats
 import scipy.interpolate
 import operator
 from matplotlib import rc
+import itertools
 # My own modules
 import Testfit
 import Workhouse
@@ -2768,6 +2769,108 @@ def pca_svd(orig_data):
     print s
     #print v
 
+def new_designer(lizt):
+    """
+    Design sequences to span PY from 0 to 10 in the 0-13 range
+
+    # Is there a way to quantify when 90% of the abortive transcription is over?
+    # Maybe by the imagequant? Maybe you'll find a correlation. What would that
+    # prove exactly? The msat? How? At each point there is a stochastic chance
+    # of falling off. MSAT means that the active site has not fallen off yet. It
+    # could be that MSAT is higher for those with weak PY? But then I should
+    # have seen it. Or maybe not use MSAT but use 90% of MSAT. You might then
+    # find that 
+    # What do I expect, biochemically? I expect that MSAT is limited by an
+    # energy barrier that RNAP is unlikely to pass while still attached to
+    # promoter.
+    # This suggests that it is not the "free energy" held up in scrunching, but
+    # 
+    # The model is that RNAP has at any point a chance of aborting, as long as
+    # it's attached to SIGMA. Mayby thermodynamic fluctuations play a part,
+    # making the process stochastic in nature. The determining factor then
+    # becomes the ease at which RNAP synthisizes the first XX nucleotides. Then
+    # sigma release is also stochastic. Sigma is pulling backward and RNAP is
+    # pulling forward. The probability of each one winning is the ease at which
+    # RNAP translocates the first 10-15 nucleotiedes. But pulling? RNAP is
+    # standing still at the promoter. However, if the DNA-DNA buildup is not the
+    # case, what is? I should re-read that article. That's for T7 though. What
+    # is the stressor? Why escape? Is this important only for strong promoters?
+    # If RNAP continues straight from initiation to escape, what is escape? Why
+    # does sigma fall off? Or why does sigma dissasociate from promoter
+    # contacts? That's the most relevant question.
+
+    # They say that rnap moves by random fluctuations that occasionally becomes
+    # blocked backwards by nucleotide incorporations. The free energy of nt
+    # incorporation should also somehow be a driving force, even if it's not
+    # well explained.
+
+    # Design sequences which are both AT rich but have opposite effects on
+    # transcription initiation, showing that it's not just the AT-richness, but
+    # the specific order of the AT-richness
+    # What about that -10 like element? Is that a particularly weak one? Would
+    # be interesting if it were the weakest possible association of these
+    # values. It's TATAAT
+    #
+    # The 10 pause site had more variation in RNA-DNA than in super_en, so I'm
+    # ruling it out as a super_en effect.
+
+    # RNAP is using force from nucleotide incorporation to propel itself?
+    # Conclusion of 1998 Science.
+
+    How many possible combinations are there? If I vary from 3 to 15? 12. 4**12
+    is 1.6 million :S But actually that is not so much. I'm doing dinucleotiding
+    and dictionary lookup. I think I can check them all out.
+
+    PyPy would be great for this!
+    """
+
+    nucleotides = set(['G', 'A', 'T', 'C'])
+
+    beg = 'AT'
+    end = 'TAGC'
+
+    energies = []
+    seqs = []
+
+    for seq in itertools.product(nucleotides, repeat=8):
+
+        # don't let the first two or two and three nucs be the same
+        if (seq[0] == 'T') or (seq[0] == seq[1]):
+            continue
+
+        sequence = beg + ''.join(seq) + end
+
+        energies.append(Energycalc.super_f(sequence))
+        seqs.append(sequence)
+
+    #plt.hist(energies, bins=70)
+
+    # Space 'energies' equally and sample it, maybe providing some alternatives?
+    # interestingly, your choices
+    # if you step equally, you get a gap at both ends because there are so few
+    # sequences there. You will have to traverse the list and select based on a
+    # pre-defined segmentation of the energies. If you do that you can make some
+    # interesting choices as well. For example, five sequences in the upper 80 %
+    # should have the same AT composition in the +10 as five in the lower 20%.
+
+    minEn, maxEn = min(energies), max(energies)
+
+    # don't take the extreme extremes
+    enRange = np.linspace(maxEn-0.5, minEn+0.5, 27)
+
+    # make boxes somehow and keep acounter in the loop to tell you how far
+    # you've gone
+
+    step = float(len(energies))/27
+    savers = []
+    gokk = sorted(zip(energies, seqs))
+    for en, seq in gokk:
+    for i in range(0, len(energies), int(step)):
+        savers.append(gokk[i])
+
+
+
+
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
@@ -2788,7 +2891,7 @@ def main():
     #new_long5UTR(lizt)
 
     # design new sequences!
-    #new_designer(lizt)
+    new_designer(lizt)
 
     #frequency_change()
     # NOTE the poly(A) and poly(T) tracts could be regulatory elements of
