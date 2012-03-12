@@ -48,6 +48,7 @@ hsu1 = '/Hsu/csvHsu'
 hsu2 = '/Hsu/csvHsuNewPY'
 hsu3 = '/Hsu/csvHsuOmit3'
 hsu4 = '/Hsu/csvHsu2008'
+hsu5 = '/Hsu/csvHsu2008_full'
 
 # Figure directory for rna_dna analysis
 # The path to the directory the script is located in
@@ -911,11 +912,11 @@ def ReadAndFixData():
 
     # Selecting the dataset you want to use
     #
-    lazt = Filereader.PYHsu(hsu1) # Unmodified Hsu data
+    #lazt = Filereader.PYHsu(hsu1) # Unmodified Hsu data
     #lazt = Filereader.PYHsu(hsu2) # Normalized Hsu data by scaling
     #lazt = Filereader.PYHsu(hsu3) # Normalized Hsu data by omitting experiment3
-    #lazt = Filereader.PYHsu(hsu4) # 2007 data, 10 sequences, skipping N25, N25anti
-    #lazt2 = Filereader.PYHsu(hsu4) # 2007 data, 10 sequences, skipping N25, N25anti
+    #lazt = Filereader.PYHsu(hsu4) # 2007 data, skipping N25, N25anti
+    lazt = Filereader.PYHsu(hsu5) # 2007 data, including N25, N25anti
     #biotech = '/Rahmi/full_sequences_standardModified'
 
     #lazt = Filereader.Rahmi104(adapt=True)
@@ -1805,8 +1806,9 @@ def new_scatter(lizt, ITSs):
 
     plt.ion()
 
-    rows = [5, 10, 15, 20, 'msat']
+    #rows = [5, 10, 15, 20, 'msat']
     #rows = [5, 10, 15, 20]
+    rows = [10, 15, 20]
     #rows = [20]
     fig, axes = plt.subplots(len(rows), 3, sharey=True)
 
@@ -2954,7 +2956,7 @@ def main():
 
     #new_ladder(lizt)
 
-    #new_scatter(lizt, ITSs)
+    new_scatter(lizt, ITSs)
 
     #new_long5UTR(lizt)
 
@@ -2968,7 +2970,7 @@ def main():
     #greA_filter()
 
     # Next plot the damn expression colors on the PCA plots
-    my_pca()
+    #my_pca()
     #hsu_pca(lizt)
     # NOTE it's not clear what I should do now. There is this odd TTT repeating
     # going on. You should relate to super_en. In super_en the AA and TT have
