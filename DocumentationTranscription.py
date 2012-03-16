@@ -930,7 +930,10 @@ def new_ladder(lizt):
 
     # Pick out 22 random positions in lizt -- the result is zolid.
     #rands = [random.randrange(0,43) for i in range(30)]
-    #lizt = [lizt[i] for i in rands]
+    rands = set([])
+    while len(rands)<22:
+        rands.add(random.randrange(0,43))
+    lizt = [lizt[i] for i in rands]
 
     # use all energy functions from new article
     #from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
@@ -3066,6 +3069,16 @@ def main():
     new_ladder(lizt)
 
     #new_scatter(lizt, ITSs)
+
+    # NOTE You have the following proposition
+    # Implement your simple model in Matlab and optimize for PY in position 10,
+    # 15, and 20 at given time points. Do cross validation by doing this for
+    # halve the set and then testing with the second half -- see if you get
+    # consistent parameter estimation and consistent validation. PS: don't
+    # choose the same twice! You can do this many times and make a MC.
+    # Show that you correlate well PY with a simple model. The differnce between
+    # the fast-goers and slow-goers is the time they spent. Thus we find both a
+    # sequence-specific regulation AND we find the time-dependence.
 
     #new_long5UTR(lizt)
 
