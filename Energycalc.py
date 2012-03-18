@@ -33,6 +33,9 @@ def DNA_DNAexpected(length):
 def RNA_DNAenergy(sequence):
     """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
     initiation cost. """
+    if len(sequence) < 2:
+        return 0
+
     indiv = list(sequence) # splitting sequence into individual letters
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
     energ = sum([NNRD[nei] for nei in neigh])
@@ -41,6 +44,9 @@ def RNA_DNAenergy(sequence):
 
 def DNA_DNAenergy(sequence):
     """ Calculate the DNA/DNA binding energy of 'sequence'. """
+    if len(sequence) < 2:
+        return 0
+
     indiv = list(sequence)
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
     energ = sum([NNDD[nei] for nei in neigh])
@@ -142,6 +148,9 @@ for name, val in EnLibRNA.items():
     # =  rna_term*(w1(-0.23) + w2*(-0.97)) + Keq_term*(w1*(-0.97) + w2*(0.23)
 
 def pca_f(sequence):
+    if len(sequence) < 2:
+        return 0
+
     indiv = list(sequence) # splitting sequence into individual letters
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
@@ -156,6 +165,8 @@ def super_f(sequence):
 def res_frac(sequence):
     """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
     initiation cost. """
+    if len(sequence) < 2:
+        return 0
 
     indiv = list(sequence) # splitting sequence into individual letters
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
@@ -163,8 +174,9 @@ def res_frac(sequence):
     return sum([resistant_fraction[nei] for nei in neigh])
 
 def K1(sequence):
-    """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
-    initiation cost. """
+    """ Calculate the K1 of 'sequence' """
+    if len(sequence) < 2:
+        return 0
 
     indiv = list(sequence) # splitting sequence into individual letters
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
@@ -172,8 +184,9 @@ def K1(sequence):
     return sum([k1[nei] for nei in neigh])
 
 def Kminus1(sequence):
-    """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
-    initiation cost. """
+    """ Calculate the K_-1 of 'sequence'. """
+    if len(sequence) < 2:
+        return 0
 
     indiv = list(sequence) # splitting sequence into individual letters
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
@@ -181,19 +194,21 @@ def Kminus1(sequence):
     return sum([kminus1[nei] for nei in neigh])
 
 def Keq(sequence):
-    """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
-    initiation cost. """
+    """ Calculate the Keq of 'sequence'. """
+    if len(sequence) < 2:
+        return 0
 
     indiv = list(sequence) # splitting sequence into individual letters
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
     return sum([Keq_EC8_EC9[nei] for nei in neigh])
-    #return sum([reKeq[nei] for nei in neigh])
 
 def invKeq(sequence):
     """
     Use the inverted Keq by getting the 9/8 rate instead of the 8/9 rate
     """
+    if len(sequence) < 2:
+        return 0
     indiv = list(sequence) # splitting sequence into individual letters
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
