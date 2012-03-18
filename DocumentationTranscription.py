@@ -10,6 +10,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
+from scipy.stats import spearmanr
 import scipy.interpolate
 import operator
 from matplotlib import rc
@@ -180,21 +181,21 @@ def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
 
     RNADNA = []
     for index in range(len(incrEnsRNADNA)):
-        RNADNA.append(scipy.stats.spearmanr(incrEnsRNADNA[index], PY))
+        RNADNA.append(spearmanr(incrEnsRNADNA[index], PY))
 
     #RNA
     incrWithExp20RNA = []
     incrWithoExp20RNA = []
     for index in range(len(incrEnsRNA[0])):
-        incrWithoExp20RNA.append(scipy.stats.spearmanr(incrEnsRNA[0][index], PY))
-        incrWithExp20RNA.append(scipy.stats.spearmanr(incrEnsRNA[1][index], PY))
+        incrWithoExp20RNA.append(spearmanr(incrEnsRNA[0][index], PY))
+        incrWithExp20RNA.append(spearmanr(incrEnsRNA[1][index], PY))
 
     #DNA
     incrWithExp20DNA = []
     incrWithoExp20DNA = []
     for index in range(len(incrEnsDNA[0])):
-        incrWithoExp20DNA.append(scipy.stats.spearmanr(incrEnsDNA[0][index], PY))
-        incrWithExp20DNA.append(scipy.stats.spearmanr(incrEnsDNA[1][index], PY))
+        incrWithoExp20DNA.append(spearmanr(incrEnsDNA[0][index], PY))
+        incrWithExp20DNA.append(spearmanr(incrEnsDNA[1][index], PY))
 
     arne = [incrWithExp20RNA, incrWithExp20DNA, incrWithoExp20RNA, incrWithoExp20DNA]
 
@@ -246,7 +247,7 @@ def LadderScrutinizer(lizt, n=10):
         enRNA = [Ec.PhysicalRNA(seq, msat, msatyes) for seq in ranITS]
         RNAen = [[[row[val][0] for row in enRNA], row[val][1]] for val in
                   range(len(enRNA[0]))]
-        corrz = [scipy.stats.spearmanr(enRNArow[0],py) for enRNArow in RNAen]
+        corrz = [spearmanr(enRNArow[0],py) for enRNArow in RNAen]
         onlyCorr = np.array([tup[0] for tup in corrz])
         # Rank the correlation ladder
         ranLa = Orderrank.Order(onlyCorr[:13])
@@ -283,9 +284,6 @@ def Purine_RNADNA(repnr=100, ranNr=39, rand='biased', upto=20):
         enTable = np.zeros(ranNr)
         for nr in range(ranNr):
             sequence = ITSgenerator_local(1)[0][:upto]
-            if rand == 'biased':
-                seq_iterator = ITSgenerator.RanGen((0.15,0.36,0.29,0.19))
-                sequence = seq_iterator.next()[:upto]
             purTable[nr] = sequence.count('G') + sequence.count('A')
             enTable[nr] = Ec.RNA_DNAenergy(sequence)
         cor, pval = scipy.stats.spearmanr(purTable, enTable)
@@ -296,20 +294,6 @@ def Purine_RNADNA(repnr=100, ranNr=39, rand='biased', upto=20):
     cor_mean, cor_sigma = scipy.stats.norm.fit(cor_vals)
     #return 'Mean (corr, pval): ', cor_mean, pval_mean, ' -- Sigma: ', cor_sigma, pval_sigma
     return 'Mean corr : ', cor_mean, ' -- Sigma: ', cor_sigma
-
-# TODO Should also add the correlation coefficient. How many exceed bla bla bla for
-# example.
-def PlotError(lizt, n=20):
-    """ Plot how good the experimental sequences are compared to random """
-    statz = JustHowWrong(n, lizt)
-    lenz = statz[4]
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    n, _bins, _patches = ax.hist(lenz, 50, normed=1, facecolor='green', alpha=0.75)
-    ax.set_xlabel('"Significant" sequences')
-    ax.set_ylabel('Frequency')
-    ax.set_xlim(0, 60)
-    return statz
 
 def StripSet(awaynr, lizt, ITSs):
     """ Remove sets of sequences from the dataset, depending on awaynr """
@@ -507,8 +491,8 @@ def HsuRandomTester(ITSs):
     purine_levs = [itr.sequence.count('G') + itr.sequence.count('A') for itr in ITSs]
     rna_dna15 = [itr.rna_dna1_15 for itr in ITSs]
     rna_dna20 = [itr.rna_dna1_20 for itr in ITSs]
-    rho15, p15 = scipy.stats.spearmanr(purine_levs, rna_dna15)
-    rho20, p20 = scipy.stats.spearmanr(purine_levs, rna_dna20)
+    rho15, p15 = spearmanr(purine_levs, rna_dna15)
+    rho20, p20 = spearmanr(purine_levs, rna_dna20)
 
     print sumgatc
     total = sum(sumgatc) # Should be 43*20 = 860
@@ -574,12 +558,12 @@ def PurineLadder(ITSs):
     a_ladd = np.array([itr.a_ladder for itr in ITSs])
     PYs = np.array([itr.PY for itr in ITSs])
     energies = np.array([itr.energy_ladder for itr in ITSs])
-    pur_corr = [scipy.stats.spearmanr(pur_ladd[:,row], PYs) for row in range(18)]
-    a_corr = [scipy.stats.spearmanr(a_ladd[:,row], PYs) for row in range(18)]
-    en_corr = [scipy.stats.spearmanr(a_ladd[:,row], energies[:,row]) for row in range(18)]
+    pur_corr = [spearmanr(pur_ladd[:,row], PYs) for row in range(18)]
+    a_corr = [spearmanr(a_ladd[:,row], PYs) for row in range(18)]
+    en_corr = [spearmanr(a_ladd[:,row], energies[:,row]) for row in range(18)]
     # The correlation between purines and the Hsu R-D energies (quoted as 0.457
     # for up to 20)
-    pur_en_corr = [scipy.stats.spearmanr(pur_ladd[:,row], energies[:,row]) for row in range(18)]
+    pur_en_corr = [spearmanr(pur_ladd[:,row], energies[:,row]) for row in range(18)]
 
     for row in pur_en_corr:
         print row
@@ -619,7 +603,7 @@ def PurineLadder(ITSs):
     # because 
     en15s = [Ec.RNA_DNAenergy(itr.sequence[:15]) for itr in ITSs]
     pur15s = [itr.sequence[:15].count('A') + itr.sequence[:15].count('G') for itr in ITSs]
-    fck_corr = scipy.stats.spearmanr(en15s, pur15s)
+    fck_corr = spearmanr(en15s, pur15s)
 
 def ReadAndFixData():
     """ Read Hsu paper-data and Hsu normalized data. """
@@ -915,7 +899,7 @@ def NewSimpleCorr(seqdata, energy_function, maxlen=20, operators=False):
     #RNA
     stats = []
     for index in range(len(incrEnsRNA)):
-        stats.append(scipy.stats.spearmanr(incrEnsRNA[index], PY))
+        stats.append(spearmanr(incrEnsRNA[index], PY))
 
     return stats
 
@@ -926,6 +910,13 @@ def new_ladder(lizt):
     nt = 20 is the full length ITS binding energy-PY correlation coefficient.  """
     maxlen = 20
     pline = 'yes'
+
+    # Pick out 22 random positions in lizt -- the result is zolid.
+    #rands = [random.randrange(0,43) for i in range(30)]
+    rands = set([])
+    while len(rands)<22:
+        rands.add(random.randrange(0,43))
+    lizt = [lizt[i] for i in rands]
 
     # use all energy functions from new article
     #from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
@@ -1252,7 +1243,7 @@ def expression_plot(energies):
     color_en = [e for indx, e in enumerate(ens) if cols[indx]]
     color_dp = [e for indx, e in enumerate(dpk) if cols[indx]]
 
-    corrs = scipy.stats.spearmanr(ens, dpk)
+    corrs = spearmanr(ens, dpk)
     header = 'r = {0:.2f}, p = {1:.3f}'.format(corrs[0], corrs[1])
     ax.set_title(header, size=22)
     ax.set_xlabel('ITS abortive-initiation propensity', size=20)
@@ -1432,7 +1423,7 @@ def new_scatter(lizt, ITSs):
             else:
                 ax.scatter(data, PYs, color=fmts[col_nr][:1])
 
-            corrs = scipy.stats.spearmanr(data, PYs)
+            corrs = spearmanr(data, PYs)
 
             if col_nr == 0:
                 ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=15)
@@ -1702,7 +1693,7 @@ def new_long5UTR(lizt):
             #x, y = dinucfreq_random.values(), ydict.values()
             ax.scatter(x, y)
 
-            corrs = scipy.stats.spearmanr(x, y)
+            corrs = spearmanr(x, y)
             header = 'r = {0:.2f}, p = {1:.3f}'.format(corrs[0], corrs[1])
             ax.set_title(header, size=22)
 
@@ -1782,7 +1773,7 @@ def new_AP(lizt, ITSs):
         props.append(np.std(prob))
         pys.append(ITS.PY)
 
-        #r, pval = scipy.stats.spearmanr(ap, prob)
+        #r, pval = spearmanr(ap, prob)
 
         #fig, ax = plt.subplots()
         #ax.bar(range(2, len(ap)+2), ap, color='b', alpha=0.7)
@@ -1791,12 +1782,12 @@ def new_AP(lizt, ITSs):
 
             #print ITS.name
             #print ap
-        #print scipy.stats.spearmanr(ap, prob)
+        #print spearmanr(ap, prob)
 
 
 
-    print scipy.stats.spearmanr(APs, props)
-    print scipy.stats.spearmanr(APs, pys)
+    print spearmanr(APs, props)
+    print spearmanr(APs, pys)
     debug()
 
 def new_promoter_strength():
@@ -1852,7 +1843,7 @@ def new_promoter_strength():
 
         props.append(propensity)
 
-    print scipy.stats.spearmanr(scores, props)
+    print spearmanr(scores, props)
     debug()
 
 def get_pr_nr(sig_paths):
@@ -2853,52 +2844,219 @@ def new_designer(lizt):
     is 1.6 million :S But actually that is not so much. I'm doing dinucleotiding
     and dictionary lookup. I think I can check them all out.
 
-    PyPy would be great for this!
+    PyPy would be great for this! PyPy speeds the process up 2fold. (Which is
+    like getting a 8hz processor ... ) 2fold is not enough for a serious speed
+    increase.
+    """
+
+    plt.ion()
+
+    beg = 'AT'
+    #N25 = 'ATAAATTTGAGAGAGGAGTT'
+    N25 = 'ATAAATTTGAGAGAG' # len 15 variant for comparing energies
+
+    repeat_nr = 5 # total number of sequences allowed to vary
+    sample_nr = 26
+    at_test_nr = 8 # reserve a few samples for special testing
+
+    min20, max20, boxed_seqs = seq_parser(beg, N25, repeat_nr, sample_nr,
+                                          at_test_nr)
+
+def seq_parser(beg, N25, repeat_nr, sample_nr, at_test_nr):
+    """
     """
 
     nucleotides = set(['G', 'A', 'T', 'C'])
 
-    beg = 'AT'
-    end = 'TAGC'
+    free_sample = sample_nr - at_test_nr
+
+    end = N25[2 + repeat_nr:]
 
     energies = []
     seqs = []
+    import time
 
-    for seq in itertools.product(nucleotides, repeat=8):
+    t1 = time.time()
+
+    import re
+    repReg = re.compile('G{5,}|A{5,}|T{5,}|C{5,}')
+
+    for seq in itertools.product(nucleotides, repeat=repeat_nr):
 
         # don't let the first two or two and three nucs be the same
-        if (seq[0] == 'T') or (seq[0] == seq[1]):
+        if (seq[0] == seq[1] == 'T') or (seq[0] == seq[1] == seq[2]):
             continue
 
         sequence = beg + ''.join(seq) + end
 
         energies.append(Ec.super_f(sequence))
+        # don't allow repeats of more than 4
+        if repReg.search(sequence):
+            continue
+
         seqs.append(sequence)
+
+    print time.time() -t1
 
     #plt.hist(energies, bins=70)
 
-    # Space 'energies' equally and sample it, maybe providing some alternatives?
-    # interestingly, your choices
-    # if you step equally, you get a gap at both ends because there are so few
-    # sequences there. You will have to traverse the list and select based on a
-    # pre-defined segmentation of the energies. If you do that you can make some
-    # interesting choices as well. For example, five sequences in the upper 80 %
-    # should have the same AT composition in the +10 as five in the lower 20%.
-
     minEn, maxEn = min(energies), max(energies)
 
-    # don't take the extreme extremes
-    enRange = np.linspace(maxEn-0.5, minEn+0.5, 27)
+    # the boundary for the top/min 10% boxes
+    # you'll need 20% otherwise I don't think you'll find good candidates
+    minLim = minEn - minEn*0.2
+    maxLim = maxEn + maxEn*0.2
 
-    # make boxes somehow and keep acounter in the loop to tell you how far
+    # Reverse the enrange, and leave out the most extreme values
+    enRange = np.linspace(maxEn, minEn, free_sample)[::-1]
+
+    boundaries = []
+    for inx, val in enumerate(enRange[:-1]):
+        boundaries.append((val, enRange[inx+1]))
+
+    # make boxes somehow and keep a counter in the loop to tell you how far
     # you've gone
+    pos = 0
 
-    step = float(len(energies))/27
-    savers = []
+    min10 = []
+    max10 = []
+
+    savers = [[] for i in range(free_sample-1)]
+
     gokk = sorted(zip(energies, seqs))
+
     for en, seq in gokk:
-        for i in range(0, len(energies), int(step)):
-            savers.append(gokk[i])
+        if en < minLim:
+            min10.append((en, seq))
+        if en > maxLim:
+            max10.append((en, seq))
+
+        # change pos when you reach a boundary
+        if en > boundaries[pos][1] and pos != len(savers)-1:
+            pos += 1
+
+        if boundaries[pos][0] <= en <= boundaries[pos][1]:
+            savers[pos].append((en, seq))
+
+    # what now? randomly sample to get one sequence from each 'box'
+
+    # first, try to get some with a high AT count in the randomized region
+
+    for seqLow in min10:
+        subseq = seqLow[2:]
+
+def fitting_models(lizt, ITSs):
+    """
+    You have implicitly assumed the linear relationship with unity-parameters
+    for the relationship between PY and the variables you consider. What if the
+    relationship is nonlinear?
+
+    RESULT:
+
+        Assume that the probability of aborting at each step is exp(xi) where xi
+        is the rna-dna or whatev for dinucleotide i. Multiplying these give
+        exp(sum_i(xi)) which is the model we're fitting
+
+        Observation: RNA-DNA + Keq has marginal improvement by adding DNA-DNA
+        alone
+        Keq + DNA-DNA has large improvement by adding RNA-DNA
+
+        You see, RNA-DNA and DNA-DNA are naturally correlated variables
+
+        By itself, RNA-DNA correlates with PY, but not DNA-DNA.
+
+        This points to RNA-DNA ans the causal factor and not DNA-DNA.
+    """
+
+    ITSlen = 15
+    # get the variables you need 
+    rna_dna = np.array([Energycalc.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+    dna_dna = np.array([Energycalc.DNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+    keq = np.array([Energycalc.Keq(s.sequence[:ITSlen]) for s in ITSs])
+    k1 = np.array([Energycalc.K1(s.sequence[:ITSlen]) for s in ITSs])
+    kMinus1 = np.array([Energycalc.Kminus1(s.sequence[:ITSlen]) for s in ITSs])
+
+    added = [Energycalc.super_f(s.sequence[:ITSlen]) for s in ITSs]
+    # your Y-values, the PYs
+    PYs = np.array([itr.PY for itr in ITSs])
+    PYs_std = [itr.PY_std for itr in ITSs]
+    names = [itr.name for itr in ITSs]
+
+    import scipy.optimize as optimize
+
+    # XXX a quandary; Keq gives the best correlation but makes the least sense
+    # Maybe the best solution is the differential equations with r =
+    # r_1*exp(r2*DeltaG(RNA-DNA))
+
+    # parameters are c1, b1, b2, ..., bn
+    parameters = (100, -0.1, 0.5)
+    variables = (keq, rna_dna)
+    variables = (np.log(k1), rna_dna)
+
+    import Models
+
+    plsq  = optimize.leastsq(Models.residuals_mainM, parameters, args=(variables, PYs))
+
+    fitted_parm = plsq[0]
+
+    outp = Models.mainM(fitted_parm, variables)
+
+    print fitted_parm
+    print spearmanr(PYs, outp)
+    print scipy.stats.pearsonr(PYs, outp)
+
+    fitted_vals = np.dot(fitted_parm[1:], variables)
+
+    # How should I fit it? The predicted PY against the actual PY?
+    # Or the actual PY against the -0.14 * keq + 0.15 * rna_dna?
+    # Then plot the equation using a linear range from min to max
+
+    minval = min(fitted_vals)
+    maxval = max(fitted_vals)
+
+    plot_range = np.arange(minval, maxval, 0.01)
+
+    #For plotting
+    #PY = c1*exp(x)
+    c1 = fitted_parm[0]
+
+    plot_data = c1*np.exp(plot_range)
+
+    fig, ax = plt.subplots()
+    ax.errorbar(c1*fitted_vals, PYs, yerr=PYs_std, fmt='go')
+    for name, py, fit in zip(names, PYs, c1*fitted_vals):
+
+        # only annotate these
+        if name not in ('N25', 'DG115a', 'DG133', 'N25/A1anti'):
+            continue
+
+        ax.annotate(name,
+                xy=(fit, py), xytext=(-20,20),
+                textcoords='offset points', ha='right', va='bottom',
+                bbox=dict(boxstyle='round, pad=0.5', fc='g', alpha=0.9),
+                arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+
+    # define the x-values for plot_data
+    xbeg = min(c1*fitted_vals)
+    xend = max(c1*fitted_vals)
+    x_range = np.linspace(xbeg, xend, len(plot_data))
+
+    ax.plot(x_range, plot_data)
+
+
+    ax.set_xticklabels([])
+    ax.set_xlabel('Abortive propensity', size=20)
+    ax.set_ylabel('Productive yield', size=20)
+    ax.set_title('Fitting $PY = Ke^{-(b1\Delta G_1 + b2\Delta G_2)}$')
+
+    ## clumsy way of starting 3dplot but ...
+    #from mpl_toolkits.mplot3d import Axes3D
+    #fig = plt.figure()
+    #ax = fig.add_subplot(111, projection='3d')
+
+    #ax.scatter(rna_dna, keq, PYs, zdir='z')
+
+    debug()
 
 
 def main():
@@ -2914,18 +3072,22 @@ def main():
 
     #new_genome()
 
-    #new_ladder(lizt)
+    new_ladder(lizt)
 
     #new_scatter(lizt, ITSs)
-
     #new_long5UTR(lizt)
 
     # design new sequences!
     #new_designer(lizt)
+    #fitting_models(lizt, ITSs)
 
     #frequency_change()
     # NOTE the poly(A) and poly(T) tracts could be regulatory elements of
     # transcriptional slippage
+
+    # TODO what would happen if I tried to fit the PY values using linear or
+    # non-linear regression with 20 parameters (x11,x12,x21,x22,etc) for the
+    # rna-dna and Keq values?
 
     # RESULT a weak signal when filtering by greA
     # That can be a plot
