@@ -16,11 +16,9 @@ import operator
 from matplotlib import rc
 import itertools
 # My own modules
-import Testfit
 import Workhouse
 import Filereader
 import Energycalc
-import Orderrank
 from glob import glob
 
 np.set_printoptions(precision=2)
@@ -215,47 +213,6 @@ def ITSgenerator_local(nrseq):
     gatc = list('GATC')
     return ['AT'+ ''.join([random.choice(gatc) for dummy1 in range(18)]) for dummy2 in
             range(nrseq)]
-
-def LadderScrutinizer(lizt, n=10):
-    """ Calculate sets of size n of random sequences, perform RNA/DNA energy
-    calculation for incremental ITS sublenghts, and evaluate the "monotonicity"
-    of the correlation ladder; evaluation depends on number k of allowed
-    deviations from monotonicity."""
-    msatyes = 'no'
-    rowdata = [[row[val] for row in lizt] for val in range(len(lizt[0]))]
-    msat = rowdata[-2]
-    py = rowdata[2]
-    # The real correlation ladder
-    arne = SimpleCorr(lizt, maxlen=20)
-    laddA = [tup[0] for tup in arne[2]][:13]
-    # Consider the ladder up to arne[6][15-3]. Rank these. Subtract a range(12).
-    # This will be deviation from perfect linear increase. This is the score.
-    ladd = np.array(Orderrank.Order(laddA[:13]))
-    perf = np.array(range(13))
-    Zcore = sum(abs(ladd-perf))
-    # The real sequence has a Zcore of 2
-    # Randomize
-    nrseq = len(rowdata[0]) #how many sequences. (might remove some)
-    # Generate random sequences and correlate their RNA/DNA values with PY
-    noter = [[],[],[]]
-    maxcor = max(laddA)
-
-    for dummy in range(n):
-        # Generate 39-43 random sequences of length 20
-        ranITS = ITSgenerator_local(nrseq)
-        # Calculate the energy
-        enRNA = [Energycalc.PhysicalRNA(seq, msat, msatyes) for seq in ranITS]
-        RNAen = [[[row[val][0] for row in enRNA], row[val][1]] for val in
-                  range(len(enRNA[0]))]
-        corrz = [spearmanr(enRNArow[0],py) for enRNArow in RNAen]
-        onlyCorr = np.array([tup[0] for tup in corrz])
-        # Rank the correlation ladder
-        ranLa = Orderrank.Order(onlyCorr[:13])
-        Zcore = sum(abs(ranLa-perf))
-        bigr = [1 for value in onlyCorr if value >= maxcor]
-        noter[0].append(Zcore)
-        noter[1].append(sum(bigr))
-    return noter
 
 def PvalDeterminer(toplot):
     """ Take a list of list of [Corr, pval] and return an interpolated Corr
@@ -3382,16 +3339,6 @@ if __name__ == '__main__':
 # strand? Might hamper expression. Sigma intervention!!
 # QUESTION: why non-template (coding) strand? Can sigma rebind both strands?
 # This should be clear from crystallographical images.
-
-# TODO test make curves for upper and lower bound. Perhaps try with other
-# functions than exponential? Polynomial for example. Also: return the errors!
-
-# TODO LadderScrutinizer: finds the probability that the almost-uniformly
-# increasing pattern in the correlation coefficients is accidental. Calculates
-# new sequences are runs correlation analysis on those of equal length as the
-# one from the sequences of the data set. Of those, the function counts how many
-# have a similarly significant increase in correlation values and divides that
-# by the number of such sets with equal length (10 with p = 0.05).
 
 # The exact physics of the DNA bubble:
 # Begins at -11,+2/3. Scrunching theory implies that DNA is pulled in, so that the
