@@ -4,6 +4,7 @@
 
 # Python modules
 from __future__ import division
+# You need future division even in numpy
 import os
 import random
 import matplotlib
@@ -20,6 +21,7 @@ import itertools
 import Workhouse
 import Filereader
 import Energycalc as Ec
+import Models
 from glob import glob
 
 import transformations as transf
@@ -100,119 +102,6 @@ def welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha):
         print "Not significantly different"
         return False
 
-def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
-    """Calculate the correlation between RNA-DNA and DNA-DNA energies with PY
-    for incremental positions of the correlation window (0:3) to (0:20). Two
-    versions are returned: one where sequence-average expected energies are
-    added after msat and one where nothing is done for msat.
-    The rev='yes' option only gives meaningful result for
-    incremental without adding expected values."""
-
-    rowdata = [[row[val] for row in seqdata] for val in range(len(seqdata[0]))]
-    seqs = rowdata[1]
-
-    if ran == 'yes':
-        nrseq = len(seqdata) #how many sequences. (might remove some)
-        seqs = ITSgenerator_local(nrseq)
-#    labels = ['Name','Sequence','PY','PYst','RPY','RPYst','RIF','RIFst','APR','MSAT','R']
-
-    PY = rowdata[2]
-#    PY = rowdata[8] # the correlation between RNA/DNA and R must be commented
-#    upon.
-
-    msat = rowdata[-2]
-    # Calculating incremental energies from 3 to 20 with and without expected
-    # energies added after msat in incr[1]. incr[0] has incremental energies
-    # without adding expected energies after msat. NOTE E(4nt)+E(5nt)=E(10nt)
-    # causes diffLen+1
-
-    incrEnsRNA = [[], []] # 0 is withOut exp, 1 is With exp
-    incrEnsDNA = [[], []]
-    start = 3 #nan for start 0,1, and 2. start =3 -> first is seq[0:3] (0,1,2)
-    for index, sequence in enumerate(seqs):
-        incrRNA = [[], []]
-        incrDNA = [[], []]
-
-        for top in range(start, maxlen+1):
-            # Setting the subsequences from which energy should be calculated
-            rnaRan = sequence[0:top]
-            dnaRan = sequence[0:top+1]
-
-            if rev == 'yes':
-                rnaRan = sequence[top-start:]
-
-            tempRNA = Ec.RNA_DNAenergy(rnaRan)
-            tempDNA = Ec.PhysicalDNA(dnaRan)[-1][0]
-
-            incrRNA[0].append(tempRNA)
-            incrDNA[0].append(tempDNA)
-
-            # you are beyond msat -> calculate average energy
-            if top > msat[index]:
-                diffLen = top-msat[index]
-                #RNA
-                baseEnRNA = Ec.RNA_DNAenergy(sequence[:int(msat[index])])
-                diffEnRNA = Ec.RNA_DNAexpected(diffLen+1)
-                incrRNA[1].append(baseEnRNA + diffEnRNA)
-
-                #DNA
-                baseEnDNA = Ec.DNA_DNAenergy(sequence[:int(msat[index])])
-                diffEnDNA = Ec.DNA_DNAexpected(diffLen+1)
-                incrDNA[1].append(baseEnDNA + diffEnDNA)
-            else:
-                incrRNA[1].append(tempRNA)
-                incrDNA[1].append(tempDNA)
-        #RNA
-        incrEnsRNA[0].append(incrRNA[0])
-        incrEnsRNA[1].append(incrRNA[1])
-
-        #DNA
-        incrEnsDNA[0].append(incrDNA[0])
-        incrEnsDNA[1].append(incrDNA[1])
-
-    #RNA
-    incrEnsRNA[0] = np.array(incrEnsRNA[0]).transpose() #transposing
-    incrEnsRNA[1] = np.array(incrEnsRNA[1]).transpose() #transposing
-
-    #DNA
-    incrEnsDNA[0] = np.array(incrEnsDNA[0]).transpose() #transposing
-    incrEnsDNA[1] = np.array(incrEnsDNA[1]).transpose () #transposing
-    # Calculating the different statistics
-
-    # RNA + DNA without expected energy
-    incrEnsRNADNA = incrEnsRNA[0] + incrEnsDNA[0]
-
-    RNADNA = []
-    for index in range(len(incrEnsRNADNA)):
-        RNADNA.append(spearmanr(incrEnsRNADNA[index], PY))
-
-    #RNA
-    incrWithExp20RNA = []
-    incrWithoExp20RNA = []
-    for index in range(len(incrEnsRNA[0])):
-        incrWithoExp20RNA.append(spearmanr(incrEnsRNA[0][index], PY))
-        incrWithExp20RNA.append(spearmanr(incrEnsRNA[1][index], PY))
-
-    #DNA
-    incrWithExp20DNA = []
-    incrWithoExp20DNA = []
-    for index in range(len(incrEnsDNA[0])):
-        incrWithoExp20DNA.append(spearmanr(incrEnsDNA[0][index], PY))
-        incrWithExp20DNA.append(spearmanr(incrEnsDNA[1][index], PY))
-
-    arne = [incrWithExp20RNA, incrWithExp20DNA, incrWithoExp20RNA, incrWithoExp20DNA]
-
-    output = {}
-    output['RNA_{0} msat-corrected'.format(maxlen)] = arne[0]
-    output['DNA_{0} msat-corrected'.format(maxlen)] = arne[1]
-
-    output['RNA_{0} uncorrected'.format(maxlen)] = arne[2]
-    output['DNA_{0} uncorrected'.format(maxlen)] = arne[3]
-
-    output['RNADNA_{0} uncorrected'.format(maxlen)] = RNADNA
-
-    return output
-
 def ITSgenerator_local(nrseq):
     """Generate list of nrseq RNA random sequences """
     gatc = list('GATC')
@@ -227,52 +116,6 @@ def PvalDeterminer(toplot):
     corrs = [tup[0] for tup in toplot]
     f = scipy.interpolate.interp1d(pvals, corrs)
     return f(0.05)
-
-def Purine_RNADNA(repnr=100, ranNr=39, rand='biased', upto=20):
-    """ Calculate the correlation coefficient between a DNA sequence's RNA-DNA
-    energy and its purine content. """
-    # NOTE should this be done with ITS sequence of the same probability
-    # distribution as found in Hsu's data? Probably not.
-    # RESULT: with 100000 runs of 39 sequences: mean = 0.29, sigma=0.15
-    # RESULT: with biased sequences I get for 100000 runs 0.35 p/m 0.15 -> 0.20 to 0.50,
-    # which contains the 0.46! 
-    # This means that the correlation between purines and RNADNA energy in hsu's
-    # 39 sequences (0.46)
-
-    cor_vals = []
-    p_vals = []
-    for dummy in range(repnr):
-        purTable = np.zeros(ranNr)
-        enTable = np.zeros(ranNr)
-        for nr in range(ranNr):
-            sequence = ITSgenerator_local(1)[0][:upto]
-            if rand == 'biased':
-                seq_iterator = ITSgenerator.RanGen((0.15,0.36,0.29,0.19))
-                sequence = seq_iterator.next()[:upto]
-            purTable[nr] = sequence.count('G') + sequence.count('A')
-            enTable[nr] = Ec.RNA_DNAenergy(sequence)
-        cor, pval = spearmanr(purTable, enTable)
-        cor_vals.append(cor)
-        p_vals.append(pval)
-
-    pval_mean, pval_sigma = scipy.stats.norm.fit(p_vals)
-    cor_mean, cor_sigma = scipy.stats.norm.fit(cor_vals)
-    #return 'Mean (corr, pval): ', cor_mean, pval_mean, ' -- Sigma: ', cor_sigma, pval_sigma
-    return 'Mean corr : ', cor_mean, ' -- Sigma: ', cor_sigma
-
-# TODO Should also add the correlation coefficient. How many exceed bla bla bla for
-# example.
-def PlotError(lizt, n=20):
-    """ Plot how good the experimental sequences are compared to random """
-    statz = JustHowWrong(n, lizt)
-    lenz = statz[4]
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    n, _bins, _patches = ax.hist(lenz, 50, normed=1, facecolor='green', alpha=0.75)
-    ax.set_xlabel('"Significant" sequences')
-    ax.set_ylabel('Frequency')
-    ax.set_xlim(0, 60)
-    return statz
 
 def StripSet(awaynr, lizt, ITSs):
     """ Remove sets of sequences from the dataset, depending on awaynr """
@@ -489,36 +332,6 @@ def HsuRandomTester(ITSs):
     # RESULT in all the sequences that have non-random nucleotide distributions,
     # 6/8 have high PY, correlated iwth lack of mostly C.
 
-def NewEnergyAnalyzer(ITSs):
-    """ Analyze the range of energies in Hsu's sequences -- this is important
-    for the next wave of experiments. You need to know at what energies the
-    transition from low PY to high PY exists. You need to know this mainly for
-    the 1_15 energies, but it will also be interesting to look at the 1_10
-    energies. """
-    PYs = []
-    one_15s = []
-    one_10s = []
-    one_20s = []
-    for itr in ITSs:
-        PYs.append(itr.PY)
-        one_15s.append(itr.rna_dna1_15)
-        one_10s.append(itr.rna_dna1_10)
-        one_20s.append(itr.rna_dna1_20)
-    fig = plt.figure()
-    ax1 = fig.add_subplot(211)
-    ax1.set_title("PY vs 1 to 15 rna-dna energies", size=10)
-    ax1.set_xlabel("1 to 15 energies", size=20)
-    ax1.set_ylabel("PY", size=20)
-    ax1.scatter(one_15s, PYs)
-    ax2 = fig.add_subplot(212)
-    ax2.set_title("PY vs 1 to 10 rna-dna energies", size=10)
-    ax2.set_xlabel("1 to 10 energies", size=20)
-    ax2.set_ylabel("PY", size=20)
-    ax2.scatter(one_10s, PYs)
-    # RESULT the 1 to 15 energies go from -19 to -8 with the peak PY occuring
-    # around -12. Ideally your energies should go from -18 to -8 in 1 to 15
-    # the 1 to 10 energies go from -12 (one at -14) to -4
-
 def PurineLadder(ITSs):
     """ Create a ladder of correlations between purine vs PY and energy."""
     pur_ladd_corr = []
@@ -623,15 +436,6 @@ def ReadAndFixData():
         ITSs.append(ITS(row[0], row[1], row[2], row[3], row[7]))
 
     return lizt, ITSs
-
-def RandEnCheck(nr=1000):
-    ranens = []
-    for dummy in range(nr):
-        ranseq = ITSgenerator_local(1)[0][:9]
-        ranens.append(Ec.RNA_DNAenergy(ranseq))
-    meanz = np.mean(ranens)
-    return meanz
-
 
 def genome_wide():
     """
@@ -1241,8 +1045,6 @@ def expression_plot(energies):
     # plot the propensities for each class as box plots
     # when that is done you can be sure there is nothing more
 
-
-
 def dinuc_en_plot(vals, rand_di_en, sigma):
     """
     """
@@ -1349,6 +1151,7 @@ def new_scatter(lizt, ITSs):
             dna_dna = [Ec.DNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
             keq = [Ec.Keq(s.sequence[:maxnuc]) for s in ITSs]
             added = [Ec.super_f(s.sequence[:maxnuc]) for s in ITSs]
+            #added = [rna_dna[i] - keq[i] for i in range(len(keq))]
             #PCA = [Ec.pca_f(s.sequence[:maxnuc]) for s in ITSs]
 
         energies = [('RNA-DNA', rna_dna), ('Translocation', keq),
@@ -2990,42 +2793,50 @@ def fitting_models(lizt, ITSs):
     # Maybe the best solution is the differential equations with r =
     # r_1*exp(r2*DeltaG(RNA-DNA))
 
-    # parameters are c1, b1, b2, ..., bn
-    parameters = (100, -0.1, 0.5)
-    variables = (keq, rna_dna)
     #variables = (k1, rna_dna)
     #variables = (kMinus1, rna_dna)
 
-    import Models
+    #### the exp model
+    #parameters = (100, -0.1, 0.5)
+    #variables = (keq, rna_dna)
 
-    plsq = optimize.leastsq(Models.residuals_mainM, parameters, args=(variables, PYs))
+    #plsq = optimize.leastsq(Models.residuals_mainM, parameters, args=(variables, PYs))
+    #fitted_parm = plsq[0]
+    #outp = Models.mainM(fitted_parm, variables)
+    #fitted_vals = np.dot(fitted_parm[1:], variables)
+    #c1 = fitted_parm[0]
+    #plot_data = c1*np.exp(plot_range)
 
+    #### the log(keq) model
+    parameters = (100, 0.1, 0.1, 0.1)
+    variables = (keq, rna_dna)
+
+    plsq = optimize.leastsq(Models.residuals_logKeq, parameters, args=(variables, PYs))
     fitted_parm = plsq[0]
-
-    outp = Models.mainM(fitted_parm, variables)
+    outp = Models.logKeq(fitted_parm, variables)
+    c1, b1, b2, b3 = fitted_parm
+    fitted_vals = b1*rna_dna - b2*np.log(b3*keq)
+    minval = min(fitted_vals)
+    maxval = max(fitted_vals)
+    plot_range = np.arange(minval, maxval, 0.01)
+    plot_data = c1*np.exp(plot_range)
+     #RESULT log(keq) model has better fit visually
+     # It corresponds to a k1*Keq equilibrium constant
+     # ACtualy .. the Keq^k1 fits best, and gives a k1 value of 1.97. Bening.
+     # The k1*Keq gives a value of exp(28) ... not benign. Which model is more
+     # likely? The exp model gives too high values for .. what about a
+     # combination? A combination changes little for b3; it doesn't improve the
+     # fit. A good sign.
 
     print fitted_parm
     print spearmanr(PYs, outp)
     print scipy.stats.pearsonr(PYs, outp)
 
-    fitted_vals = np.dot(fitted_parm[1:], variables)
-
-    debug()
-
     # How should I fit it? The predicted PY against the actual PY?
     # Or the actual PY against the -0.14 * keq + 0.15 * rna_dna?
     # Then plot the equation using a linear range from min to max
 
-    minval = min(fitted_vals)
-    maxval = max(fitted_vals)
-
-    plot_range = np.arange(minval, maxval, 0.01)
-
-    #For plotting
-    #PY = c1*exp(x)
-    c1 = fitted_parm[0]
-
-    plot_data = c1*np.exp(plot_range)
+    plt.ion()
 
     fig, ax = plt.subplots()
     ax.errorbar(c1*fitted_vals, PYs, yerr=PYs_std, fmt='go')
@@ -3076,6 +2887,28 @@ def new_models(lizt, ITSs):
 
     Where X are the pre and pos-translocated states of each dinucleotide
     position, and A is a matrix of rate-coefficients
+
+    All right. Now you have 2 models. You will probably have 3-4 models in the
+    end to choose from. You'll need an easy way to test different models.
+
+    First, different models will produce different A-matrices (rate constants).
+    Thus, each model must be associated with its A-matrix. The different rate
+    constants will be modified in different ways by constants for fitting + the
+    variables (RNA-DNA, DNA-DNA, Keq, k1, kMinus1)
+
+    I should let each ITS object have the above variables calculated for each
+    dinucleotdie pair. Then I don't need to re-calculate them, just use the
+    indexes. Then you can write k1 = c1*exp(c2*rna_dna)/keq - c3*dna-dna
+    for each rate constant as you please.
+
+    Different models will have different number of rate constants which need
+    different transformations on them. You can't generalize that. Each model
+    should have its own method (comment out if not run). Each model should
+    produce comparable outcomes in terms of plots and other measures.
+
+    Equilibrum of the post-pre step reflects a time-scale difference. We say
+    that this reaction is fast compared to nucleotide incorporation. Is it?
+    Maybe.
     """
 
     # Plot the movement in what? A 3d box plot?
@@ -3087,7 +2920,11 @@ def new_models(lizt, ITSs):
     #For now, just return the concentration at the last stage 
 
     PYs = [itr.PY for itr in ITSs]
+    its_len = 12 # how far to transcribe
 
+    first_nonequilibrium(PYs, its_len)
+
+def first_nonequilibrium(PYs, its_len):
 
     # RESULT the 'naive' approach does not work (I had actually thought that it
     # would). Am I comparing against the right thing? I'm copmaring against the
@@ -3095,21 +2932,20 @@ def new_models(lizt, ITSs):
     # NOTE you are having equal sign between RNA-DNA and the other... maybe you
     # should reverse it? How do I do that without compromizing the values? :S
     # TODO
-    # 1) Try to fit 3 parameters to the PY values
-    # 2) Try to introduce changes in the model
+    # 1) Try to fit 3 parameters to the PY values # not much better
+    # 2) Try to introduce changes in the model # can try ...
 
     # initial tunable values
     initial_values = (1,1,-1)
     print initial_values
 
-    its_len = 11 # how far to transcribe
     states = its_len -1 # the number of i positions
     variables = states*2 # two sub-states for each state: pre- and posttranslocated
 
     y0 = [1] + [0 for i in range(variables)]
     # XXX The final value in 'y0' is the end product
 
-    t = np.linspace(0, 150., 1500)   # time grid
+    t = np.linspace(0, 150., 1500) # time grid
     # The time units are of course arbitrary
 
     # these transformations will work on k1, k2, and k3, or any further k's you
@@ -3236,6 +3072,51 @@ def rnap_solver(y, t, A):
     dx = np.dot(A, y)
 
     return dx
+
+def equlib_matrix(rate, state_nr):
+    """
+    Assume equlibrium for the reaction:
+    X_f_0 <=> X_e_0 -> X_f_1
+
+    Then you get d(Xf_1)/dt = k1[Xf_0]
+
+    Where in practice k1 = c1*exp(-\Delta G)/Keq, but this value must come from
+    the outside
+    X_f_0 -> X_f_1 , k0
+    X_f_1 -> X_f_2 , k1
+    X_f_2 -> X_f_3 , k2
+
+    X = [X_f_0, X_f_1, X_f_2, X_f_3]
+    A = [[-k0,   0 , 0,  0],
+         [k0 , -k1 , 0,  0],
+         [0  ,  k1, -k2, 0],
+         [0  ,  0  , k2, 0]]
+    """
+
+    # initialize with the first row
+    rows = [  [rate[0]] + [0 for i in range(state_nr-1)] ]
+
+    for r_nr in range(state_nr-2):
+        row = []
+
+        for col_nr in range(state_nr):
+
+            if col_nr == r_nr:
+                row.append(rate[r_nr])
+
+            elif col_nr == r_nr+1:
+                row.append(-rate[r_nr+1])
+
+            else:
+                row.append(0)
+
+
+        rows.append(row)
+
+    rows.append([0 for i in range(state_nr-2)] + [ rate[-1], 0 ])
+
+    return np.array(rows)
+
 
 def parameter_matrix(rates, states, variables):
     """
@@ -3373,13 +3254,19 @@ def main():
     # the fast-goers and slow-goers is the time they spent. Thus we find both a
     # sequence-specific regulation AND we find the time-dependence.
 
+    # XXX to show that the Keq and RNA-DNA really matter, try to fit to random
+    # values for Keq and RNA-DNA. What about -2 as a constant for RNA-DNA?
+
+    # The final challenge is to show that a model with RNA-DNA energy + DNA-DNA
+    # for bubble opening performs worse than my model.
+
     #new_long5UTR(lizt)
 
     # design new sequences!
     #new_designer(lizt)
 
     # the ODE models
-    new_models(lizt, ITSs)
+    #new_models(lizt, ITSs)
 
     # the naive exp-fitting models
     #fitting_models(lizt, ITSs)
