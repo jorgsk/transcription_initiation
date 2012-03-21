@@ -145,15 +145,22 @@ class ITS(object):
         self.PY = PY
         self.PY_std = PY_std
         self.msat = int(msat)
-        self.rna_dna1_10 = Ec.RNA_DNAenergy(self.sequence[:10])
         self.rna_dna1_15 = Ec.RNA_DNAenergy(self.sequence[:15])
         self.rna_dna1_20 = Ec.RNA_DNAenergy(self.sequence)
-        self.dna_dna1_10 = Ec.DNA_DNAenergy(self.sequence[:10])
-        self.dna_dna1_15 = Ec.DNA_DNAenergy(self.sequence[:15])
-        self.dna_dna1_20 = Ec.DNA_DNAenergy(self.sequence)
+
         # Redlisted sequences 
         self.redlist = []
         self.redlisted = False
+
+        __indiv = list(sequence)
+        __dinucs = [__indiv[c] + __indiv[c+1] for c in range(20-1)]
+
+        # Make di-nucleotide vectors for all the energy parameters
+        self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
+        self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
+        self.keq_di = [Ec.Keq_EC8_EC9[di] for di in __dinucs]
+        self.k1_di = [Ec.k1[di] for di in __dinucs]
+        self.kminus1_di = [Ec.kminus1[di] for di in __dinucs]
 
 def RedlistInvestigator(ITSs):
     """ Read minus ten elements from Filereader and add redlisted sequence
@@ -2920,11 +2927,79 @@ def new_models(lizt, ITSs):
     #For now, just return the concentration at the last stage 
 
     PYs = [itr.PY for itr in ITSs]
-    its_len = 12 # how far to transcribe
+    #its_len = 12 # how far to transcribe
+    its_len = 4 # how far to transcribe
 
-    first_nonequilibrium(PYs, its_len)
+    #first_nonequilibrium(PYs, its_len, ITSs)
 
-def first_nonequilibrium(PYs, its_len):
+    second_equilibrium(PYs, its_len, ITSs)
+
+def second_equilibrium(PYs, its_len, ITSs):
+    """
+    Assume equilibrium in the pre-post step.
+
+    You have only 1 rate constant. You suggest one on this form:
+        c1*exp(c2*rna_dna + c3*ln(Keq) + c4)
+
+    Where the c4 is optional
+    """
+
+    initial_values = (1,1,1,1)
+
+    state_nr = its_len - 1 # starting with the first nt already incorporated
+
+    # initial vales for the states
+    y0 = [1] + [0 for i in range(state_nr)]
+
+    # the time grid -- it might be best to determine this in another way
+    t = np.linspace(0, 150., 1500)
+
+    arguments = (y0, t, its_len, state_nr, ITSs, PYs)
+
+    plsq = optimize.leastsq(cost_function_second, initial_values, args = arguments)
+
+def cost_function_second(start_values, y0, t, its_len, state_nr, ITSs, PYs):
+    """
+    Integrate the second model and compare its output to PYs
+
+        k1 = c1*exp(c2*rna_dna + c3*ln(Keq) + c4)
+    """
+    # get the tuning parameters and the rna-dna and k1, kminus1 values
+    finals = []
+    for its in ITSs:
+
+        # XXX TODO your model needs rna-dna and keq for different nucleotide
+        # pairs. Make sure that the matrix is created the way it should. Make a
+        # mock-example of 4 nucleotides on paper and proceed from there.
+
+        rna_dna = its.rna_dna_di[:its_len]
+        keq = its.keq_di[:its_len]
+
+        # create the rate constant
+        if len(start_values) == 3:
+            (a, b, c) = start_values
+            k1 = a*np.exp(b*rna_dna - c*np.log(keq))
+
+        elif len(start_values) == 4:
+            (a, b, c, d) = start_values
+            k1 = a*np.exp(b*rna_dna - c*np.log(keq) - d)
+
+        A = equlib_matrix(k1, state_nr)
+
+        debug()
+
+        soln = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,))
+
+        finals.append(soln[-1][-1])
+
+    dist_vect = np.array(finals) - np.array(PYs)
+    #dista = np.sqrt(sum(dist_vect**2))
+
+    return dist_vect
+
+
+
+def first_nonequilibrium(PYs, its_len, ITSs):
 
     # RESULT the 'naive' approach does not work (I had actually thought that it
     # would). Am I comparing against the right thing? I'm copmaring against the
@@ -3082,6 +3157,9 @@ def equlib_matrix(rate, state_nr):
 
     Where in practice k1 = c1*exp(-\Delta G)/Keq, but this value must come from
     the outside
+
+    seq = 'GATC'
+
     X_f_0 -> X_f_1 , k0
     X_f_1 -> X_f_2 , k1
     X_f_2 -> X_f_3 , k2
@@ -3096,7 +3174,7 @@ def equlib_matrix(rate, state_nr):
     # initialize with the first row
     rows = [  [rate[0]] + [0 for i in range(state_nr-1)] ]
 
-    for r_nr in range(state_nr-2):
+    for r_nr in range(state_nr-1):
         row = []
 
         for col_nr in range(state_nr):
@@ -3110,10 +3188,13 @@ def equlib_matrix(rate, state_nr):
             else:
                 row.append(0)
 
-
         rows.append(row)
 
-    rows.append([0 for i in range(state_nr-2)] + [ rate[-1], 0 ])
+    aa = np.array(rows)
+    debug()
+    rows.append([0 for i in range(state_nr-1)] + [ rate[-1], 0 ])
+    aa = np.array(rows)
+    debug()
 
     return np.array(rows)
 
@@ -3266,7 +3347,7 @@ def main():
     #new_designer(lizt)
 
     # the ODE models
-    #new_models(lizt, ITSs)
+    new_models(lizt, ITSs)
 
     # the naive exp-fitting models
     #fitting_models(lizt, ITSs)
