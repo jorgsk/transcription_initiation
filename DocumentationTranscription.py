@@ -10,6 +10,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
+from scipy import optimize
 from scipy.stats import spearmanr
 import scipy.interpolate
 import operator
@@ -18,11 +19,15 @@ import itertools
 # My own modules
 import Workhouse
 import Filereader
-import Energycalc
+import Energycalc as Ec
 from glob import glob
 
+import transformations as transf
+
+# Make numpy easier to read
 np.set_printoptions(precision=2)
 np.set_printoptions(suppress=True)
+
 from numpy import dot
 
 def run_from_ipython():
@@ -136,8 +141,8 @@ def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
             if rev == 'yes':
                 rnaRan = sequence[top-start:]
 
-            tempRNA = Energycalc.RNA_DNAenergy(rnaRan)
-            tempDNA = Energycalc.PhysicalDNA(dnaRan)[-1][0]
+            tempRNA = Ec.RNA_DNAenergy(rnaRan)
+            tempDNA = Ec.PhysicalDNA(dnaRan)[-1][0]
 
             incrRNA[0].append(tempRNA)
             incrDNA[0].append(tempDNA)
@@ -146,13 +151,13 @@ def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
             if top > msat[index]:
                 diffLen = top-msat[index]
                 #RNA
-                baseEnRNA = Energycalc.RNA_DNAenergy(sequence[:int(msat[index])])
-                diffEnRNA = Energycalc.RNA_DNAexpected(diffLen+1)
+                baseEnRNA = Ec.RNA_DNAenergy(sequence[:int(msat[index])])
+                diffEnRNA = Ec.RNA_DNAexpected(diffLen+1)
                 incrRNA[1].append(baseEnRNA + diffEnRNA)
 
                 #DNA
-                baseEnDNA = Energycalc.DNA_DNAenergy(sequence[:int(msat[index])])
-                diffEnDNA = Energycalc.DNA_DNAexpected(diffLen+1)
+                baseEnDNA = Ec.DNA_DNAenergy(sequence[:int(msat[index])])
+                diffEnDNA = Ec.DNA_DNAexpected(diffLen+1)
                 incrDNA[1].append(baseEnDNA + diffEnDNA)
             else:
                 incrRNA[1].append(tempRNA)
@@ -245,7 +250,7 @@ def Purine_RNADNA(repnr=100, ranNr=39, rand='biased', upto=20):
                 seq_iterator = ITSgenerator.RanGen((0.15,0.36,0.29,0.19))
                 sequence = seq_iterator.next()[:upto]
             purTable[nr] = sequence.count('G') + sequence.count('A')
-            enTable[nr] = Energycalc.RNA_DNAenergy(sequence)
+            enTable[nr] = Ec.RNA_DNAenergy(sequence)
         cor, pval = spearmanr(purTable, enTable)
         cor_vals.append(cor)
         p_vals.append(pval)
@@ -297,12 +302,12 @@ class ITS(object):
         self.PY = PY
         self.PY_std = PY_std
         self.msat = int(msat)
-        self.rna_dna1_10 = Energycalc.RNA_DNAenergy(self.sequence[:10])
-        self.rna_dna1_15 = Energycalc.RNA_DNAenergy(self.sequence[:15])
-        self.rna_dna1_20 = Energycalc.RNA_DNAenergy(self.sequence)
-        self.dna_dna1_10 = Energycalc.DNA_DNAenergy(self.sequence[:10])
-        self.dna_dna1_15 = Energycalc.DNA_DNAenergy(self.sequence[:15])
-        self.dna_dna1_20 = Energycalc.DNA_DNAenergy(self.sequence)
+        self.rna_dna1_10 = Ec.RNA_DNAenergy(self.sequence[:10])
+        self.rna_dna1_15 = Ec.RNA_DNAenergy(self.sequence[:15])
+        self.rna_dna1_20 = Ec.RNA_DNAenergy(self.sequence)
+        self.dna_dna1_10 = Ec.DNA_DNAenergy(self.sequence[:10])
+        self.dna_dna1_15 = Ec.DNA_DNAenergy(self.sequence[:15])
+        self.dna_dna1_20 = Ec.DNA_DNAenergy(self.sequence)
         # Redlisted sequences 
         self.redlist = []
         self.redlisted = False
@@ -523,7 +528,7 @@ def PurineLadder(ITSs):
         pur_ladder = [seq[:stop].count('A') + seq[:stop].count('G') for stop in
                range(2,20)]
         a_ladder = [seq[:stop].count('G') for stop in range(2,20)]
-        energies = [Energycalc.RNA_DNAenergy(seq[:stp]) for stp in range(2,20)]
+        energies = [Ec.RNA_DNAenergy(seq[:stp]) for stp in range(2,20)]
         itr.energy_ladder = energies
         itr.pur_ladder = pur_ladder
         itr.a_ladder = a_ladder
@@ -575,7 +580,7 @@ def PurineLadder(ITSs):
     # link is within one standard deviation of what you would expect from random
     # sequences -- hinting that the rna-dna correlation is not just some fluke
     # because 
-    en15s = [Energycalc.RNA_DNAenergy(itr.sequence[:15]) for itr in ITSs]
+    en15s = [Ec.RNA_DNAenergy(itr.sequence[:15]) for itr in ITSs]
     pur15s = [itr.sequence[:15].count('A') + itr.sequence[:15].count('G') for itr in ITSs]
     fck_corr = spearmanr(en15s, pur15s)
 
@@ -623,7 +628,7 @@ def RandEnCheck(nr=1000):
     ranens = []
     for dummy in range(nr):
         ranseq = ITSgenerator_local(1)[0][:9]
-        ranens.append(Energycalc.RNA_DNAenergy(ranseq))
+        ranens.append(Ec.RNA_DNAenergy(ranseq))
     meanz = np.mean(ranens)
     return meanz
 
@@ -705,10 +710,10 @@ def genome_wide():
 
             jumbl_its = ''.join([its[np.random.randint(clen)] for v in
                                  range(clen)])
-            energies.append(Energycalc.RNA_DNAenergy(its))
-            all_energies.append(Energycalc.RNA_DNAenergy(its))
+            energies.append(Ec.RNA_DNAenergy(its))
+            all_energies.append(Ec.RNA_DNAenergy(its))
 
-            jumbl_energies.append(Energycalc.RNA_DNAenergy(jumbl_its))
+            jumbl_energies.append(Ec.RNA_DNAenergy(jumbl_its))
 
             at_count.append(its.count('A') + its.count('T'))
 
@@ -737,10 +742,10 @@ def genome_wide():
 
         rand_at.append(randseq.count('A') + randseq.count('T'))
 
-        randenergies.append(Energycalc.RNA_DNAenergy(randseq))
+        randenergies.append(Ec.RNA_DNAenergy(randseq))
 
         jumbl_rs = ''.join([randseq[np.random.randint(clen)] for v in range(clen)])
-        jumbl_randenergies.append(Energycalc.RNA_DNAenergy(jumbl_rs))
+        jumbl_randenergies.append(Ec.RNA_DNAenergy(jumbl_rs))
 
     print 'random at count', np.mean(rand_at)
     print 'std at count', np.std(rand_at)
@@ -885,10 +890,10 @@ def new_ladder(lizt):
     maxlen = 20
     pline = 'yes'
 
-    # Pick out 22 random positions in lizt -- the result is zolid.
-    #rands = [random.randrange(0,43) for i in range(30)]
+    # how will it go with 26 random ones?
+    # Pick out 26 random positions in lizt -- the result is zolid.
     rands = set([])
-    while len(rands)<22:
+    while len(rands)<26:
         rands.add(random.randrange(0,43))
     lizt = [lizt[i] for i in rands]
 
@@ -983,7 +988,7 @@ def new_genome():
         sig_dict[fname[8:15]] = path
 
     #from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
-    from Energycalc import NNRD, NNDD, super_en, reKeq
+    from Ec import NNRD, NNDD, super_en, reKeq
 
     name2func = [('Keq', reKeq), ('RNA-DNA', NNRD), ('DNA-DNA', NNDD), ('Combo',
                                                                        super_en)]
@@ -1034,7 +1039,7 @@ def new_genome():
 
             # try to average if more than 1 promoter assigned to a gene
             if name.endswith('p'):
-                energies[name[:-1]] = Energycalc.super_f(seq[-20:-10].upper())
+                energies[name[:-1]] = Ec.super_f(seq[-20:-10].upper())
 
             # there are 80 nt in the strand
             indiv = list(seq.upper()[-col_nr:]) # list of individual nucleotides
@@ -1329,26 +1334,26 @@ def new_scatter(lizt, ITSs):
         name = '1_{0}_scatter_comparison'.format(maxnuc)
 
         if maxnuc == 'msat':
-            #rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
-            #dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
-            #keq = [Energycalc.Keq(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
-            #added = [Energycalc.super_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
-            rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:s.msat]) for s in ITSs]
-            dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:s.msat]) for s in ITSs]
-            keq = [Energycalc.Keq(s.sequence[:s.msat]) for s in ITSs]
-            added = [Energycalc.super_f(s.sequence[:s.msat]) for s in ITSs]
-            #PCA = [Energycalc.pca_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #rna_dna = [Ec.RNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #dna_dna = [Ec.DNA_DNAenergy(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #keq = [Ec.Keq(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            #added = [Ec.super_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
+            rna_dna = [Ec.RNA_DNAenergy(s.sequence[:s.msat]) for s in ITSs]
+            dna_dna = [Ec.DNA_DNAenergy(s.sequence[:s.msat]) for s in ITSs]
+            keq = [Ec.Keq(s.sequence[:s.msat]) for s in ITSs]
+            added = [Ec.super_f(s.sequence[:s.msat]) for s in ITSs]
+            #PCA = [Ec.pca_f(s.sequence[:s.msat])/float(s.msat) for s in ITSs]
 
         else:
-            rna_dna = [Energycalc.RNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
-            dna_dna = [Energycalc.DNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
-            keq = [Energycalc.Keq(s.sequence[:maxnuc]) for s in ITSs]
-            added = [Energycalc.super_f(s.sequence[:maxnuc]) for s in ITSs]
-            #PCA = [Energycalc.pca_f(s.sequence[:maxnuc]) for s in ITSs]
+            rna_dna = [Ec.RNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
+            dna_dna = [Ec.DNA_DNAenergy(s.sequence[:maxnuc]) for s in ITSs]
+            keq = [Ec.Keq(s.sequence[:maxnuc]) for s in ITSs]
+            added = [Ec.super_f(s.sequence[:maxnuc]) for s in ITSs]
+            #PCA = [Ec.pca_f(s.sequence[:maxnuc]) for s in ITSs]
 
-        #energies = [('RNA-DNA', rna_dna), ('Translocation', keq),
-                    #('RNA-DNA - Translocation', added)]
-        energies = [('Abortive propensity', added)]
+        energies = [('RNA-DNA', rna_dna), ('Translocation', keq),
+                    ('RNA-DNA - Translocation', added)]
+        #energies = [('Abortive propensity', added)]
 
         PYs = [itr.PY for itr in ITSs]
         PYs_std = [itr.PY_std for itr in ITSs]
@@ -1358,11 +1363,10 @@ def new_scatter(lizt, ITSs):
         for col_nr, (name, data) in enumerate(energies):
 
             # can't use [0,4] notation when only 1 row ..
-            #if len(rows) == 1:
-                #ax = axes[col_nr]
-            #else:
-                #ax = axes[row_nr, col_nr]
-            ax = axes
+            if len(rows) == 1:
+                ax = axes[col_nr]
+            else:
+                ax = axes[row_nr, col_nr]
 
             if stds == 'yes':
                 ax.errorbar(data, PYs, yerr=PYs_std, fmt=fmts[col_nr])
@@ -1375,7 +1379,7 @@ def new_scatter(lizt, ITSs):
                 #ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=15)
                 ax.set_ylabel("Productive yield of ITS variant)".format(maxnuc), size=15)
             if row_nr == 0:
-                ax.set_xlabel("Abortive propensity", size=20)
+                #ax.set_xlabel("Abortive propensity", size=20)
                 #header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
                 header = 'Spearman: r = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
                 ax.set_title(header, size=15)
@@ -1571,8 +1575,8 @@ def new_long5UTR(lizt):
                 if indx == 0 and subseq not in seq.upper():
                     debug()
 
-                #energy[indx] += Energycalc.Keq(subseq)
-                #energy[indx] += Energycalc.res_frac(subseq)
+                #energy[indx] += Ec.Keq(subseq)
+                #energy[indx] += Ec.res_frac(subseq)
 
                 idv = list(subseq) # splitting sequence into individual letters
                 dins = [idv[cnt] + idv[cnt+1] for cnt in range(9)]
@@ -1629,7 +1633,7 @@ def new_long5UTR(lizt):
     # to +10
 
 
-    from Energycalc import resistant_fraction, super_en
+    from Ec import resistant_fraction, super_en
 
     # check both original and shuffled data
     for dinucdict, headr in [(dinucfreq, 'Dinucleotides'), (dinucfreq_random,
@@ -1716,8 +1720,8 @@ def new_AP(lizt, ITSs):
         # zip them
         for dinuc, AP in zip(neigh, abortz):
             ap.append(AP)
-            prob.append(Energycalc.super_en[dinuc])
-            #prob.append(Energycalc.Keq_EC8_EC9[dinuc])
+            prob.append(Ec.super_en[dinuc])
+            #prob.append(Ec.Keq_EC8_EC9[dinuc])
 
             # compare the standard deviations
         APs.append(np.std(ap))
@@ -1790,20 +1794,27 @@ def new_promoter_strength():
     for prom, (score, seq) in checkme.items():
         scores.append(float(score))
 
-        propensity = Energycalc.super_f(seq[-20:-10].upper())
+        propensity = Ec.super_f(seq[-20:-10].upper())
 
         props.append(propensity)
 
     print spearmanr(scores, props)
     debug()
 
-def get_pr_nr(sig_paths):
+def get_pr_nr(sig_paths, promoter):
     """
     Count the number of promoters with a 1promoter-1gene connection
     """
     proms = set([])
 
     for path in sig_paths:
+
+        # 'promoter' is either the specific type of promoter you want, or it's
+        # all promoters
+        if 'all' in promoter:
+            pass
+        elif promoter not in path:
+            continue
 
         for line in open(path, 'rb'):
             (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
@@ -1852,7 +1863,7 @@ def get_plus_20(pos, strand, ecoli):
     if strand == 'reverse':
         return reverseComplement(ecoli[pos-40:pos-20])
 
-def get_reversed_data():
+def get_reversed_data(promoter, enDict):
     """
     Return energy data for all promoters in a m X n matrix, where m is the
     number of promoters and n is the measure you want. This is to support a
@@ -1888,20 +1899,18 @@ def get_reversed_data():
     ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
     ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
 
-    from Energycalc import super_en, Keq_EC8_EC9
-
     # get genes for which there is expression data
     expression = get_expression(expression_path)
     # TODO start here and get the new matrix up and running
 
     # get promoters for which there is a 1-1 promoter-gene relationsihp 
-    promoters = get_pr_nr(sig_paths)
+    promoters = get_pr_nr(sig_paths, promoter)
 
     # Get the promoters that have expressed genes
-    pr_remain = promoters.intersection(set(expression.keys()))
+    #pr_remain = promoters.intersection(set(expression.keys()))
 
     # Optionally ignore the expression thing -- I think it's not related 
-    #pr_remain = promoters
+    pr_remain = promoters
 
     # You should return a m (promoter) x n (measures) matrix. Let's use the
     # Keq of the first 20 dinucleotdies, which will be 19
@@ -1909,12 +1918,13 @@ def get_reversed_data():
     #ind = list(sequence) # splitting sequence into individual letters
     #neigh = [ind[c] + ind[c+1] for c in range(len(ind)-1)]
 
-    en_dict = Keq_EC8_EC9
-    #en_dict = super_en
+    en_dict = enDict
 
     empty_matrix = np.zeros([len(pr_remain), 38])
 
     expre = []
+
+    names = []
 
     # seq_logo = open(sigma+'_logo.fasta', 'wb')
     row_pos = 0
@@ -1929,6 +1939,8 @@ def get_reversed_data():
             if seq == '' or gene_name not in pr_remain:
                 continue
 
+            names.append(gene_name)
+
             ITSseq = seq.upper()[-20:]
             dins = [ITSseq[b] + ITSseq[b+1] for b in range(19)]
 
@@ -1939,11 +1951,15 @@ def get_reversed_data():
 
             empty_matrix[row_pos] = np.array(ens)
 
-            expre.append(expression[gene_name])
+            if gene_name in expression:
+                expre.append(expression[gene_name])
+            else:
+                expre.append(0)
+
 
             row_pos += 1
 
-    return expre, empty_matrix
+    return expre, empty_matrix, names
 
 
 def its_data():
@@ -1997,7 +2013,7 @@ def its_data():
     ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
     ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
 
-    from Energycalc import Keq, RNA_DNAenergy, DNA_DNAenergy
+    from Ec import Keq, RNA_DNAenergy, DNA_DNAenergy
 
     # Prepare a data-matrix with 8 columns and as many sigma70 promoters as
     # there is expression data from for which only a single promoter is known
@@ -2006,15 +2022,17 @@ def its_data():
     expression = get_expression(expression_path)
 
     # get promoters for which there is a 1-1 promoter-gene relationsihp 
-    promoters = get_pr_nr(sig_paths)
+    promoters = get_pr_nr(sig_paths, 'all')
 
     # Get the promoters that have expressed genes
-    pr_remain = promoters.intersection(set(expression.keys()))
+    #pr_remain = promoters.intersection(set(expression.keys()))
 
     # Optionally ignore the expression thing -- I think it's not related 
-    #pr_remain = promoters
+    pr_remain = promoters
 
     empty_matrix = np.zeros([len(pr_remain), 9])
+
+    names = []
 
     # seq_logo = open(sigma+'_logo.fasta', 'wb')
     row_pos = 0
@@ -2028,6 +2046,8 @@ def its_data():
 
             if seq == '' or gene_name not in pr_remain:
                 continue
+
+            names.append(gene_name)
 
             ITSseq = seq.upper()[-20:]
             dins = [ITSseq[b] + ITSseq[b+1] for b in range(19)]
@@ -2066,7 +2086,7 @@ def its_data():
             row_pos += 1 # increment to the next gene/promoter
 
     # Return as mXn matrix, with expression separate
-    return empty_matrix[:,0].T, empty_matrix[:,1:].T
+    return names, empty_matrix[:,0].T, empty_matrix[:,1:].T
 
 def frequency_change():
     """
@@ -2670,7 +2690,9 @@ def my_pca():
     # Personally this is very strange, but it could find co-varying patterns in
     # the genes, but really, it's nuts. The interpretation is not clear at all.
 
-    expression, X = get_reversed_data()
+    from Energycalc import super_en, Keq_EC8_EC9
+    expression, X, names = get_reversed_data('all', super_en)
+
     log2exp = np.log2(expression)
 
     m, n = X.shape
@@ -2684,6 +2706,27 @@ def my_pca():
     var_sum = sum(sgma)
     cum_eig = [float(format(sum(sgma[:i])/var_sum, '.2f'))
                for i in range(1, len(sgma)-1)]
+
+    ########## Write the dataset for Martin ##########
+    #for promoter in ['Sigma70', 'all_promoters']:
+        #for energy_term, enDict in [('Translocation', Keq_EC8_EC9),
+                                    #('Combination', super_en)]:
+
+            #expression, X, names = get_reversed_data(promoter, enDict)
+            #debug()
+
+            #outfile = 'output/{0}_{1}.txt'.format(energy_term, promoter)
+            #handle = open(outfile, 'wb')
+            #for row, name in zip(X, names):
+                #handle.write('{0}\t'.format(name))
+                #handle.write('\t'.join([str(r) for r in row]) + '\n')
+
+            #handle.close()
+
+    #debug()
+
+
+    ######################################
 
     debug()
     # new method
@@ -2844,7 +2887,7 @@ def seq_parser(beg, N25, repeat_nr, sample_nr, at_test_nr):
         if repReg.search(sequence):
             continue
 
-        energies.append(Energycalc.super_f(sequence))
+        energies.append(Ec.super_f(sequence))
         seqs.append(sequence)
 
     print time.time() -t1
@@ -2917,17 +2960,25 @@ def fitting_models(lizt, ITSs):
         By itself, RNA-DNA correlates with PY, but not DNA-DNA.
 
         This points to RNA-DNA ans the causal factor and not DNA-DNA.
+
+        However, it seems that it is a linear combination of RNA-DNA and Keq
+        that best explains the values. In the standard models RNA-DNA is
+        expontential and Keq is linear. This will cause loss-of-correlation in
+        the ODE system. It will be solved if you make k3 linear in terms of
+        RNA-DNA; but this doesn't fit well with the arrhenius equation. Maybe
+        though you can make a taylor approximation to the first or second
+        degree? At least you can use that to argue your case.
     """
 
     ITSlen = 15
     # get the variables you need 
-    rna_dna = np.array([Energycalc.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
-    dna_dna = np.array([Energycalc.DNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
-    keq = np.array([Energycalc.Keq(s.sequence[:ITSlen]) for s in ITSs])
-    k1 = np.array([Energycalc.K1(s.sequence[:ITSlen]) for s in ITSs])
-    kMinus1 = np.array([Energycalc.Kminus1(s.sequence[:ITSlen]) for s in ITSs])
+    rna_dna = np.array([Ec.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+    dna_dna = np.array([Ec.DNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+    keq = np.array([Ec.Keq(s.sequence[:ITSlen]) for s in ITSs])
+    k1 = np.array([Ec.K1(s.sequence[:ITSlen]) for s in ITSs])
+    kMinus1 = np.array([Ec.Kminus1(s.sequence[:ITSlen]) for s in ITSs])
 
-    added = [Energycalc.super_f(s.sequence[:ITSlen]) for s in ITSs]
+    added = [Ec.super_f(s.sequence[:ITSlen]) for s in ITSs]
     # your Y-values, the PYs
     PYs = np.array([itr.PY for itr in ITSs])
     PYs_std = [itr.PY_std for itr in ITSs]
@@ -2942,11 +2993,12 @@ def fitting_models(lizt, ITSs):
     # parameters are c1, b1, b2, ..., bn
     parameters = (100, -0.1, 0.5)
     variables = (keq, rna_dna)
-    variables = (np.log(k1), rna_dna)
+    #variables = (k1, rna_dna)
+    #variables = (kMinus1, rna_dna)
 
     import Models
 
-    plsq  = optimize.leastsq(Models.residuals_mainM, parameters, args=(variables, PYs))
+    plsq = optimize.leastsq(Models.residuals_mainM, parameters, args=(variables, PYs))
 
     fitted_parm = plsq[0]
 
@@ -2957,6 +3009,8 @@ def fitting_models(lizt, ITSs):
     print scipy.stats.pearsonr(PYs, outp)
 
     fitted_vals = np.dot(fitted_parm[1:], variables)
+
+    debug()
 
     # How should I fit it? The predicted PY against the actual PY?
     # Or the actual PY against the -0.14 * keq + 0.15 * rna_dna?
@@ -3009,6 +3063,287 @@ def fitting_models(lizt, ITSs):
 
     debug()
 
+def new_models(lizt, ITSs):
+    """
+    Define a linear ODE system that solves the movement on RNAP on the ITS.
+    Optimize the system based on 3 parameters that will quantify the effect of
+    RNA-DNA and Keq translocation bias.
+
+    Your original discovery is a linear relationship between Keq and RNA-DNA.
+    You'll need to recreate this in the rate equations somehow.
+
+    The system is dX = AX
+
+    Where X are the pre and pos-translocated states of each dinucleotide
+    position, and A is a matrix of rate-coefficients
+    """
+
+    # Plot the movement in what? A 3d box plot?
+    #plt.ion()
+    #fig, axes = plt.subplots(10)
+    #for r_nr, row in enumerate(soln[::300]):
+        #axes[r_nr].plot(row)
+
+    #For now, just return the concentration at the last stage 
+
+    PYs = [itr.PY for itr in ITSs]
+
+
+    # RESULT the 'naive' approach does not work (I had actually thought that it
+    # would). Am I comparing against the right thing? I'm copmaring against the
+    # % of value in state 20. I'll start doing it until 15 instead.
+    # NOTE you are having equal sign between RNA-DNA and the other... maybe you
+    # should reverse it? How do I do that without compromizing the values? :S
+    # TODO
+    # 1) Try to fit 3 parameters to the PY values
+    # 2) Try to introduce changes in the model
+
+    # initial tunable values
+    initial_values = (1,1,-1)
+    print initial_values
+
+    its_len = 11 # how far to transcribe
+    states = its_len -1 # the number of i positions
+    variables = states*2 # two sub-states for each state: pre- and posttranslocated
+
+    y0 = [1] + [0 for i in range(variables)]
+    # XXX The final value in 'y0' is the end product
+
+    t = np.linspace(0, 150., 1500)   # time grid
+    # The time units are of course arbitrary
+
+    # these transformations will work on k1, k2, and k3, or any further k's you
+    # may make
+    transformations = transf.const, transf.const, transf.expon
+
+    arguments = (y0, t, its_len, states, variables, ITSs, transformations, PYs)
+
+    plsq = optimize.leastsq(cost_function, initial_values, args = arguments)
+
+    # TODO check the effect of the different parameters; to what degree do they
+    # change the order of the final vals?
+
+    fitted_param = plsq[0]
+    print fitted_param
+    #fitted_param = [2.02,  3.26, -0.91]
+    # XXX result; with these fitted parameters you don't get a good fit. This
+    # means you'll have to update the model.
+    # You'll need a set of models. Each will have different parameters. The more
+    # parameters, the more fitting :/
+    # You can also try other minimizers.
+    # Try a model without RNA-DNA for example; just aconstant. I get a bit
+    # better correlation 0.45, but it converges slow as hell.
+
+    # make a file with different transformations of k1, k2, k3 etc
+    # maybe I should split them up into the individual transformations so that I
+    # don't create 10 different usage examples.
+    # The last one can be split into first exp and then constant!
+    # The values take 'array, value'
+
+    # get the distribution of RNAP in the final state of the simulation
+    finals = final_state(ITSs, y0, t, transformations, fitted_param, its_len)
+
+    print spearmanr(PYs, finals)
+    # With the current model, there is no real optimization. The least squares
+    # function finds no optimum. Probably means the underlying model is so
+    # wrong.
+
+    debug()
+
+def final_state(ITSs, y0, t, transformations, parameters, its_len):
+    """
+    Just the loop
+    """
+    finals = []
+    for its in ITSs:
+
+        seq = its.sequence[:its_len]
+        neigh = [seq[cnt] + seq[cnt+1] for cnt in range(len(seq)-1)]
+
+        # note that what the paper calls k1 is my k2; their kminus1 is 9->8, but I'm
+        # going the other way!
+        k11 = np.array([Ec.kminus1[di] for di in neigh])
+        k21 = np.array([Ec.k1[di] for di in neigh])
+        k31 = np.array([Ec.NNRD[di] for di in neigh])
+
+        a, b, c = parameters
+
+        k1 = a*k11
+        k2 = a*k21
+        k3 = b*np.exp(c*k31)
+
+        transf_rates = [k1, k2, k3]
+
+        states = len(k1)
+        variables = states*2
+
+        A = parameter_matrix(transf_rates, states, variables)
+
+        # solve the with the new param
+        #arguments = (A,) # the abysmal synax requires a double dict as argument
+        soln = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,))
+
+        finals.append(soln[-1][-1])
+
+    return finals
+
+def cost_function(parameters, y0, t, its_len, states, variables, ITSs,
+                  transformations, PYs):
+    """
+    Cost function. Could the equations get out of hand? I hope not.
+    """
+
+    # get the tuning parameters and the rna-dna and k1, kminus1 values
+    a, b, c = parameters
+
+    finals = []
+    for its in ITSs:
+
+        seq = its.sequence[:its_len]
+        neigh = [seq[cnt] + seq[cnt+1] for cnt in range(len(seq)-1)]
+
+        k11 = np.array([Ec.kminus1[di] for di in neigh])
+        k21 = np.array([Ec.k1[di] for di in neigh])
+        k31 = np.array([Ec.NNRD[di] for di in neigh])
+
+        # modify the rate constants by some formula
+        # maybe you'll make a library of reaction constants here
+        k1 = a*k11
+        k2 = a*k21
+        k3 = b*np.exp(c*k31)
+
+        states = its_len - 1
+        variables = states*2
+
+        rates = (k1, k2, k3)
+
+        A = parameter_matrix(rates, states, variables)
+
+        soln = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,))
+
+        finals.append(soln[-1][-1])
+
+    dist_vect = np.array(finals) - np.array(PYs)
+    #dista = np.sqrt(sum(dist_vect**2))
+
+    return dist_vect
+
+def rnap_solver(y, t, A):
+    """
+    Solver.
+    """
+
+    dx = np.dot(A, y)
+
+    return dx
+
+def parameter_matrix(rates, states, variables):
+    """
+    Construct the parameter matrix for the RNAP reaction
+
+    Example for 3 states:
+
+    X_f_0 <=> X_e_0 -> X_f_1
+    X_f_1 <=> X_e_1 -> X_f_2
+    X_f_2 <=> X_e_2 -> X_f_3
+
+    With reaction rates
+    k1_0, k2_0, k3_0
+    k1_1, k2_1, k3_1
+    k2_2, k2_2, K3_2
+
+    X will be [X_f_0, X_e_0, X_f_1, X_e_1, X_f_2, X_e_2, x_f_3]
+
+    A =
+    [ [-k1_0,   k2_0        , 0    , 0             , 0    , 0              , 0],
+      [ k1_0, -(k2_0 + k3_0), 0    , 0             , 0    , 0              , 0],
+
+      [0    ,   k3_0        , -k1_1,   k2_1        , 0    , 0              , 0],
+      [0    , 0             ,  k1_1, -(k2_1 + k3_1), 0    , 0              , 0],
+
+      [0,   , 0             , 0    ,   k3_1,       , -k1_2,   k2_2         , 0],
+      [0,   , 0             , 0    , 0             ,  k1_2, -(k2_2 + k3_2) , 0],
+
+      [0,   , 0,            , 0,   , 0,            , 0,   ,   k3_2         , 0] ]
+
+    Firs two and last row are special cases. What falls in between follows this
+    pattern
+
+    i starts in col (2i -1) = f_col (first_column)
+    state i odd:
+        cols before f_col = 0
+        col f_col   is  k3_(i-1)
+        col f_col+1 is -k1_i
+        col f_col+2 is  k2_i
+
+    state i even: starts in col 2i = f_col
+        cols before 2i are 0
+        col 2i   is k1_i
+        col 2i+1 is -(k2_i + k3_i)
+
+    Note that you may have to reverse the sign for k3, otherwise the reactions
+    will have negative rates
+
+    The value for 'variables' is the number of pre and pos-translocated step.
+    However, you have one more 'accumulation' variable at the end. This
+    corresponds to the last column of the matrix
+    """
+
+    k1, k2, k3 = rates
+
+    rows = []
+
+    row1 = [-k1[0], k2[0]] + [0 for i in range(variables-1)]
+    row2 = [k1[0], -(k2[0] + k3[0])] + [0 for i in range(variables-1)]
+
+    rows.append(row1)
+    rows.append(row2)
+
+    # add the middle values
+    for i in range(1, states):
+
+        # Row 1 of state_i
+        f_col = 2*i -1
+        row1 = []
+        for col_nr in range(variables+1):
+
+            if col_nr == f_col:
+                row1.append(k3[i-1])
+                #row1.append(np.exp(k3[i-1]))
+
+            elif col_nr == f_col + 1:
+                row1.append(-k1[i])
+
+            elif col_nr == f_col + 2:
+                row1.append(k2[i])
+
+            else:
+                row1.append(0)
+
+        rows.append(row1)
+
+        # Row 2
+        f_col = 2*i
+        row2 = []
+        for col_nr in range(variables+1):
+
+            if col_nr == f_col:
+                row2.append(k1[i])
+
+            elif col_nr == f_col + 1:
+                row2.append(-(k2[i] + k3[i]))
+                #row2.append(-(k2[i] + np.exp(k3[i])))
+
+            else:
+                row2.append(0)
+
+        rows.append(row2)
+
+    rowN = [0 for i in range(variables -1)] + [k3[-1], 0]
+
+    rows.append(rowN)
+
+    return np.array(rows)
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
@@ -3023,7 +3358,8 @@ def main():
 
     #new_genome()
 
-    new_ladder(lizt)
+    #for i in range(10):
+        #new_ladder(lizt)
 
     #new_scatter(lizt, ITSs)
 
@@ -3042,6 +3378,10 @@ def main():
     # design new sequences!
     #new_designer(lizt)
 
+    # the ODE models
+    new_models(lizt, ITSs)
+
+    # the naive exp-fitting models
     #fitting_models(lizt, ITSs)
 
     #frequency_change()
@@ -3152,10 +3492,10 @@ class Sequence(object):
         self.repeat_freq = self._lookup_frequency(self._repeats)
 
         # the four energy terms
-        self.super_en = Energycalc.super_f(sequence)
-        self.keq_en = Energycalc.Keq(sequence)
-        self.RNADNA_en = Energycalc.RNA_DNAenergy(sequence)
-        self.DNADNA_en = Energycalc.DNA_DNAenergy(sequence)
+        self.super_en = Ec.super_f(sequence)
+        self.keq_en = Ec.Keq(sequence)
+        self.RNADNA_en = Ec.RNA_DNAenergy(sequence)
+        self.DNADNA_en = Ec.DNA_DNAenergy(sequence)
 
         if shuffle:
             # make 20 randomly shuffled versions of the sequence
@@ -3242,14 +3582,14 @@ class Sequence(object):
 # Include the same but for random positions in the genome
 
 ############ Small test to correlate rna-dna and dna-dna energies ############
-#dna = Energycalc.NNDD
-#rna = Energycalc.NNRD
+#dna = Ec.NNDD
+#rna = Ec.NNRD
 
 #fix, ax = plt.subplots()
-#dna = Energycalc.resistant_fraction
-##dna = Energycalc.Keq_EC8_EC9
-#rna = Energycalc.NNRD
-##rna = Energycalc.resistant_fraction
+#dna = Ec.resistant_fraction
+##dna = Ec.Keq_EC8_EC9
+#rna = Ec.NNRD
+##rna = Ec.resistant_fraction
 
 #dna_en = []
 #rna_en = []
