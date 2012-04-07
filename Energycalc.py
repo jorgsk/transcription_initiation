@@ -4,6 +4,7 @@ import copy
 import numpy as np
 
 # RNA-DNA duplexes from 2002 paper
+# DNA bases are given.
 NNRD = {'TT':-0.4,'TG':-1.6,'TC':-1.4,'TA':-1.0,'GT':-1.0,'GG':-1.5,'GC':-1.2,'GA':-0.9,'CT':-1.4,'CG':-2.4,'CC':-2.2,'CA':-1.5,'AT':-0.3,'AG':-0.8,'AC':-1.0,'AA':-0.2,'Initiation':1.0}
 # EnLibRNA is for calculating expected random sequence values
 EnLibRNA = copy.deepcopy(NNRD)

@@ -37,13 +37,37 @@ def logKeq(parameters, variables):
 
     if len(parameters) == 3:
         c1, b1, b2 = parameters
-        return c1*np.exp(b1*rna_dna - np.log(b2*keq))
+        return c1*np.exp(b1*rna_dna - b2*np.log(keq))
 
     elif len(parameters) == 2:
         c1, b1 = parameters
-        return c1*np.exp(b1*rna_dna - np.log(keq))
+        return c1*np.exp(rna_dna - b1*np.log(keq))
 
 def residuals_logKeq(parameters, variables, PY):
 
     return PY - logKeq(parameters, variables)
 
+def logRT(parameters, variables):
+    """
+    PY = c1*exp(x1/RT + c2*log(x2))
+    """
+    rna_dna, keq = variables
+    RT = 0.62
+
+    if len(parameters) == 3:
+        c1, c2, c3 = parameters
+        return c1*np.exp(c2*rna_dna/RT - c3*np.log(keq))
+
+    elif len(parameters) == 2:
+        c1, c2 = parameters
+        return c1*np.exp(c2*rna_dna/RT - np.log(keq))
+
+    elif len(parameters) == 1:
+        c1 = parameters[0]
+        #return c1*np.exp(rna_dna/RT - np.log(keq))
+        return c1*np.exp(rna_dna/RT - np.log(keq))
+
+
+def residuals_logRT(parameters, variables, PY):
+
+    return PY - logRT(parameters, variables)
