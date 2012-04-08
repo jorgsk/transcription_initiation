@@ -19,7 +19,7 @@ import itertools
 import Testfit
 import Workhouse
 import Filereader
-import Energycalc as Ec
+import Ec as Ec
 import Orderrank
 from glob import glob
 
@@ -2970,13 +2970,13 @@ def fitting_models(lizt, ITSs):
 
     ITSlen = 15
     # get the variables you need 
-    rna_dna = np.array([Energycalc.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
-    dna_dna = np.array([Energycalc.DNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
-    keq = np.array([Energycalc.Keq(s.sequence[:ITSlen]) for s in ITSs])
-    k1 = np.array([Energycalc.K1(s.sequence[:ITSlen]) for s in ITSs])
-    kMinus1 = np.array([Energycalc.Kminus1(s.sequence[:ITSlen]) for s in ITSs])
+    rna_dna = np.array([Ec.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+    dna_dna = np.array([Ec.DNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+    keq = np.array([Ec.Keq(s.sequence[:ITSlen]) for s in ITSs])
+    k1 = np.array([Ec.K1(s.sequence[:ITSlen]) for s in ITSs])
+    kMinus1 = np.array([Ec.Kminus1(s.sequence[:ITSlen]) for s in ITSs])
 
-    added = [Energycalc.super_f(s.sequence[:ITSlen]) for s in ITSs]
+    added = [Ec.super_f(s.sequence[:ITSlen]) for s in ITSs]
     # your Y-values, the PYs
     PYs = np.array([itr.PY for itr in ITSs])
     PYs_std = [itr.PY_std for itr in ITSs]
@@ -3072,7 +3072,7 @@ def main():
 
     #new_genome()
 
-    new_ladder(lizt)
+    #new_ladder(lizt)
 
     #new_scatter(lizt, ITSs)
     #new_long5UTR(lizt)
