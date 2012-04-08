@@ -105,7 +105,6 @@ def welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha):
         print "Not significantly different"
         return False
 
-<<<<<<< HEAD
 def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
     """Calculate the correlation between RNA-DNA and DNA-DNA energies with PY
     for incremental positions of the correlation window (0:3) to (0:20). Two
@@ -3209,8 +3208,10 @@ def new_models(lizt, ITSs):
     #p1 = np.linspace(7, 12, 5)
     p1 = np.array([10]) # insensitive to variation here
     p2 = np.array([0])
-    p3 = np.linspace(0.005, 0.2, 10)
-    p4 = np.linspace(0.1, 0.4, 10)
+    #p3 = np.linspace(0.005, 0.2, 10)
+    p3 = np.linspace(0.005, 0.2, 5)
+    #p4 = np.linspace(0.1, 0.4, 10)
+    p4 = np.linspace(0.1, 0.4, 5)
 
     ranges = (p1, p2, p3, p4)
 
@@ -3227,8 +3228,8 @@ def new_models(lizt, ITSs):
         results_normal[its_len] = normal_obj
 
         # get the results for randomized ITS versions
-        normal_obj = scruncher(PYs, its_len, ITSs, ranges, rand_nr)
-        results_randomized[its_len] = normal_obj
+        random_obj = scruncher(PYs, its_len, ITSs, ranges, rand_nr)
+        results_randomized[its_len] = random_obj
 
     #XXX OK you've got a randomized version; now you need to plot it
     # what about going back to optimizing toward the PY values themselves and
@@ -4023,41 +4024,12 @@ def parameter_matrix(rates, states, variables):
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
-
-    #RedlistInvestigator(ITSs)
-    #RedlistPrinter(ITSs)
-    #HsuRandomTester(ITSs)
-    #PurineLadder(ITSs)
-
     #genome_wide()
-
     #new_genome()
-
-<<<<<<< HEAD
-    #new_ladder(lizt)
-
-    #new_scatter(lizt, ITSs)
-=======
     #for i in range(10):
         #new_ladder(lizt)
 
     #new_scatter(lizt, ITSs)
-
-    # NOTE You have the following proposition
-    # Implement your simple model in Matlab and optimize for PY in position 10,
-    # 15, and 20 at given time points. Do cross validation by doing this for
-    # halve the set and then testing with the second half -- see if you get
-    # consistent parameter estimation and consistent validation. PS: don't
-    # choose the same twice! You can do this many times and make a MC.
-    # Show that you correlate well PY with a simple model. The differnce between
-    # the fast-goers and slow-goers is the time they spent. Thus we find both a
-    # sequence-specific regulation AND we find the time-dependence.
-
-    # XXX to show that the Keq and RNA-DNA really matter, try to fit to random
-    # values for Keq and RNA-DNA. What about -2 as a constant for RNA-DNA?
-
-    # The final challenge is to show that a model with RNA-DNA energy + DNA-DNA
-    # for bubble opening performs worse than my model.
 
     # the ODE models
     new_models(lizt, ITSs)
@@ -4067,17 +4039,9 @@ def main():
 
     #frequency_change()
     # NOTE the poly(A) and poly(T) tracts could be regulatory elements of
-    # transcriptional slippage
-
-    # TODO what would happen if I tried to fit the PY values using linear or
-    # non-linear regression with 20 parameters (x11,x12,x21,x22,etc) for the
-    # rna-dna and Keq values?
+    # transcriptional slippage; this has been shown for several promoters
 
     # RESULT a weak signal when filtering by greA
-    # That can be a plot
-    # TODO make the plot, including the standard deviations :S
-    # You have to do it at work; you haven't included the data in the repository
-    # :S
     #greA_filter()
 
     # Now plotting the damn expression colors on the PCA plots
@@ -4086,15 +4050,20 @@ def main():
     # NOTE it's not clear what I should do now. There is this odd TTT repeating
     # going on. You should relate to super_en. In super_en the AA and TT have
     # totally opposite meanings. TTTT and AAAA are both associated with lower
-    # rpkm.
+    # rpkm. TTT tracts have been found at promoter proximal regions before. It's
+    # not clear what they do.
 
     # They found promoter proximal stalling at these promoters
     # tnaA, cspA, cspD, rplK, rpsA and rpsU as well as lacZ. How do these stand
-    # out in the crowd?
+    # out in the crowd? They dont
 
     # TODO you still need to define strong promoters and see if there's a
     # tradeoff there. For strong promoters I would expect a shift in mean energy
-    # compared to the rest.
+    # compared to the rest. UPDATE: promoter strength is hard to define: plus,
+    # Hsu gave an example of a strong E coli promoter with very little abortive
+    # transcript. She says it's because escape is not the rate limiting step for
+    # this promoter, it's open bubble formation. The bubble is so strong (GCs
+    # between -10 and +2) so that the bubble collapses easily.
     #new_promoter_strength()
 
     # You have ribosomal genes + DPKM values for e coli genes
