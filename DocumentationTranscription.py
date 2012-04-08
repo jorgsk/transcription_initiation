@@ -1,30 +1,38 @@
 """ Calculate correlations between RNA/DNA and DNA/DNA binding energies and PY. """
-
 # NOTE this file is a simplified version of 'Transcription.py' to generate data for the Hsu-paper
 
 # Python modules
 from __future__ import division
+# You need future division even in numpy
 import os
 import random
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
-from scipy.stats import spearmanr
+from scipy import optimize
+from scipy.stats import spearmanr, pearsonr
 import scipy.interpolate
 import operator
 from matplotlib import rc
 import itertools
+import time
 # My own modules
-import Testfit
 import Workhouse
 import Filereader
-import Ec as Ec
-import Orderrank
+import Models
 from glob import glob
 
+from operator import itemgetter
+
+import multiprocessing
+
+import transformations as transf
+
+# Make numpy easier to read
 np.set_printoptions(precision=2)
 np.set_printoptions(suppress=True)
+
 from numpy import dot
 
 def run_from_ipython():
@@ -97,6 +105,7 @@ def welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha):
         print "Not significantly different"
         return False
 
+<<<<<<< HEAD
 def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
     """Calculate the correlation between RNA-DNA and DNA-DNA energies with PY
     for incremental positions of the correlation window (0:3) to (0:20). Two
@@ -257,6 +266,11 @@ def LadderScrutinizer(lizt, n=10):
         noter[1].append(sum(bigr))
     return noter
 
+def ITSgenerator():
+    """Generate a random ITS """
+    gatc = list('GATC')
+    return 'AT'+ ''.join([random.choice(gatc) for dummy1 in range(18)])
+
 def PvalDeterminer(toplot):
     """ Take a list of list of [Corr, pval] and return an interpolated Corr
     value that should correspond to pval = 0.05. """
@@ -314,24 +328,72 @@ def StripSet(awaynr, lizt, ITSs):
             newITSs.append(ITSs[dummy])
     return lizt, newITSs
 
+class Result(object):
+    """
+    Placeholder for results for plotting
+    These are results from the simulation for a given its_length; they are the
+    top 20 correlation coefficients, pvals, fitted parameters (c1, c2, c3, c4)
+    and the final values
+    """
+    def __init__(self, corr, pvals, params, finals):
+
+        self.corr = corr
+        self.pvals = pvals
+        self.params = params
+        self.finals = finals
+
+        # calculate the mean, std, max, and min values for correlation
+        # coefficients, pvalues, and finals simulation results (concentration in
+        # its_len)
+        self.corr_mean = np.mean(corr)
+        self.corr_std = np.std(corr)
+        self.corr_max = max(corr)
+        self.corr_min = min(corr)
+
+        self.pvals_mean = np.mean(pvals)
+        self.pvals_std = np.std(pvals)
+        self.pvals_max = max(pvals)
+        self.pvals_min = min(pvals)
+
+        self.finals_mean = np.mean(finals)
+        self.finals_std = np.std(finals)
+        self.finals_max = max(finals)
+        self.finals_min = min(finals)
+
+        # The parameters are not so easy to do something with; the should be
+        # supplied in a dictionray [c1,c2,c3,c4] = arrays; so make mean, std,
+        # min, max for them as well
+
+        self.params_mean = dict((k, np.mean(v)) for k,v in params.items())
+        self.params_std = dict((k, np.std(v)) for k,v in params.items())
+        self.params_max = dict((k, max(v)) for k,v in params.items())
+        self.params_min = dict((k, min(v)) for k,v in params.items())
+
 class ITS(object):
     """ Storing the ITSs in a class for better handling. """
-    def __init__(self, name, sequence, PY, PY_std, msat):
+    def __init__(self, sequence, name='noname', PY=-1, PY_std=-1, msat=-1):
         # Set the initial important data.
         self.name = name
         self.sequence = sequence
         self.PY = PY
         self.PY_std = PY_std
         self.msat = int(msat)
-        self.rna_dna1_10 = Ec.RNA_DNAenergy(self.sequence[:10])
         self.rna_dna1_15 = Ec.RNA_DNAenergy(self.sequence[:15])
         self.rna_dna1_20 = Ec.RNA_DNAenergy(self.sequence)
-        self.dna_dna1_10 = Ec.DNA_DNAenergy(self.sequence[:10])
-        self.dna_dna1_15 = Ec.DNA_DNAenergy(self.sequence[:15])
-        self.dna_dna1_20 = Ec.DNA_DNAenergy(self.sequence)
+
         # Redlisted sequences 
         self.redlist = []
         self.redlisted = False
+
+        __indiv = list(sequence)
+        __dinucs = [__indiv[c] + __indiv[c+1] for c in range(20-1)]
+
+        # Make di-nucleotide vectors for all the energy parameters
+        self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
+        self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
+        self.keq_di = [Ec.Keq_EC8_EC9[di] for di in __dinucs]
+        self.k1_di = [Ec.k1[di] for di in __dinucs]
+        self.kminus1_di = [Ec.kminus1[di] for di in __dinucs]
 
 def RedlistInvestigator(ITSs):
     """ Read minus ten elements from Filereader and add redlisted sequence
@@ -510,36 +572,6 @@ def HsuRandomTester(ITSs):
     # RESULT in all the sequences that have non-random nucleotide distributions,
     # 6/8 have high PY, correlated iwth lack of mostly C.
 
-def NewEnergyAnalyzer(ITSs):
-    """ Analyze the range of energies in Hsu's sequences -- this is important
-    for the next wave of experiments. You need to know at what energies the
-    transition from low PY to high PY exists. You need to know this mainly for
-    the 1_15 energies, but it will also be interesting to look at the 1_10
-    energies. """
-    PYs = []
-    one_15s = []
-    one_10s = []
-    one_20s = []
-    for itr in ITSs:
-        PYs.append(itr.PY)
-        one_15s.append(itr.rna_dna1_15)
-        one_10s.append(itr.rna_dna1_10)
-        one_20s.append(itr.rna_dna1_20)
-    fig = plt.figure()
-    ax1 = fig.add_subplot(211)
-    ax1.set_title("PY vs 1 to 15 rna-dna energies", size=10)
-    ax1.set_xlabel("1 to 15 energies", size=20)
-    ax1.set_ylabel("PY", size=20)
-    ax1.scatter(one_15s, PYs)
-    ax2 = fig.add_subplot(212)
-    ax2.set_title("PY vs 1 to 10 rna-dna energies", size=10)
-    ax2.set_xlabel("1 to 10 energies", size=20)
-    ax2.set_ylabel("PY", size=20)
-    ax2.scatter(one_10s, PYs)
-    # RESULT the 1 to 15 energies go from -19 to -8 with the peak PY occuring
-    # around -12. Ideally your energies should go from -18 to -8 in 1 to 15
-    # the 1 to 10 energies go from -12 (one at -14) to -4
-
 def PurineLadder(ITSs):
     """ Create a ladder of correlations between purine vs PY and energy."""
     pur_ladd_corr = []
@@ -641,18 +673,9 @@ def ReadAndFixData():
     # Storing Name, sequence, and PY.
     ITSs = []
     for row in lizt:
-        ITSs.append(ITS(row[0], row[1], row[2], row[3], row[7]))
+        ITSs.append(ITS(row[1], row[0], row[2], row[3], row[7]))
 
     return lizt, ITSs
-
-def RandEnCheck(nr=1000):
-    ranens = []
-    for dummy in range(nr):
-        ranseq = ITSgenerator_local(1)[0][:9]
-        ranens.append(Ec.RNA_DNAenergy(ranseq))
-    meanz = np.mean(ranens)
-    return meanz
-
 
 def genome_wide():
     """
@@ -911,10 +934,10 @@ def new_ladder(lizt):
     maxlen = 20
     pline = 'yes'
 
-    # Pick out 22 random positions in lizt -- the result is zolid.
-    #rands = [random.randrange(0,43) for i in range(30)]
+    # how will it go with 26 random ones?
+    # Pick out 26 random positions in lizt -- the result is zolid.
     rands = set([])
-    while len(rands)<22:
+    while len(rands)<26:
         rands.add(random.randrange(0,43))
     lizt = [lizt[i] for i in rands]
 
@@ -1262,8 +1285,6 @@ def expression_plot(energies):
     # plot the propensities for each class as box plots
     # when that is done you can be sure there is nothing more
 
-
-
 def dinuc_en_plot(vals, rand_di_en, sigma):
     """
     """
@@ -1417,6 +1438,11 @@ def new_scatter(lizt, ITSs):
         for col_nr, (name, data) in enumerate(energies):
 
             ax = axes[row_nr, col_nr]
+            # can't use [0,4] notation when only 1 row ..
+            if len(rows) == 1:
+                ax = axes[col_nr]
+            else:
+                ax = axes[row_nr, col_nr]
 
             if stds == 'yes':
                 ax.errorbar(data, PYs, yerr=PYs_std, fmt=fmts[col_nr])
@@ -1428,7 +1454,8 @@ def new_scatter(lizt, ITSs):
             if col_nr == 0:
                 ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=15)
             if row_nr == 0:
-                header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
+                #ax.set_xlabel("Abortive propensity", size=20)
+                #header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
                 header = 'Spearman: r = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
                 ax.set_title(header, size=15)
             else:
@@ -1846,13 +1873,20 @@ def new_promoter_strength():
     print spearmanr(scores, props)
     debug()
 
-def get_pr_nr(sig_paths):
+def get_pr_nr(sig_paths, promoter):
     """
     Count the number of promoters with a 1promoter-1gene connection
     """
     proms = set([])
 
     for path in sig_paths:
+
+        # 'promoter' is either the specific type of promoter you want, or it's
+        # all promoters
+        if 'all' in promoter:
+            pass
+        elif promoter not in path:
+            continue
 
         for line in open(path, 'rb'):
             (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
@@ -1901,7 +1935,7 @@ def get_plus_20(pos, strand, ecoli):
     if strand == 'reverse':
         return reverseComplement(ecoli[pos-40:pos-20])
 
-def get_reversed_data():
+def get_reversed_data(promoter, enDict):
     """
     Return energy data for all promoters in a m X n matrix, where m is the
     number of promoters and n is the measure you want. This is to support a
@@ -1944,13 +1978,13 @@ def get_reversed_data():
     # TODO start here and get the new matrix up and running
 
     # get promoters for which there is a 1-1 promoter-gene relationsihp 
-    promoters = get_pr_nr(sig_paths)
+    promoters = get_pr_nr(sig_paths, promoter)
 
     # Get the promoters that have expressed genes
-    pr_remain = promoters.intersection(set(expression.keys()))
+    #pr_remain = promoters.intersection(set(expression.keys()))
 
     # Optionally ignore the expression thing -- I think it's not related 
-    #pr_remain = promoters
+    pr_remain = promoters
 
     # You should return a m (promoter) x n (measures) matrix. Let's use the
     # Keq of the first 20 dinucleotdies, which will be 19
@@ -1958,12 +1992,13 @@ def get_reversed_data():
     #ind = list(sequence) # splitting sequence into individual letters
     #neigh = [ind[c] + ind[c+1] for c in range(len(ind)-1)]
 
-    en_dict = Keq_EC8_EC9
-    #en_dict = super_en
+    en_dict = enDict
 
     empty_matrix = np.zeros([len(pr_remain), 38])
 
     expre = []
+
+    names = []
 
     # seq_logo = open(sigma+'_logo.fasta', 'wb')
     row_pos = 0
@@ -1978,6 +2013,8 @@ def get_reversed_data():
             if seq == '' or gene_name not in pr_remain:
                 continue
 
+            names.append(gene_name)
+
             ITSseq = seq.upper()[-20:]
             dins = [ITSseq[b] + ITSseq[b+1] for b in range(19)]
 
@@ -1988,11 +2025,15 @@ def get_reversed_data():
 
             empty_matrix[row_pos] = np.array(ens)
 
-            expre.append(expression[gene_name])
+            if gene_name in expression:
+                expre.append(expression[gene_name])
+            else:
+                expre.append(0)
+
 
             row_pos += 1
 
-    return expre, empty_matrix
+    return expre, empty_matrix, names
 
 
 def its_data():
@@ -2055,15 +2096,17 @@ def its_data():
     expression = get_expression(expression_path)
 
     # get promoters for which there is a 1-1 promoter-gene relationsihp 
-    promoters = get_pr_nr(sig_paths)
+    promoters = get_pr_nr(sig_paths, 'all')
 
     # Get the promoters that have expressed genes
-    pr_remain = promoters.intersection(set(expression.keys()))
+    #pr_remain = promoters.intersection(set(expression.keys()))
 
     # Optionally ignore the expression thing -- I think it's not related 
-    #pr_remain = promoters
+    pr_remain = promoters
 
     empty_matrix = np.zeros([len(pr_remain), 9])
+
+    names = []
 
     # seq_logo = open(sigma+'_logo.fasta', 'wb')
     row_pos = 0
@@ -2077,6 +2120,8 @@ def its_data():
 
             if seq == '' or gene_name not in pr_remain:
                 continue
+
+            names.append(gene_name)
 
             ITSseq = seq.upper()[-20:]
             dins = [ITSseq[b] + ITSseq[b+1] for b in range(19)]
@@ -2115,7 +2160,7 @@ def its_data():
             row_pos += 1 # increment to the next gene/promoter
 
     # Return as mXn matrix, with expression separate
-    return empty_matrix[:,0].T, empty_matrix[:,1:].T
+    return names, empty_matrix[:,0].T, empty_matrix[:,1:].T
 
 def frequency_change():
     """
@@ -2719,7 +2764,9 @@ def my_pca():
     # Personally this is very strange, but it could find co-varying patterns in
     # the genes, but really, it's nuts. The interpretation is not clear at all.
 
-    expression, X = get_reversed_data()
+    from Energycalc import super_en, Keq_EC8_EC9
+    expression, X, names = get_reversed_data('all', super_en)
+
     log2exp = np.log2(expression)
 
     m, n = X.shape
@@ -2733,6 +2780,27 @@ def my_pca():
     var_sum = sum(sgma)
     cum_eig = [float(format(sum(sgma[:i])/var_sum, '.2f'))
                for i in range(1, len(sgma)-1)]
+
+    ########## Write the dataset for Martin ##########
+    #for promoter in ['Sigma70', 'all_promoters']:
+        #for energy_term, enDict in [('Translocation', Keq_EC8_EC9),
+                                    #('Combination', super_en)]:
+
+            #expression, X, names = get_reversed_data(promoter, enDict)
+            #debug()
+
+            #outfile = 'output/{0}_{1}.txt'.format(energy_term, promoter)
+            #handle = open(outfile, 'wb')
+            #for row, name in zip(X, names):
+                #handle.write('{0}\t'.format(name))
+                #handle.write('\t'.join([str(r) for r in row]) + '\n')
+
+            #handle.close()
+
+    #debug()
+
+
+    ######################################
 
     debug()
     # new method
@@ -2966,6 +3034,14 @@ def fitting_models(lizt, ITSs):
         By itself, RNA-DNA correlates with PY, but not DNA-DNA.
 
         This points to RNA-DNA ans the causal factor and not DNA-DNA.
+
+        However, it seems that it is a linear combination of RNA-DNA and Keq
+        that best explains the values. In the standard models RNA-DNA is
+        expontential and Keq is linear. This will cause loss-of-correlation in
+        the ODE system. It will be solved if you make k3 linear in terms of
+        RNA-DNA; but this doesn't fit well with the arrhenius equation. Maybe
+        though you can make a taylor approximation to the first or second
+        degree? At least you can use that to argue your case.
     """
 
     ITSlen = 15
@@ -2988,39 +3064,78 @@ def fitting_models(lizt, ITSs):
     # Maybe the best solution is the differential equations with r =
     # r_1*exp(r2*DeltaG(RNA-DNA))
 
-    # parameters are c1, b1, b2, ..., bn
-    parameters = (100, -0.1, 0.5)
-    variables = (keq, rna_dna)
-    variables = (np.log(k1), rna_dna)
+    #variables = (k1, rna_dna)
+    #variables = (kMinus1, rna_dna)
 
-    import Models
+    #### the exp model
+    #parameters = (100, -0.1, 0.5)
+    #variables = (keq, rna_dna)
 
-    plsq  = optimize.leastsq(Models.residuals_mainM, parameters, args=(variables, PYs))
+    #plsq = optimize.leastsq(Models.residuals_mainM, parameters, args=(variables, PYs))
+    #fitted_parm = plsq[0]
+    #outp = Models.mainM(fitted_parm, variables)
+    #fitted_vals = np.dot(fitted_parm[1:], variables)
+    #c1 = fitted_parm[0]
+    #plot_data = c1*np.exp(plot_range)
 
+    #### the log(keq) model
+    #parameters = (100, 0.1, 0.1)
+    #variables = (keq, rna_dna)
+
+    #plsq = optimize.leastsq(Models.residuals_logKeq, parameters, args=(variables, PYs))
+    #fitted_parm = plsq[0]
+    #outp = Models.logKeq(fitted_parm, variables)
+    #c1, b1, b2 = fitted_parm
+    #fitted_vals = b1*rna_dna - b2*np.log(keq)
+    #minval = min(fitted_vals)
+    #maxval = max(fitted_vals)
+    #plot_range = np.arange(minval, maxval, 0.01)
+    #plot_data = c1*np.exp(plot_range)
+     #RESULT log(keq) model has better fit visually
+     # It corresponds to a k1*Keq equilibrium constant
+     # ACtualy .. the Keq^k1 fits best, and gives a k1 value of 1.97. Bening.
+     # The k1*Keq gives a value of exp(28) ... not benign. Which model is more
+     # likely? The exp model gives too high values for .. what about a
+     # combination? A combination changes little for b3; it doesn't improve the
+     # fit. A good sign.
+
+    #### the exp model with log(keq) and /RT
+    parameters = (10, -1, 1)
+    #parameters = (10, -1)
+    #parameters = (10,)
+    variables = (rna_dna, keq)
+
+    plsq = optimize.leastsq(Models.residuals_logRT, parameters, args=(variables, PYs))
     fitted_parm = plsq[0]
+    outp = Models.logRT(fitted_parm, variables)
 
-    outp = Models.mainM(fitted_parm, variables)
+    #c1, c2 = fitted_parm
+    #c1 = fitted_parm
+    #KT = 2500
+    #fitted_vals = keq/KT + np.log(keq)
+    #minval = min(fitted_vals)
+    #maxval = max(fitted_vals)
+    #plot_range = np.arange(minval, maxval, 0.01)
+    #plot_data = c1*np.exp(plot_range)
+    # RESULT dividing rna-dna by 2500 is essensially to silence the term. The
+    # term plays a part, so you'll have to do something about that.
+    # RESULT interestingly np.exp(rna_dna - np.log(keq)) does not work well with
+    # this kind of fitting, but it works well with the ODE. Just confirm that
+    # OK? Confirmed. The 5*np.exp(rna_dna - np.log(keq)) works just fine. It
+    # gives correlation coefficicents of more than 0.7. That's interesting.
+    # However, trying and dividing by KT gave 0.61 nad 0.37 spearman, pearson.
+    # It's better than for the naive model, but it's still a far shot away.
+    # XXX wonderful, my friend. The \G energy was in kcal/mol. The RT energy I
+    # had was not in the same unit! When I use the same units I get RT = 0.62 *
+    # kcal/mol which is MUUUUUUUUCH better
 
     print fitted_parm
     print spearmanr(PYs, outp)
-    print scipy.stats.pearsonr(PYs, outp)
+    print pearsonr(PYs, outp)
 
-    fitted_vals = np.dot(fitted_parm[1:], variables)
+    debug()
 
-    # How should I fit it? The predicted PY against the actual PY?
-    # Or the actual PY against the -0.14 * keq + 0.15 * rna_dna?
-    # Then plot the equation using a linear range from min to max
-
-    minval = min(fitted_vals)
-    maxval = max(fitted_vals)
-
-    plot_range = np.arange(minval, maxval, 0.01)
-
-    #For plotting
-    #PY = c1*exp(x)
-    c1 = fitted_parm[0]
-
-    plot_data = c1*np.exp(plot_range)
+    plt.ion()
 
     fig, ax = plt.subplots()
     ax.errorbar(c1*fitted_vals, PYs, yerr=PYs_std, fmt='go')
@@ -3058,6 +3173,852 @@ def fitting_models(lizt, ITSs):
 
     debug()
 
+def new_models(lizt, ITSs):
+    """
+    Define a linear ODE system that solves the movement on RNAP on the ITS.
+    Optimize the system based on 3 parameters that will quantify the effect of
+    RNA-DNA and Keq translocation bias.
+
+    Your original discovery is a linear relationship between Keq and RNA-DNA.
+    You'll need to recreate this in the rate equations somehow.
+
+    The system is dX = AX
+
+    How should the models be benchmarked? Currently, I'm running them for a
+    certain amount of time and correlating the concentration at i = 20 to the
+    PYs. This is not optimal, because many escape long before 20, so they never
+    each 20 in scrunched conditions. Most reach 14 so this could be a trade-off.
+
+    Are there methods that are more intuitive? The PY value is a measure of how
+    much transcript is full length compared to aborted.
+
+    Models:
+    #first_nonequilibrium(PYs, its_len, ITSs)
+    #second_equilibrium(PYs, its_len, ITSs)
+    #normal_obj = scruncher(PYs, its_len, ITSs, ranges)
+
+    """
+
+    # Compare with the PY percentages in this notation
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+    its_len = 10 # how far to transcribe
+
+    # Parameter ranges you want to test out
+    # You can be crude now and use finer grained detailes later
+
+    #p1 = np.linspace(7, 12, 5)
+    p1 = np.array([10]) # insensitive to variation here
+    p2 = np.array([0])
+    p3 = np.linspace(0.005, 0.2, 10)
+    p4 = np.linspace(0.1, 0.4, 10)
+
+    ranges = (p1, p2, p3, p4)
+
+    results_normal = {}
+    results_randomized = {}
+
+    # the number of times you should randomize the ITS and rerun
+    rand_nr = 2
+
+    # XXX new model: scrunching
+    for its_len in range(8, 10):
+        # get the 'normal' results
+        normal_obj = scruncher(PYs, its_len, ITSs, ranges)
+        results_normal[its_len] = normal_obj
+
+        # get the results for randomized ITS versions
+        normal_obj = scruncher(PYs, its_len, ITSs, ranges, rand_nr)
+        results_randomized[its_len] = normal_obj
+
+    #XXX OK you've got a randomized version; now you need to plot it
+    # what about going back to optimizing toward the PY values themselves and
+    # not making a grid? I think that with the proper model it will be OK. The
+    # reviewers might ask how you're making that stuff.
+
+    # XXX validate the scruncher model by randomizing the rna-dna arrays (the
+    # same as randomizing the nucleotides); no, don't do that. Instead,
+    # randomize the values of the energy parameters; the difference is crucial.
+    # If you just randomize the array, you'll get the same answer since you are
+    # taking cumulative values. Well, maybe the keq will cause some problems,
+    # but I don't know.
+
+def scruncher(PYs, its_len, ITSs, ranges, rand_nr=1):
+    """
+    Introduce scrunching to the model. This will give you values that reverse
+    the sign that's bugging you.
+
+    Your model is as follows:
+        c1*exp(-c2*rna_dna + c3*dna_dna - c4*ln(Keq))
+    """
+
+    state_nr = its_len - 1 # starting with the first two nt already incorporated
+    # The second nt is then state 0
+
+    # initial vales for the states
+    y0 = [1] + [0 for i in range(state_nr-1)]
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    if rand_nr > 1:
+        rand_results = []
+
+    # default: only 1 loop
+    for repeat in range(rand_nr):
+
+        #go from ITS object to dict to appease the impotent pickle
+        new_ITSs = []
+        for its in ITSs:
+            ITSs_dict = {'rna_dna_di': np.array(its.rna_dna_di),
+                         'dna_dna_di': np.array(its.dna_dna_di),
+                         'keq_di': np.array(its.keq_di)}
+            new_ITSs.append(ITSs_dict)
+
+        if rand_nr > 1:
+            # normalizing by testing random sequences. Can we fit the parameters
+            # from random sequences to these ITS values?
+
+            new_ITSs = []
+            for i in range(len(ITSs)):
+                rand_seq = ITSgenerator()
+                new_its = ITS(rand_seq)
+                ITSs_dict = {'rna_dna_di': np.array(new_its.rna_dna_di),
+                             'dna_dna_di': np.array(new_its.dna_dna_di),
+                             'keq_di': np.array(new_its.keq_di)}
+                new_ITSs.append(ITSs_dict)
+
+        arguments = (y0, t, its_len, state_nr, new_ITSs, PYs)
+
+        if rand_nr > 1:
+            rand_results.append(grid_scrunch(arguments, ranges))
+
+    # if just 1 run
+    if rand_nr == 1:
+        return grid_scrunch(arguments, ranges)
+
+    # if 2 or more runs, first average the results in rand_results
+    elif rand_nr > 1:
+        #make new corr, pvals, and params; just add them together; ignore the
+        #finals
+        new_corr, new_pvals, new_params = [], [], {'c1':[], 'c2':[], 'c3':[], 'c4':[]}
+
+        # add together the values
+        for res_obj in rand_results:
+            new_corr.append(res_obj.corr.tolist())
+            new_pvals.append(res_obj.pvals.tolist())
+
+            for k, v in res_obj.params.items():
+                new_params[k].append(v)
+
+        # make a new result object
+        new_result = Result(new_corr, new_pvals, new_params, res_obj.finals)
+
+        return new_result
+
+def grid_scrunch(arguments, ranges):
+
+    # all possible compbinations
+    params = [p for p in itertools.product(*ranges)]
+
+    #divide the params into 4
+    window = int(np.floor(len(params)/4.0))
+    divide = [params[i*window:(i+1)*window] for i in range(3)]
+    last = params[3*window:] # make sure you get all in the last one
+    divide.append(last)
+
+    PYs = arguments[-1]
+
+    t1 = time.time()
+
+    ## make a pool of 4 workers for multicore action
+    my_pool = multiprocessing.Pool(4)
+    results = [my_pool.apply_async(_multi_func, (p, arguments, PYs)) for p in divide]
+    my_pool.close()
+    my_pool.join()
+    # flatten the output
+    all_results = sum([r.get() for r in results], [])
+
+    # All_results is a list of tuples on the following form:
+    # ((finals, par, rp, pp))
+    # Sort them on the pearson correlation, 'rp'
+
+    # the non-parallell version for debugging purposes
+    # all_results = sum([_multi_func(*(pa, arguments, PYs)) for pa in divide], [])
+
+    # Filter and pick the 10 with largest p2
+    all_sorted = sorted(all_results, key=itemgetter(2), reverse=True)
+
+    # wasteful, but you have at most a few thousand elements so it's not slow
+    top_hits = [r for nr, r in enumerate(all_sorted) if nr < 20]
+
+    # now make separate corr, pvals, params, and finals arrays from these
+    finals = np.array(top_hits[0][0]) # only get finals for the top top
+    corr = np.array([c[2] for c in top_hits])
+    pvals = np.array([c[3] for c in top_hits])
+
+    # params must be made into a dict
+    pars = [c[1] for c in top_hits]
+
+    # params[c1,c2,c3,c4] = [array]
+    params = {}
+    for par_nr in range(1, len(ranges)+1):
+        params['c{0}'.format(par_nr)] = [p[par_nr-1] for p in pars]
+
+    # make a Result object
+    result_obj = Result(corr, pvals, params, finals)
+
+    print time.time() - t1
+
+    return result_obj
+
+
+
+def optimize_scrunch(arguments, initial_values):
+
+    plsq = optimize.leastsq(cost_function_scruncher, initial_values, args = arguments)
+
+    fitted_param = plsq[0]
+
+    ###reuse the cost function but only output the final result
+    finals_init = cost_function_scruncher(initial_values, *arguments, run_once=True)
+    finals_opt = cost_function_scruncher(fitted_param, *arguments, run_once=True)
+
+    PYs = arguments[-1]
+
+    # plot th
+    for finals in [finals_init, finals_opt]:
+
+        print 'fitted parameters', fitted_param
+        print 'spearman correlation', spearmanr(PYs, finals)
+        print 'pearson correaltion', pearsonr(PYs, finals)
+        print ''
+
+        fig, ax = plt.subplots()
+        ax.scatter(finals, PYs)
+        plt.show()
+
+    debug()
+
+def _multi_func(paras, arguments, PYs):
+    """
+    Evaluate the model for all parameter combinations. Return the final values,
+    the parameters, and the correlation coefficients.
+    """
+    all_hits = []
+
+    for par in paras:
+        finals = cost_function_scruncher(par, *arguments, run_once=True)
+
+        if sum(finals) < 0.01:
+            continue
+
+        # correlation
+        rp, pp = pearsonr(PYs, finals)
+
+        all_hits.append((finals, par, rp, pp))
+
+    return all_hits
+
+def second_equilibrium(PYs, its_len, ITSs):
+    """
+    Assume equilibrium in the pre-post step.
+
+    You have only 1 rate constant. You suggest one on this form:
+        c1*exp(c2*rna_dna + c3*ln(Keq) + c4)
+
+    Where the c4 is optional
+    """
+
+    print ''
+
+    state_nr = its_len - 1 # starting with the first two nt already incorporated
+    # The second nt is then state 0
+
+    # initial vales for the states
+    y0 = [1] + [0 for i in range(state_nr-1)]
+
+    # the time grid -- it might be best to determine this in another way
+    # make sure the integrator integrates with the same time-step for all
+    # sequences? Does that matter?
+    t = np.linspace(0, 10., 1000)
+
+    arguments = (y0, t, its_len, state_nr, ITSs, PYs)
+    #initial_values = (5, 1, 1)
+
+    #plsq = optimize.leastsq(cost_function_second, initial_values, args = arguments)
+
+    #fitted_param = plsq[0]
+    fitted_param = (12, 1, 1)
+
+    # reuse the cost function but only output the final result
+    #finals_init = cost_function_second(initial_values, *arguments, run_once=True)
+    finals_opt = cost_function_second(fitted_param, *arguments, run_once=True)
+
+    print fitted_param
+
+    #for finals in [finals_init, finals_opt]:
+    for finals in [finals_opt]:
+
+        print fitted_param
+        print spearmanr(PYs, finals)
+        print pearsonr(PYs, finals)
+        print ''
+        print ''
+
+        fig, ax = plt.subplots()
+        ax.scatter(finals, PYs)
+
+    #debug()
+
+     #try to go through a rough map of values and return the correlation values
+     #looks like p1 is not sensitive here, likely because you're looking just at
+     #finals
+     #RESULT this was a good approach. Looks like values right around 1 for b2
+     #and b3 give good results. Are these parameter robust, then?
+    p1 = np.linspace(5, 9, 4)
+    p2 = np.linspace(-2, 2, 10)
+    p3 = np.linspace(-2, 2, 10)
+
+    good_unz = []
+
+    for p1val in p1:
+        for p2val in p2:
+            for p3val in p3:
+                par = (p1val, p2val, p3val)
+                finals_opt = cost_function_second(par, *arguments, run_once=True)
+
+                r, p = pearsonr(PYs, finals_opt)
+                rs, ps = spearmanr(PYs, finals_opt)
+
+                if r > 0.6:
+                    good_unz.append((par, r, rs))
+
+
+    debug()
+
+def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
+                         run_once=False):
+    """
+        k1 = c1*exp(-c2*rna_dna_i + c2*dna_dna_{i+1} - c3*ln(Keq_{i-1}))
+
+        Dna-bubble one step ahead of the rna-dna hybrid; Keq one step behind.
+        When the rna-dna reaches length 9, the you must subtract the hybrid for
+        each step forward.
+
+    """
+    # get the tuning parameters and the rna-dna and k1, kminus1 values
+    RT = 1.9858775*(37 + 273.15)/1000
+    finals = []
+    # The energy of the initiation bubble
+    minus11_en = -7.67 # 'ATAATAGATTC' DNA_DNAenergy
+    #minus11_en = 0 # 'ATAATAGATTC' DNA_DNAenergy / 2
+
+    for its_dict in ITSs:
+
+        # must shift by minus 1 ('GATTA' example: GA, AT, TT, TA -> len 5, but 4
+        # relevant dinucleotides)
+
+        #dna_dna = np.array(its.rna_dna_di[:its_len-1])
+        #rna_dna = np.array(its.rna_dna_di[:its_len-1])
+        #keq = np.array(its.keq_di[:its_len-1])
+
+        # XXX to work with multiprocessing, you have changed from ITS instances
+        # to dictionary with the rna dna keq parameters in them
+        dna_dna = its_dict['dna_dna_di'][:its_len-1]
+        rna_dna = its_dict['rna_dna_di'][:its_len-1]
+        keq = its_dict['keq_di'][:its_len-1]
+
+        # create the rate constant.
+        # it should be used to create the A-matrix
+        # this will be much more complicated than before. Before you must made
+        # an array of values. Now you will need a for loop that counts through
+        # the its len
+        if len(start_values) == 4:
+            (a, b, c, d) = start_values
+
+        elif len(start_values) == 1:
+            a = start_values[0]
+            (b, c, d) = (1, 1, 1)
+
+        # initialize empty rates
+        k1 = np.zeros(its_len-2)
+
+        proceed = True
+
+        for i in range(1, its_len-1):
+            KEQ = keq[i-1]
+            DNA_DNA = minus11_en + sum(dna_dna[:i])
+            if i < 9:
+                RNA_DNA = sum(rna_dna[:i])
+            else:
+                RNA_DNA = sum(rna_dna[i-9:i])
+
+            expo = (-b*RNA_DNA + c*DNA_DNA)/RT -d*KEQ
+
+            # if this value is above 0, what you are doing will not work
+            if run_once and expo > 0:
+                proceed = False
+                break
+
+            rate = a*np.exp(expo)
+
+            #print start_values
+            #print expo
+            #print rate
+            k1[i-2] = rate
+
+        # XXX you must abort if proceed is false and run_once is tru
+        # a positive exponent is nonsense
+        if run_once and not proceed:
+            finals.append(0)
+        else:
+
+            #f, ax = plt.subplots()
+            #ax.plot(k1)
+            #plt.show()
+            #debug()
+            A = equlib_matrix(k1, state_nr)
+            # pass the jacobian matrix to ease things
+            # you can also pass the jacobian of the objective function, but since
+            # you're using the correlation, that's going to be more trixy.
+            soln, info = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,),
+                                                full_output=True, Dfun=jacob_second)
+            finals.append(soln[-1][-1])
+
+    if run_once:
+
+        # values vary wildly with varying parameters. Because 1000 is so big?
+        #print start_values
+        #print np.mean(finals)
+        #print np.std(finals)
+        #debug()
+
+        return np.array(finals)
+
+    # if not run once, you're called from an optimizer -> return the distance
+    # vector; also include the distance from var(PY) with var(finals)
+    # m
+    # New output: a vector of the mean of PYs, the median of PYs, the std of
+    # PYs, and the pearson correlation coefficient of finals with PYs (against
+    # a target of 0.7
+    # you should probably weigh them differently too
+    else:
+
+        #result = np.concatenate((finals, np.array([np.var()])))
+        #dist_vect = np.array(finals) - np.array(PYs)
+        #objective = np.array([np.mean(PYs), np.median(PYs), np.std(PYs), 0.75/2])
+        objective = np.array([1, np.std(PYs), np.median(PYs), 0.80*100])
+
+        #result = np.array([np.mean(finals), np.median(finals), np.std(finals),
+                          #pearsonr(finals, PYs)[0]/2])
+        # weight with 100 to get most emphasis on the pearsonr correlation
+        result = np.array([1, np.std(finals), np.median(finals), 100*pearsonr(finals, PYs)[0]])
+
+    return objective - result
+
+def cost_function_second(start_values, y0, t, its_len, state_nr, ITSs, PYs,
+                         run_once=False):
+    """
+    Integrate the second model and compare its output to PYs
+
+        k1 = c1*exp(c2*rna_dna_i + c3*ln(Keq_{i-1}) + c4)
+    """
+    # get the tuning parameters and the rna-dna and k1, kminus1 values
+    RT = 1.9858775*(37 + 273.15)/1000
+    finals = []
+    for its in ITSs:
+
+        # must shift by minus 1 ('GATTA' example: GA, AT, TT, TA -> len 5, but 4
+        # relevant dinucleotides)
+        rna_dna = np.array(its.rna_dna_di[:its_len-1])
+        keq = np.array(its.keq_di[:its_len-1])
+
+        if len(start_values) == 1:
+            a = start_values[0]
+            k1 = a*np.exp(-rna_dna[1:]/RT - np.log(keq[:-1]))
+
+        # create the rate constant. Note that rna_dna is i+1 and keq is i
+        if len(start_values) == 3:
+            (a, b, c) = start_values
+            k1 = a*np.exp(-b*rna_dna[1:]/RT - c*np.log(keq[:-1]))
+
+        A = equlib_matrix(k1, state_nr)
+
+        # pass the jacobian matrix to ease things
+        # You have to try this. And also passing the jacobian of the objective
+        # function. If that finally doesn't work...
+        # The problem with the parameters could be 
+        soln, info = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,),
+                                            full_output=True, Dfun=jacob_second)
+        finals.append(soln[-1][-1])
+
+    if run_once:
+        return np.array(finals)
+
+    # if not run once, you're called from an optimizer -> return the distance
+    # vector; also include the distance from var(PY) with var(finals)
+    # m
+    # New output: a vector of the mean of PYs, the median of PYs, the std of
+    # PYs, and the pearson correlation coefficient of finals with PYs (against
+    # a target of 0.7
+    # you should probably weigh them differently too
+    else:
+
+        #result = np.concatenate((finals, np.array([np.var()])))
+        #dist_vect = np.array(finals) - np.array(PYs)
+        #objective = np.array([np.mean(PYs), np.median(PYs), np.std(PYs), 0.75/2])
+        objective = np.array([np.std(PYs), np.median(PYs), 0.80*100])
+
+        #result = np.array([np.mean(finals), np.median(finals), np.std(finals),
+                          #pearsonr(finals, PYs)[0]/2])
+        result = np.array([np.std(finals), np.median(finals), 100*pearsonr(finals, PYs)[0]])
+
+    return objective - result
+
+
+def first_nonequilibrium(PYs, its_len, ITSs):
+
+    # RESULT the 'naive' approach does not work (I had actually thought that it
+    # would). Am I comparing against the right thing? I'm copmaring against the
+    # % of value in state 20. I'll start doing it until 15 instead.
+    # NOTE you are having equal sign between RNA-DNA and the other... maybe you
+    # should reverse it? How do I do that without compromizing the values? :S
+    # TODO
+    # 1) Try to fit 3 parameters to the PY values # not much better
+    # 2) Try to introduce changes in the model # can try ...
+
+    # initial tunable values
+    initial_values = (1,1,-1)
+    print initial_values
+
+    states = its_len -1 # the number of i positions
+    variables = states*2 # two sub-states for each state: pre- and posttranslocated
+
+    y0 = [1] + [0 for i in range(variables)]
+    # XXX The final value in 'y0' is the end product
+
+    t = np.linspace(0, 150., 1500) # time grid
+    # The time units are of course arbitrary
+
+    # these transformations will work on k1, k2, and k3, or any further k's you
+    # may make
+    transformations = transf.const, transf.const, transf.expon
+
+    arguments = (y0, t, its_len, states, variables, ITSs, transformations, PYs)
+
+    plsq = optimize.leastsq(cost_function, initial_values, args = arguments)
+
+    # TODO check the effect of the different parameters; to what degree do they
+    # change the order of the final vals?
+
+    fitted_param = plsq[0]
+    print fitted_param
+    #fitted_param = [2.02,  3.26, -0.91]
+    # XXX result; with these fitted parameters you don't get a good fit. This
+    # means you'll have to update the model.
+    # You'll need a set of models. Each will have different parameters. The more
+    # parameters, the more fitting :/
+    # You can also try other minimizers.
+    # Try a model without RNA-DNA for example; just aconstant. I get a bit
+    # better correlation 0.45, but it converges slow as hell.
+
+    # make a file with different transformations of k1, k2, k3 etc
+    # maybe I should split them up into the individual transformations so that I
+    # don't create 10 different usage examples.
+    # The last one can be split into first exp and then constant!
+    # The values take 'array, value'
+
+    # get the distribution of RNAP in the final state of the simulation
+    finals = final_state(ITSs, y0, t, transformations, fitted_param, its_len)
+
+    print spearmanr(PYs, finals)
+    # With the current model, there is no real optimization. The least squares
+    # function finds no optimum. Probably means the underlying model is so
+    # wrong.
+
+    debug()
+
+def final_state(ITSs, y0, t, transformations, parameters, its_len):
+    """
+    Just the loop
+    """
+    finals = []
+    for its in ITSs:
+
+        seq = its.sequence[:its_len]
+        neigh = [seq[cnt] + seq[cnt+1] for cnt in range(len(seq)-1)]
+
+        # note that what the paper calls k1 is my k2; their kminus1 is 9->8, but I'm
+        # going the other way!
+        k11 = np.array([Ec.kminus1[di] for di in neigh])
+        k21 = np.array([Ec.k1[di] for di in neigh])
+        k31 = np.array([Ec.NNRD[di] for di in neigh])
+
+        a, b, c = parameters
+
+        k1 = a*k11
+        k2 = a*k21
+        k3 = b*np.exp(c*k31)
+
+        transf_rates = [k1, k2, k3]
+
+        states = len(k1)
+        variables = states*2
+
+        A = parameter_matrix(transf_rates, states, variables)
+
+        # solve the with the new param
+        #arguments = (A,) # the abysmal synax requires a double dict as argument
+        soln = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,))
+
+        finals.append(soln[-1][-1])
+
+    return finals
+
+def cost_function(parameters, y0, t, its_len, states, variables, ITSs,
+                  transformations, PYs):
+    """
+    Cost function. Could the equations get out of hand? I hope not.
+    """
+
+    # get the tuning parameters and the rna-dna and k1, kminus1 values
+    a, b, c = parameters
+
+    finals = []
+    for its in ITSs:
+
+        seq = its.sequence[:its_len]
+        neigh = [seq[cnt] + seq[cnt+1] for cnt in range(len(seq)-1)]
+
+        k11 = np.array([Ec.kminus1[di] for di in neigh])
+        k21 = np.array([Ec.k1[di] for di in neigh])
+        k31 = np.array([Ec.NNRD[di] for di in neigh])
+
+        # modify the rate constants by some formula
+        # maybe you'll make a library of reaction constants here
+        k1 = a*k11
+        k2 = a*k21
+        k3 = b*np.exp(c*k31)
+
+        states = its_len - 1
+        variables = states*2
+
+        rates = (k1, k2, k3)
+
+        A = parameter_matrix(rates, states, variables)
+
+        soln = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,))
+
+        finals.append(soln[-1][-1])
+
+    dist_vect = np.array(finals) - np.array(PYs)
+    #dista = np.sqrt(sum(dist_vect**2))
+
+    return dist_vect
+
+def rnap_solver(y, t, A):
+    """
+    Solver.
+    """
+
+    dx = np.dot(A, y)
+
+    return dx
+
+def jacob_second(t, y, A):
+    """
+    Return the jacobian matrix
+
+    X = [X0, X1, X2, X3]
+    A = [[-k0,   0 , 0,  0],
+         [k0 , -k1 , 0,  0],
+         [0  ,  k1, -k2, 0],
+         [0  ,  0  , k2, 0]]
+
+    AX = [[-k0*X0         ],
+          [k0*X0 - k1*X1  ],
+          [k1*X1 - k2*X2  ],
+          [k2*X2         ]]
+
+
+    J = [[df1/dX0, df1/dX1, df1/dX2, df1/dX3],
+         [df2/dX0, ...,                     ]
+            .
+            .
+         [dfN/dx0, ...,              dfN/dX3]
+
+    J = [[-k0,   0, 0, 0],
+         [k0 , -k1, 0, 0],
+         [0  ,  k1]
+         ...
+
+         Waitaminute, here J = A!
+
+
+    """
+
+    return A
+
+def equlib_matrix(rate, state_nr):
+    """
+    Assume equlibrium for the reaction:
+    X_f_0 <=> X_e_0 -> X_f_1
+
+    Then you get d(Xf_1)/dt = k1[Xf_0]
+
+    The value of k1 is calculate outside
+
+    Example:
+
+    seq = 'GATTA'
+
+    X0 = A,
+    X1 = T,
+    X2 = T,
+    X3 = A
+
+    X0 -> X1 , k0
+    X1 -> X2 , k1
+    X2 -> X3 , k2
+
+    X = [X0, X1, X2, X3]
+    A = [[-k0,   0 , 0,  0],
+         [k0 , -k1 , 0,  0],
+         [0  ,  k1, -k2, 0],
+         [0  ,  0  , k2, 0]]
+    """
+
+    # initialize with the first row
+    rows = [  [-rate[0]] + [0 for i in range(state_nr-1)] ]
+
+    for r_nr in range(state_nr-2):
+        row = []
+
+        for col_nr in range(state_nr):
+
+            if col_nr == r_nr:
+                row.append(rate[r_nr])
+
+            elif col_nr == r_nr+1:
+                row.append(-rate[r_nr+1])
+
+            else:
+                row.append(0)
+
+        rows.append(row)
+
+    rows.append([0 for i in range(state_nr-2)] + [ rate[-1], 0 ])
+
+    return np.array(rows)
+
+
+def parameter_matrix(rates, states, variables):
+    """
+    Construct the parameter matrix for the RNAP reaction
+
+    Example for 3 states:
+
+    X_f_0 <=> X_e_0 -> X_f_1
+    X_f_1 <=> X_e_1 -> X_f_2
+    X_f_2 <=> X_e_2 -> X_f_3
+
+    With reaction rates
+    k1_0, k2_0, k3_0
+    k1_1, k2_1, k3_1
+    k2_2, k2_2, K3_2
+
+    X will be [X_f_0, X_e_0, X_f_1, X_e_1, X_f_2, X_e_2, x_f_3]
+
+    A =
+    [ [-k1_0,   k2_0        , 0    , 0             , 0    , 0              , 0],
+      [ k1_0, -(k2_0 + k3_0), 0    , 0             , 0    , 0              , 0],
+
+      [0    ,   k3_0        , -k1_1,   k2_1        , 0    , 0              , 0],
+      [0    , 0             ,  k1_1, -(k2_1 + k3_1), 0    , 0              , 0],
+
+      [0,   , 0             , 0    ,   k3_1,       , -k1_2,   k2_2         , 0],
+      [0,   , 0             , 0    , 0             ,  k1_2, -(k2_2 + k3_2) , 0],
+
+      [0,   , 0,            , 0,   , 0,            , 0,   ,   k3_2         , 0] ]
+
+    Firs two and last row are special cases. What falls in between follows this
+    pattern
+
+    i starts in col (2i -1) = f_col (first_column)
+    state i odd:
+        cols before f_col = 0
+        col f_col   is  k3_(i-1)
+        col f_col+1 is -k1_i
+        col f_col+2 is  k2_i
+
+    state i even: starts in col 2i = f_col
+        cols before 2i are 0
+        col 2i   is k1_i
+        col 2i+1 is -(k2_i + k3_i)
+
+    Note that you may have to reverse the sign for k3, otherwise the reactions
+    will have negative rates
+
+    The value for 'variables' is the number of pre and pos-translocated step.
+    However, you have one more 'accumulation' variable at the end. This
+    corresponds to the last column of the matrix
+    """
+
+    k1, k2, k3 = rates
+
+    rows = []
+
+    row1 = [-k1[0], k2[0]] + [0 for i in range(variables-1)]
+    row2 = [k1[0], -(k2[0] + k3[0])] + [0 for i in range(variables-1)]
+
+    rows.append(row1)
+    rows.append(row2)
+
+    # add the middle values
+    for i in range(1, states):
+
+        # Row 1 of state_i
+        f_col = 2*i -1
+        row1 = []
+        for col_nr in range(variables+1):
+
+            if col_nr == f_col:
+                row1.append(k3[i-1])
+                #row1.append(np.exp(k3[i-1]))
+
+            elif col_nr == f_col + 1:
+                row1.append(-k1[i])
+
+            elif col_nr == f_col + 2:
+                row1.append(k2[i])
+
+            else:
+                row1.append(0)
+
+        rows.append(row1)
+
+        # Row 2
+        f_col = 2*i
+        row2 = []
+        for col_nr in range(variables+1):
+
+            if col_nr == f_col:
+                row2.append(k1[i])
+
+            elif col_nr == f_col + 1:
+                row2.append(-(k2[i] + k3[i]))
+                #row2.append(-(k2[i] + np.exp(k3[i])))
+
+            else:
+                row2.append(0)
+
+        rows.append(row2)
+
+    rowN = [0 for i in range(variables -1)] + [k3[-1], 0]
+
+    rows.append(rowN)
+
+    return np.array(rows)
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
@@ -3072,13 +4033,36 @@ def main():
 
     #new_genome()
 
+<<<<<<< HEAD
     #new_ladder(lizt)
 
     #new_scatter(lizt, ITSs)
-    #new_long5UTR(lizt)
+=======
+    #for i in range(10):
+        #new_ladder(lizt)
 
-    # design new sequences!
-    #new_designer(lizt)
+    #new_scatter(lizt, ITSs)
+
+    # NOTE You have the following proposition
+    # Implement your simple model in Matlab and optimize for PY in position 10,
+    # 15, and 20 at given time points. Do cross validation by doing this for
+    # halve the set and then testing with the second half -- see if you get
+    # consistent parameter estimation and consistent validation. PS: don't
+    # choose the same twice! You can do this many times and make a MC.
+    # Show that you correlate well PY with a simple model. The differnce between
+    # the fast-goers and slow-goers is the time they spent. Thus we find both a
+    # sequence-specific regulation AND we find the time-dependence.
+
+    # XXX to show that the Keq and RNA-DNA really matter, try to fit to random
+    # values for Keq and RNA-DNA. What about -2 as a constant for RNA-DNA?
+
+    # The final challenge is to show that a model with RNA-DNA energy + DNA-DNA
+    # for bubble opening performs worse than my model.
+
+    # the ODE models
+    new_models(lizt, ITSs)
+
+    # the naive exp-fitting models
     #fitting_models(lizt, ITSs)
 
     #frequency_change()
@@ -3376,16 +4360,6 @@ if __name__ == '__main__':
 # strand? Might hamper expression. Sigma intervention!!
 # QUESTION: why non-template (coding) strand? Can sigma rebind both strands?
 # This should be clear from crystallographical images.
-
-# TODO test make curves for upper and lower bound. Perhaps try with other
-# functions than exponential? Polynomial for example. Also: return the errors!
-
-# TODO LadderScrutinizer: finds the probability that the almost-uniformly
-# increasing pattern in the correlation coefficients is accidental. Calculates
-# new sequences are runs correlation analysis on those of equal length as the
-# one from the sequences of the data set. Of those, the function counts how many
-# have a similarly significant increase in correlation values and divides that
-# by the number of such sets with equal length (10 with p = 0.05).
 
 # The exact physics of the DNA bubble:
 # Begins at -11,+2/3. Scrunching theory implies that DNA is pulled in, so that the
