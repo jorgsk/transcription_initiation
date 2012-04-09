@@ -347,18 +347,18 @@ class Result(object):
         # its_len)
         self.corr_mean = np.mean(corr)
         self.corr_std = np.std(corr)
-        self.corr_max = max(corr)
-        self.corr_min = min(corr)
+        self.corr_max = np.max(corr)
+        self.corr_min = np.min(corr)
 
         self.pvals_mean = np.mean(pvals)
         self.pvals_std = np.std(pvals)
-        self.pvals_max = max(pvals)
-        self.pvals_min = min(pvals)
+        self.pvals_max = np.max(pvals)
+        self.pvals_min = np.min(pvals)
 
         self.finals_mean = np.mean(finals)
         self.finals_std = np.std(finals)
-        self.finals_max = max(finals)
-        self.finals_min = min(finals)
+        self.finals_max = np.max(finals)
+        self.finals_min = np.min(finals)
 
         # The parameters are not so easy to do something with; the should be
         # supplied in a dictionray [c1,c2,c3,c4] = arrays; so make mean, std,
@@ -366,8 +366,8 @@ class Result(object):
 
         self.params_mean = dict((k, np.mean(v)) for k,v in params.items())
         self.params_std = dict((k, np.std(v)) for k,v in params.items())
-        self.params_max = dict((k, max(v)) for k,v in params.items())
-        self.params_min = dict((k, min(v)) for k,v in params.items())
+        self.params_max = dict((k, np.max(v)) for k,v in params.items())
+        self.params_min = dict((k, np.min(v)) for k,v in params.items())
 
 class ITS(object):
     """ Storing the ITSs in a class for better handling. """
@@ -3193,19 +3193,17 @@ def new_models(lizt, ITSs):
     much transcript is full length compared to aborted.
 
     Models:
-    #first_nonequilibrium(PYs, its_len, ITSs)
-    #second_equilibrium(PYs, its_len, ITSs)
     #normal_obj = scruncher(PYs, its_len, ITSs, ranges)
+
+    Your model is as follows:
+        c1*exp(-c2*rna_dna + c3*dna_dna - c4*ln(Keq))
 
     """
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
-    its_len = 10 # how far to transcribe
 
     # Parameter ranges you want to test out
-    # You can be crude now and use finer grained detailes later
-
     #p1 = np.linspace(7, 12, 5)
     p1 = np.array([10]) # insensitive to variation here
     p2 = np.array([0])
@@ -3213,39 +3211,6 @@ def new_models(lizt, ITSs):
     p4 = np.linspace(0.1, 0.4, 10)
 
     par_ranges = (p1, p2, p3, p4)
-
-
-    # the number of times you should randomize the ITS and rerun
-    rand_nr = 2
-
-    # XXX new model: scrunching; you can either try the gird approach or try to
-    # optimize to the PY values; the last approach is successfull with DNA-DNA
-    # and Keq alone. Can the negaive exponent be forced by the optmizer?
-    # Crazy stuff. With DNA-DNA, the optimizer gets a very good correlation
-    # early on, but loses correlation down to the 0.6, 0.7 level later on.
-
-    # What if I flip the switch to rna-dna? It should be the same. Almost ...
-
-    # What to do now? How did you get that 0.8 correlation with rna-dna alone
-    # with grid; I really liked how grid was compensating those variables, while
-    # hre it looks more like it's adjusting with c1 -- of course, it's because
-    # it wants to have an exact match to the PYs. This isn't reasonable; I
-    # should have a higher score. Maybe 10 times higher? Some of the optimized
-    # variables are crazy. The penalty should be weighted by the distance from
-    # the mean; outliers should be penalized so I don't end up with some fitting
-    # well and others fitting really badly.
-
-    # The question remains: what is the best way of presenting this? Like a grid
-    # with a fixed c1 and variable c2,c3 etc or an optimal for each step? In
-    # both cases you need to randomize as a control.
-
-    # Idea: to make it easier to test out model designs, make it so that when
-    # you specify the ranges for the variables and optimize =true/false. If
-    # optimize is false, do the grid-approach. if optimize is true, only use
-    # optimize with the parameters that have more than 1 value in the range.
-    # Start values are the median values of the grid. Then you can also supply
-    # 'randomize' which can be an int. If it's 0, no randomization. if 4, it
-    # will randomize 4 times and report the average scores.
 
     its_range = range(6,8)
     #its_range = 7
@@ -3257,6 +3222,28 @@ def new_models(lizt, ITSs):
 
     results, rand_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                            optimize, randomize, t)
+
+    debug()
+
+    print_scrunch(results, rand_results)
+
+def print_scrunch(results, rand_results, optimize, randomize, par_ranges):
+    """
+    Print the results from the scrunch model. Make it clear if you have used
+    optimization or grid and if a randomized control is included. Also make it
+    clear which model you have used (are some parameters 0, are some constant)
+    """
+
+    # now, print the results; include random results if they were requested.
+    # I propose a correlation plot similar to what you've done already
+
+    # use corr_max for results and corr_mean/corr_std for random
+
+    # The p-vals must come later, but you know it's around 0.3
+    # just copy-paste from new_ladder(), easy peasy.
+
+    # after that ... you have to do some serious analysis. Maybe you can change
+    # optimizer so that it doesn't go into positive exponet terretory.
 
 def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randomize, t):
     """
@@ -3287,7 +3274,13 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randomize, t):
 
             if randomize:
                 # DO the randomization magic here
-                pass
+                # What should that be? You have to re-calculate the ITSs
+                optimized_obj = opt_scruncher(PYs, its_len, ITSs, ranges, t, y0,
+                                              state_nr, randomize)
+            else:
+                optimized_obj = False
+
+            results_random[its_len] = optimized_obj
 
     ### GRID
     if not optimize:
@@ -3303,54 +3296,101 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randomize, t):
 
             results[its_len] = normal_obj
 
-            # get the results for randomized ITS versions
-            random_obj = scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr,
-                                   randomize)
+            if randomize:
+                # get the results for randomized ITS versions
+                random_obj = scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr,
+                                       randomize)
+            else:
+                random_obj = False
 
             results_random[its_len] = random_obj
 
-
     return results, results_random
 
-
-def opt_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr):
+def opt_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=False):
     """
-    Introduce scrunching to the model. This will give you values that reverse
-    the sign that's bugging you.
-
-    Your model is as follows:
-        c1*exp(-c2*rna_dna + c3*dna_dna - c4*ln(Keq))
-
-    However, you need to find out how many variables you want to optimize and
-    how many you should keep constant. If the length of any of the ranges is 1,
-    this should not be considered variable but constant.
+    Return a 'result' object either from the original ITS sequences or an
+    average from 'randomized' number of sets of random ITS sequences.
     """
 
-    # try to optimize with the following variables:
-    p1 = 5
-    p2 = 0.03
-    p3 = 0.03
-    p4 = 0.2
+    variables = []
+    truth_table = []
+    constants = []
 
-    inits = []
+    for rang in ranges:
+        if len(rang) == 1:
+            constants.append(rang[0])
+            truth_table.append(False)
+        else:
+            variables.append(np.median(rang))
+            truth_table.append(True)
 
-    #for 
-    # TODO make it so that you only optimize those parameters which have a range
+    if not randomize:
+        ITS_variables = get_its_variables(ITSs)
+        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs, False,
+                     constants, truth_table)
 
-    initial_values = (p1, p2, p3, p4)
+        return get_optimized_result(variables, arguments, truth_table, constants)
 
+    # if randomize, optimize 'randomize' number of random ITS sequences 
+    else:
+
+        rand_objects = []
+        for rand_nr in range(randomize):
+            ITS_variables = get_its_variables(ITSs, randomize=True)
+            arguments = (y0, t, its_len, state_nr, ITS_variables, PYs, False,
+                         constants, truth_table)
+
+            result_obj = get_optimized_result(variables, arguments, truth_table, constants)
+
+            rand_objects.append(result_obj)
+
+        return average_rand_result(rand_objects)
+
+def get_optimized_result(variables, arguments, truth_table, constants):
+
+    plsq = optimize.leastsq(cost_function_scruncher, variables,
+                            args = arguments)
+
+    # reconstruct fitted and constant parameters from the truth-table
+    final_param = get_mixed_params(truth_table, plsq[0], constants)
+
+    # change run_once to True compared to above
+    arguments = arguments[:-3] + (True,)
+    finals = cost_function_scruncher(final_param, *arguments)
+
+    PYs = arguments[-2]
+    corr, pval = pearsonr(PYs, finals)
+
+    params = dict(('c{0}'.format(nr+1), p) for nr, p in enumerate(final_param))
+
+    # return a Result object
+    return Result(corr, pval, params, finals)
+
+
+def get_its_variables(ITSs, randomize=False):
+    """
+    Get ITS objects and return a dict of their energy variables: RNA-DNA,
+    DNA-DNA, Keq
+    """
     new_ITSs = []
+
     for its in ITSs:
+
+        # if randomize, create a new object ITS object from a random sequence
+        if randomize:
+            rand_seq = ITSgenerator()
+            its = ITS(rand_seq)
+
         ITSs_dict = {'rna_dna_di': np.array(its.rna_dna_di),
                      'dna_dna_di': np.array(its.dna_dna_di),
                      'keq_di': np.array(its.keq_di)}
+
         new_ITSs.append(ITSs_dict)
 
-    arguments = (y0, t, its_len, state_nr, new_ITSs, PYs)
+    return new_ITSs
 
-    optimize_scrunch(arguments, initial_values)
-
-def scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, rand_nr=1):
+def scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize):
     """
     Introduce scrunching to the model. This will give you values that reverse
     the sign that's bugging you.
@@ -3359,57 +3399,50 @@ def scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, rand_nr=1):
         c1*exp(-c2*rna_dna + c3*dna_dna - c4*ln(Keq))
     """
 
-    # if rand_nr is 0, don't do randomizations of sequences
-    if rand_nr == 0:
+    if not randomize:
         #go from ITS object to dict to appease the impotent pickle
-        new_ITSs = []
-        for its in ITSs:
-            ITSs_dict = {'rna_dna_di': np.array(its.rna_dna_di),
-                         'dna_dna_di': np.array(its.dna_dna_di),
-                         'keq_di': np.array(its.keq_di)}
-            new_ITSs.append(ITSs_dict)
+        ITS_variables = get_its_variables(ITSs)
 
-        arguments = (y0, t, its_len, state_nr, new_ITSs, PYs)
+        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs)
 
         return grid_scrunch(arguments, ranges)
 
-    # rand_nr is > 0 which means you should RANDOMIZE; return the averaged
-    # results
+    # if randomize, return the averaged results of the 'randomized' runs
     else:
         rand_results = []
-        for repeat in range(rand_nr):
+        for repeat in range(randomize):
 
             # normalizing by testing random sequences. Can we fit the parameters
             # from random sequences to these ITS values?
 
-            new_ITSs = []
-            for i in range(len(ITSs)):
-                rand_seq = ITSgenerator()
-                new_its = ITS(rand_seq)
-                ITSs_dict = {'rna_dna_di': np.array(new_its.rna_dna_di),
-                             'dna_dna_di': np.array(new_its.dna_dna_di),
-                             'keq_di': np.array(new_its.keq_di)}
-                new_ITSs.append(ITSs_dict)
+            ITS_variables = get_its_variables(ITSs, randomize=True)
+
+            arguments = (y0, t, its_len, state_nr, ITS_variables, PYs)
 
             rand_results.append(grid_scrunch(arguments, ranges))
 
-        #make new corr, pvals, and params; just add them together; ignore the
-        #finals
-        new_corr, new_pvals, new_params = [], [], {'c1':[], 'c2':[],
-                                                   'c3':[], 'c4':[]}
+        return average_rand_result(rand_results)
 
-        # add together the values
-        for res_obj in rand_results:
-            new_corr.append(res_obj.corr.tolist())
-            new_pvals.append(res_obj.pvals.tolist())
+def average_rand_result(rand_results):
+    """make new corr, pvals, and params; just add them together; ignore the
+    #finals
+    """
 
-            for k, v in res_obj.params.items():
-                new_params[k].append(v)
+    new_corr, new_pvals, new_params = [], [], {'c1':[], 'c2':[],
+                                               'c3':[], 'c4':[]}
 
-        # make a new result object
-        new_result = Result(new_corr, new_pvals, new_params, res_obj.finals)
+    # add together the values
+    for res_obj in rand_results:
+        new_corr.append(res_obj.corr.tolist())
+        new_pvals.append(res_obj.pvals.tolist())
 
-        return new_result
+        for k, v in res_obj.params.items():
+            new_params[k].append(v)
+
+    # make a new result object
+    new_result = Result(new_corr, new_pvals, new_params, res_obj.finals)
+
+    return new_result
 
 def grid_scrunch(arguments, ranges):
 
@@ -3427,8 +3460,8 @@ def grid_scrunch(arguments, ranges):
     t1 = time.time()
 
     ## make a pool of 4/2 workers for multicore action
-    #my_pool = multiprocessing.Pool(4)
-    my_pool = multiprocessing.Pool(2)
+    my_pool = multiprocessing.Pool(4)
+    #my_pool = multiprocessing.Pool(2)
     results = [my_pool.apply_async(_multi_func, (p, arguments, PYs)) for p in divide]
     my_pool.close()
     my_pool.join()
@@ -3469,27 +3502,6 @@ def grid_scrunch(arguments, ranges):
 
     return result_obj
 
-def optimize_scrunch(arguments, initial_values):
-
-    plsq = optimize.leastsq(cost_function_scruncher, initial_values,
-                            args = arguments)
-
-    fitted_param = plsq[0]
-
-    finals = cost_function_scruncher(fitted_param, *arguments)
-
-    PYs = arguments[-1]
-
-    corr, pval = pearsonr(PYs, finals)
-
-    params = dict(('c{0}'.format(nr+1), p) for nr, p in enumerate(fitted_param))
-
-    # make a Result object; but here you have only 1 value, not a gazillion like
-    # in grid ... it's OK: mean(4) = 4, but pass the params as a dict;
-    result_obj = Result(corr, pval, params, finals)
-
-    return result_obj
-
 def _multi_func(paras, arguments, PYs):
     """
     Evaluate the model for all parameter combinations. Return the final values,
@@ -3510,99 +3522,21 @@ def _multi_func(paras, arguments, PYs):
 
     return all_hits
 
-def second_equilibrium(PYs, its_len, ITSs):
-    """
-    Assume equilibrium in the pre-post step.
-
-    You have only 1 rate constant. You suggest one on this form:
-        c1*exp(c2*rna_dna + c3*ln(Keq) + c4)
-
-    Where the c4 is optional
-    """
-
-    print ''
-
-    state_nr = its_len - 1 # starting with the first two nt already incorporated
-    # The second nt is then state 0
-
-    # initial vales for the states
-    y0 = [1] + [0 for i in range(state_nr-1)]
-
-    # the time grid -- it might be best to determine this in another way
-    # make sure the integrator integrates with the same time-step for all
-    # sequences? Does that matter?
-    t = np.linspace(0, 10., 1000)
-
-    arguments = (y0, t, its_len, state_nr, ITSs, PYs)
-    #initial_values = (5, 1, 1)
-
-    #plsq = optimize.leastsq(cost_function_second, initial_values, args = arguments)
-
-    #fitted_param = plsq[0]
-    fitted_param = (12, 1, 1)
-
-    # reuse the cost function but only output the final result
-    #finals_init = cost_function_second(initial_values, *arguments, run_once=True)
-    finals_opt = cost_function_second(fitted_param, *arguments, run_once=True)
-
-    print fitted_param
-
-    #for finals in [finals_init, finals_opt]:
-    for finals in [finals_opt]:
-
-        print fitted_param
-        print spearmanr(PYs, finals)
-        print pearsonr(PYs, finals)
-        print ''
-        print ''
-
-        fig, ax = plt.subplots()
-        ax.scatter(finals, PYs)
-
-    #debug()
-
-     #try to go through a rough map of values and return the correlation values
-     #looks like p1 is not sensitive here, likely because you're looking just at
-     #finals
-     #RESULT this was a good approach. Looks like values right around 1 for b2
-     #and b3 give good results. Are these parameter robust, then?
-    p1 = np.linspace(5, 9, 4)
-    p2 = np.linspace(-2, 2, 10)
-    p3 = np.linspace(-2, 2, 10)
-
-    good_unz = []
-
-    for p1val in p1:
-        for p2val in p2:
-            for p3val in p3:
-                par = (p1val, p2val, p3val)
-                finals_opt = cost_function_second(par, *arguments, run_once=True)
-
-                r, p = pearsonr(PYs, finals_opt)
-                rs, ps = spearmanr(PYs, finals_opt)
-
-                if r > 0.6:
-                    good_unz.append((par, r, rs))
-
-
-    debug()
-
 def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
-                         run_once=False):
+                         run_once=False, const_par=False, truth_table=False):
     """
-        k1 = c1*exp(-c2*rna_dna_i + c2*dna_dna_{i+1} - c3*ln(Keq_{i-1}))
+    k1 = c1*exp(-c2*rna_dna_i + c2*dna_dna_{i+1} - c3*ln(Keq_{i-1}))
 
-        Dna-bubble one step ahead of the rna-dna hybrid; Keq one step behind.
-        When the rna-dna reaches length 9, the you must subtract the hybrid for
-        each step forward.
+    Dna-bubble one step ahead of the rna-dna hybrid; Keq one step behind.
+    When the rna-dna reaches length 9, the you must subtract the hybrid for
+    each step forward.
 
     """
     # get the tuning parameters and the rna-dna and k1, kminus1 values
     RT = 1.9858775*(37 + 273.15)/1000
     finals = []
     # The energy of the initiation bubble
-    minus11_en = -7.67 # 'ATAATAGATTC' DNA_DNAenergy
-    #minus11_en = 0 # 'ATAATAGATTC' DNA_DNAenergy / 2
+    minus11_en = -9.95 # 'ATAATAGATTCAT'
 
     for its_dict in ITSs:
 
@@ -3614,19 +3548,19 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         rna_dna = its_dict['rna_dna_di'][:its_len-1]
         keq = its_dict['keq_di'][:its_len-1]
 
-        # create the rate constant.
-        # it should be used to create the A-matrix
-        # this will be much more complicated than before. Before you must made
-        # an array of values. Now you will need a for loop that counts through
-        # the its len
+        # For run_once and if all 4 are used for optimization
         if len(start_values) == 4:
-            #(a, b, c) = start_values
             (a, b, c, d) = start_values
+
+        # If optimization and not all 4 are used, a, b,c, d will be a mix
+        # between variable and fixed parameters
+        elif len(start_values) < 4:
+            (a, b, c, d) = get_mixed_params(truth_table, start_values, const_par)
 
         # initialize empty rates
         k1 = np.zeros(its_len-2)
 
-        proceed = True
+        proceed = True  # don't proceed for bad exponenitals and run_once = True
 
         for i in range(1, its_len-1):
             KEQ = keq[i-1]
@@ -3637,8 +3571,6 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
                 RNA_DNA = sum(rna_dna[i-9:i])
 
             expo = (-b*RNA_DNA + c*DNA_DNA)/RT -d*KEQ
-            #expo = b*DNA_DNA/RT -c*KEQ
-            #expo = -b*RNA_DNA/RT -c*KEQ
 
             # if this value is above 0, what you are doing will not work
             if run_once and expo > 0:
@@ -3649,21 +3581,14 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
 
             rate = a*np.exp(expo)
 
-            #print start_values
-            #print expo
-            #print rate
             k1[i-2] = rate
 
-        # XXX you must abort if proceed is false and run_once is tru
+        # you must abort if proceed is false and run_once is tru
         # a positive exponent is nonsense
         if run_once and not proceed:
             finals.append(0)
         else:
 
-            #f, ax = plt.subplots()
-            #ax.plot(k1)
-            #plt.show()
-            #debug()
             A = equlib_matrix(k1, state_nr)
             # pass the jacobian matrix to ease things
             # you can also pass the jacobian of the objective function, but since
@@ -3674,239 +3599,47 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
 
     if run_once:
 
-        # values vary wildly with varying parameters. Because 1000 is so big?
-        #print start_values
-        #print np.mean(finals)
-        #print np.std(finals)
-        #debug()
-
         return np.array(finals)
 
     # if not run once, you're called from an optimizer -> return the distance
     # vector; also include the distance from var(PY) with var(finals)
-    # m
-    # New output: a vector of the mean of PYs, the median of PYs, the std of
-    # PYs, and the pearson correlation coefficient of finals with PYs (against
-    # a target of 0.7
-    # you should probably weigh them differently too
     else:
 
-        #result = np.concatenate((finals, np.array([np.var()])))
-        #dist_vect = np.array(finals) - np.array(PYs)
-        #objective = np.array([np.mean(PYs), np.median(PYs), np.std(PYs), 0.75/2])
-        #objective = np.array([1, np.std(PYs), np.median(PYs), 0.80*100])
-
         # Retry optimizer with PYs as objective
-        #objective = np.array(PYs)*10
         objective = np.array(PYs)
         result = np.array(finals)
 
-        #result = np.array([np.mean(finals), np.median(finals), np.std(finals),
-                          #pearsonr(finals, PYs)[0]/2])
         # weight with 100 to get most emphasis on the pearsonr correlation
         #result = np.array([1, np.std(finals), np.median(finals), 100*pearsonr(finals, PYs)[0]])
 
         return objective - result
 
-def cost_function_second(start_values, y0, t, its_len, state_nr, ITSs, PYs,
-                         run_once=False):
+def get_mixed_params(truth_table, start_values, const_par):
     """
-    Integrate the second model and compare its output to PYs
-
-        k1 = c1*exp(c2*rna_dna_i + c3*ln(Keq_{i-1}) + c4)
-    """
-    # get the tuning parameters and the rna-dna and k1, kminus1 values
-    RT = 1.9858775*(37 + 273.15)/1000
-    finals = []
-    for its in ITSs:
-
-        # must shift by minus 1 ('GATTA' example: GA, AT, TT, TA -> len 5, but 4
-        # relevant dinucleotides)
-        rna_dna = np.array(its.rna_dna_di[:its_len-1])
-        keq = np.array(its.keq_di[:its_len-1])
-
-        if len(start_values) == 1:
-            a = start_values[0]
-            k1 = a*np.exp(-rna_dna[1:]/RT - np.log(keq[:-1]))
-
-        # create the rate constant. Note that rna_dna is i+1 and keq is i
-        if len(start_values) == 3:
-            (a, b, c) = start_values
-            k1 = a*np.exp(-b*rna_dna[1:]/RT - c*np.log(keq[:-1]))
-
-        A = equlib_matrix(k1, state_nr)
-
-        # pass the jacobian matrix to ease things
-        # You have to try this. And also passing the jacobian of the objective
-        # function. If that finally doesn't work...
-        # The problem with the parameters could be 
-        soln, info = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,),
-                                            full_output=True, Dfun=jacob_second)
-        finals.append(soln[-1][-1])
-
-    if run_once:
-        return np.array(finals)
-
-    # if not run once, you're called from an optimizer -> return the distance
-    # vector; also include the distance from var(PY) with var(finals)
-    # m
-    # New output: a vector of the mean of PYs, the median of PYs, the std of
-    # PYs, and the pearson correlation coefficient of finals with PYs (against
-    # a target of 0.7
-    # you should probably weigh them differently too
-    else:
-
-        #result = np.concatenate((finals, np.array([np.var()])))
-        #dist_vect = np.array(finals) - np.array(PYs)
-        #objective = np.array([np.mean(PYs), np.median(PYs), np.std(PYs), 0.75/2])
-        objective = np.array([np.std(PYs), np.median(PYs), 0.80*100])
-
-        #result = np.array([np.mean(finals), np.median(finals), np.std(finals),
-                          #pearsonr(finals, PYs)[0]/2])
-        result = np.array([np.std(finals), np.median(finals), 100*pearsonr(finals, PYs)[0]])
-
-    return objective - result
-
-
-def first_nonequilibrium(PYs, its_len, ITSs):
-
-    # RESULT the 'naive' approach does not work (I had actually thought that it
-    # would). Am I comparing against the right thing? I'm copmaring against the
-    # % of value in state 20. I'll start doing it until 15 instead.
-    # NOTE you are having equal sign between RNA-DNA and the other... maybe you
-    # should reverse it? How do I do that without compromizing the values? :S
-    # TODO
-    # 1) Try to fit 3 parameters to the PY values # not much better
-    # 2) Try to introduce changes in the model # can try ...
-
-    # initial tunable values
-    initial_values = (1,1,-1)
-    print initial_values
-
-    states = its_len -1 # the number of i positions
-    variables = states*2 # two sub-states for each state: pre- and posttranslocated
-
-    y0 = [1] + [0 for i in range(variables)]
-    # XXX The final value in 'y0' is the end product
-
-    t = np.linspace(0, 150., 1500) # time grid
-    # The time units are of course arbitrary
-
-    # these transformations will work on k1, k2, and k3, or any further k's you
-    # may make XXX this is deprecated
-    #transformations = transf.const, transf.const, transf.expon
-
-    arguments = (y0, t, its_len, states, variables, ITSs, transformations, PYs)
-
-    plsq = optimize.leastsq(cost_function, initial_values, args = arguments)
-
-    # TODO check the effect of the different parameters; to what degree do they
-    # change the order of the final vals?
-
-    fitted_param = plsq[0]
-    print fitted_param
-    #fitted_param = [2.02,  3.26, -0.91]
-    # XXX result; with these fitted parameters you don't get a good fit. This
-    # means you'll have to update the model.
-    # You'll need a set of models. Each will have different parameters. The more
-    # parameters, the more fitting :/
-    # You can also try other minimizers.
-    # Try a model without RNA-DNA for example; just aconstant. I get a bit
-    # better correlation 0.45, but it converges slow as hell.
-
-    # make a file with different transformations of k1, k2, k3 etc
-    # maybe I should split them up into the individual transformations so that I
-    # don't create 10 different usage examples.
-    # The last one can be split into first exp and then constant!
-    # The values take 'array, value'
-
-    # get the distribution of RNAP in the final state of the simulation
-    finals = final_state(ITSs, y0, t, transformations, fitted_param, its_len)
-
-    print spearmanr(PYs, finals)
-    # With the current model, there is no real optimization. The least squares
-    # function finds no optimum. Probably means the underlying model is so
-    # wrong.
-
-    debug()
-
-def final_state(ITSs, y0, t, transformations, parameters, its_len):
-    """
-    Just the loop
-    """
-    finals = []
-    for its in ITSs:
-
-        seq = its.sequence[:its_len]
-        neigh = [seq[cnt] + seq[cnt+1] for cnt in range(len(seq)-1)]
-
-        # note that what the paper calls k1 is my k2; their kminus1 is 9->8, but I'm
-        # going the other way!
-        k11 = np.array([Ec.kminus1[di] for di in neigh])
-        k21 = np.array([Ec.k1[di] for di in neigh])
-        k31 = np.array([Ec.NNRD[di] for di in neigh])
-
-        a, b, c = parameters
-
-        k1 = a*k11
-        k2 = a*k21
-        k3 = b*np.exp(c*k31)
-
-        transf_rates = [k1, k2, k3]
-
-        states = len(k1)
-        variables = states*2
-
-        A = parameter_matrix(transf_rates, states, variables)
-
-        # solve the with the new param
-        #arguments = (A,) # the abysmal synax requires a double dict as argument
-        soln = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,))
-
-        finals.append(soln[-1][-1])
-
-    return finals
-
-def cost_function(parameters, y0, t, its_len, states, variables, ITSs,
-                  transformations, PYs):
-    """
-    Cost function. Could the equations get out of hand? I hope not.
+    You pass a variable numer of fixed and constant parameters for optimization.
+    You join these into one parameter set.
     """
 
-    # get the tuning parameters and the rna-dna and k1, kminus1 values
-    a, b, c = parameters
+    s_values = start_values.tolist()
 
-    finals = []
-    for its in ITSs:
+    # make a copy of const_par -- otherwise it seems to disappear from the outer
+    # loop. I don't understand how that works. Try to recreate it.
+    c_par = list(const_par)
 
-        seq = its.sequence[:its_len]
-        neigh = [seq[cnt] + seq[cnt+1] for cnt in range(len(seq)-1)]
+    # reverse parameters and constant_parameters to be able to pop
+    # front-first
+    s_values.reverse()
+    c_par.reverse()
 
-        k11 = np.array([Ec.kminus1[di] for di in neigh])
-        k21 = np.array([Ec.k1[di] for di in neigh])
-        k31 = np.array([Ec.NNRD[di] for di in neigh])
+    mix_param = []
 
-        # modify the rate constants by some formula
-        # maybe you'll make a library of reaction constants here
-        k1 = a*k11
-        k2 = a*k21
-        k3 = b*np.exp(c*k31)
+    for ind, boo in enumerate(truth_table):
+        if boo:
+            mix_param.append(s_values.pop())
+        else:
+            mix_param.append(c_par.pop())
 
-        states = its_len - 1
-        variables = states*2
-
-        rates = (k1, k2, k3)
-
-        A = parameter_matrix(rates, states, variables)
-
-        soln = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,))
-
-        finals.append(soln[-1][-1])
-
-    dist_vect = np.array(finals) - np.array(PYs)
-    #dista = np.sqrt(sum(dist_vect**2))
-
-    return dist_vect
+    return mix_param
 
 def rnap_solver(y, t, A):
     """
