@@ -124,38 +124,13 @@ for name, val in EnLibRNA.items():
     #super_en[name] = reKeq[name] - val
     super_en[name] = val - reKeq[name]
 
-# XXX try to make another super_en based on PCA
+# XXX go from Keq to Delta G values; it makes the equation prettier and you
+# avoid the 'ln's in your calculations
+delta_keq = {}
 
-_sum = 15.39 + 6.1
-w1 = 15.39/_sum
-w2 = 6.1/_sum
-
-p1 = -0.23
-p2 = -0.97
-
-pca_en = {}
-for name, val in EnLibRNA.items():
-
-    #pca_en[name] = val*(w1*p1 + w2*p2) + reKeq[name]*(w1*p2 - w2*p1)
-    pca_en[name] = val*p1 + reKeq[name]*p2
-
-    # 15.39/_sum = w1
-    # 6.1/_sum = w2
-
-    #super_f = w1*(rna_term*(-0.23) + Keq_term*(-0.97)
-    # + w2*(rna_term*(-0.97) + Keq_term*(0.23)
-
-
-    # =  rna_term*(w1(-0.23) + w2*(-0.97)) + Keq_term*(w1*(-0.97) + w2*(0.23)
-
-def pca_f(sequence):
-    if len(sequence) < 2:
-        return 0
-
-    indiv = list(sequence) # splitting sequence into individual letters
-    neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
-
-    return sum([pca_en[nei] for nei in neigh])
+RT = 1.9858775*(37 + 273.15)
+for din, en in Keq_EC8_EC9.items():
+    delta_keq[din] = -RT*en/1000  #divide by 1000 to get kcal
 
 def super_f(sequence):
     indiv = list(sequence) # splitting sequence into individual letters
