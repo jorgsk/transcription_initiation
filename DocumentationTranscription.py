@@ -341,7 +341,7 @@ class Result(object):
     the X*20 best. For random, mean and std are what's interesting (the mean and
     std of the best for each random sample)
     """
-    def __init__(self, corr, pvals, params, finals):
+    def __init__(self, corr, pvals, params, finals, time_series=False):
 
         self.corr = corr
         self.pvals = pvals
@@ -379,6 +379,13 @@ class Result(object):
         # that's what you're going to plot (but also plot the mean and std)
         # You rely on that v is sorted in the same order as corr
         self.params_best = dict((k, v[0]) for k,v in params.items())
+
+        if time_series:
+            # OK, how are you going to treat this? supposedly they are sorted in
+            # the its-fashion. There's no problem sending in a class method to
+            # pickle I think... it's if you're multiprocessing from WITHIN a
+            # class it's getting mucky.
+            self.time_series = time_series
 
 class ITS(object):
     """ Storing the ITSs in a class for better handling. """
@@ -3216,68 +3223,255 @@ def new_models(lizt, ITSs):
 
     # Parameter ranges you want to test out
     #c1 = np.linspace(7, 12, 5)
-    c1 = np.array([10]) # insensitive to variation here
+    c1 = np.array([20]) # insensitive to variation here
     c2 = np.array([0]) # c2 is best evaluated to 0
-    #c2 = np.linspace(0.005, 0.2, 10)
-    c3 = np.linspace(0.001, 0.1, 15)
-    c4 = np.linspace(0.05, 0.5, 15)
+    #c2 = np.linspace(0.005, 0.3, 15)*-1
+    c3 = np.linspace(0.001, 0.1, 6)
+    #c3 = np.array([0])
+    c4 = np.linspace(0.05, 0.5, 6)
 
     par_ranges = (c1, c2, c3, c4)
 
-    its_range = range(4, 19)
+    its_range = range(8, 11)
 
     optim = False   # GRID
     #optimize = True   # OPTIMIZER
     # I trust the Grid more than the opt. Stick with it.
 
-    #randomize = 10 # here 0 = False (or randomize 0 times)
+    #randomize = 5 # here 0 = False (or randomize 0 times)
     randomize = 0 # here 0 = False (or randomize 0 times)
+
+    #initial_bubble = False
+    initial_bubble = True
 
     # Time-grid
     t = np.linspace(0, 1., 100)
 
     results, rand_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
-                                           optim, randomize, t)
+                                           optim, randomize, t, initial_bubble)
 
-    # TODO to make your approach 'cooler', convert the equilibrum constants to
-    # Delta G values; it makes the modeling more easy to read.
+    # ladder plot
+    #print_scrunch_ladder(results, rand_results, optim, randomize, par_ranges,
+                  #initial_bubble)
 
-    print_scrunch(results, rand_results, optim, randomize, par_ranges)
+    # scatter plot 
+    #print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
+                  #initial_bubble, PYs)
 
-def print_scrunch(results, rand_results, optimize, randomize, par_ranges):
+    # TODO make a plot/figure where you see the distribution of RNAP for 5
+    # selected sequences over time.
+    # time series
+    print_rnap_distribution(results, rand_results, initial_bubble, ITSs)
+
+    # RESULT rna-dna with opposite sign together with keq is better than dna-dna
+    # and keq from nt = 13 and onward. rna-dna peaks at 82 and dna-dna at 78.
+
+    # TODO make 3/4 figures with different models; show that the one with
+    # rna-dna is marginally better. Show what happens when you turn 'off' the
+    # initial scrunching parameter. Any more tweaks? Maybe that the solution is
+    # robust with respect to changes in c1.
+    # Make the whole thing automated.
+
+    # auto_figure_maker()
+
+def print_rnap_distribution(results, par_ranges, initial_bubble, ITSs):
     """
-    Print the results from the scrunch model. Make it clear if you have used
-    optimization or grid and if a randomized control is included. Also make it
-    clear which model you have used (are some parameters 0, are some constant)
+    For some selected ITS sequences print the RNAP concentration
+    """
+    #plt.ion()
+    final_result = results[max(results.keys())]
+
+    # for each row, pick the results 
+    fmts = ['r', 'g', 'b', 'c']
+
+    # Compare with the PY percentages in this notation
+    names, PYs = zip(*[(itr.name, itr.PY) for itr in ITSs])
+
+    # tuple with name, py, and time_series
+    united =  zip(names, PYs, final_result.time_series)
+
+    # sort by PY, largest first ...
+    united.sort(key=itemgetter(1), reverse=True)
+
+    # XXX you just checked: time series[-1][-1] is like finals
+    # indices of the ones you are picking out for plotting
+    # vary the limits to your preference
+    indices = [int(v) for v in np.linspace(0,42,3)]
+
+    plotme = [united[i] for i in indices]
+
+    fig, axes = plt.subplots(3, 3, sharey=True, sharex=True)
+
+    for col_nr, p in enumerate(reversed(plotme)):
+        # each column is 1 promoter; each row is t =0, t =1/2, or t =1
+
+        name, py, t_series = p
+
+        for row_nr, ts_data in enumerate(t_series):
+
+            ax = axes[row_nr, col_nr]
+
+            ax.plot(ts_data, linewidth=2, color=fmts[row_nr])
+
+            if row_nr == 0:
+                ax.set_title(name)
+
+            if col_nr == 0:
+
+                if row_nr == 0:
+                    ax.set_ylabel('Early')
+
+                if row_nr == 1:
+                    ax.set_ylabel('Mid')
+
+                if row_nr == 2:
+                    ax.set_ylabel('Late')
+
+            if row_nr == 2:
+                ax.set_xlabel('Nucleotide position')
+
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+
+def auto_figure_maker():
+    """
+    Print out all variations of the models with c1 constant.
+    Also show a version where c1 is not constant.
     """
 
+    # How to do this?
+    # Pre-define model1, 2,3,4 etc by parameter values. then simply call the
+    # plot_functions with those parameters.
+
+    model1, model2, model3, model3 = get_models()
+
+def get_models():
+    """
+    Define some models
+    """
+
+    #c1 = np.linspace(7, 12, 5)
+    c1 = np.array([20]) # insensitive to variation here
+    c2 = np.array([0]) # c2 is best evaluated to 0
+    #c2 = np.linspace(0.005, 0.3, 15)*-1
+    c3 = np.linspace(0.001, 0.1, 6)
+    #c3 = np.array([0])
+    c4 = np.linspace(0.05, 0.5, 6)
+
+
+class Model(object):
+    """
+    A model ... it's characterized by the constants
+    """
+
+    def __init__(self, name, c1, c2, c3, c4, description):
+
+        self.name = name
+
+        self.c1 = c1
+        self.c2 = c2
+        self.c3 = c3
+        self.c4 = c4
+
+        self.description = description
+
+def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
+                          initial_bubble, PYs):
+    """
+    Print scatter plots at 5, 10, 15, and 20 if available. If not, leave blank.
+
+    RESULT this has proven to be a problem. While the correlation itself is good
+    for any c1, only a specific c1 value will give similar value ranges for PYs
+    and finals for a given its_len. This is to be expected, and is a trade-off
+    between c1 and t -- the time of integration.
+
+    Isn't it then marvelous that you got such a good match between PY and the
+    'abortive propensity' initially? A little bit too marvelous for my flavor.
+    """
     plt.ion()
-    fig, axes = plt.subplots(2,2)
+
+    PYs = PYs*100
+
+    rows = [5, 10, 15, 20]
+    fig, axes = plt.subplots(len(rows), 1, sharey=True)
+
+    # for each row, pick the results 
+    fmts = ['r', 'g', 'b', 'c']
+
+    for row_nr, maxnuc in enumerate(rows):
+        name = '1_{0}_scatter_comparison'.format(maxnuc)
+
+        if maxnuc-1 in results:
+            finals = results[maxnuc-1].finals # you were comparing to PY/100
+        else:
+            continue
+
+        ax = axes[row_nr]
+
+        ax.scatter(finals, PYs, color= fmts[row_nr])
+
+        corrs = pearsonr(finals, PYs)
+
+        ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=15)
+
+        if row_nr == 0:
+            #ax.set_xlabel("Abortive propensity", size=20)
+            #header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
+            header = 'Pearson: r = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
+            ax.set_title(header, size=15)
+        else:
+            header = 'r = {0:.2f}, p = {1:.1e}'.format(corrs[0], corrs[1])
+            ax.set_title(header, size=15)
+
+        # awkward way of setting the tick sizes
+        for l in ax.get_xticklabels():
+            l.set_fontsize(12)
+            #l.set_fontsize(6)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(12)
+            #l.set_fontsize(6)
+
+        fmin, fmax = min(finals), max(finals)
+
+        scale = (fmax-fmin)*0.2
+
+        ax.set_xlim(fmin-scale, fmax+scale)
+        # that doesn't work for values close to zero. You need an absolute
+        # measure.
+
+def print_scrunch_ladder(results, rand_results, optimize, randomize, par_ranges,
+                  initial_bubble):
+    """
+    Alternative print-scrunch.
+    [0][0] is the pearson for the real and the control
+    [0][1] is the parameters for the pearson fit
+    """
+    plt.ion()
+    fig, axes = plt.subplots(1,2)
 
     colors_params = ['r', 'c', 'm', 'k']
 
-    #params = ('c1', 'c2', 'c3', 'c4')
-    # only plot parameters 1 to 4, since c1 is 1 order of magnitude larger
-    params = ('c2', 'c3', 'c4')
+    all_params = ('c1', 'c2', 'c3', 'c4')
+    # only plot parameters that are variable 
+    plot_params = [p for p, r in zip(all_params, par_ranges) if len(r) > 1]
 
-    par2col = dict(zip(params, colors_params))
+    # assign colors to parameters
+    par2col = dict(zip(all_params, colors_params))
 
     # go over both the real and random results
-    for r_nr, (ddict, name, colr) in enumerate([(results, 'real', 'b'),
-                                                (rand_results, 'random', 'g')]):
+    # This loop covers [0][0] and [0][1]
+    for (ddict, name, colr) in [(results, 'real', 'b'),
+                                (rand_results, 'random', 'g')]:
 
         # don't plot 'random' if you haven't included it
         if False in ddict.values():
             continue
 
-        # if r_nr is 0, plot the max_corr
-        # if r_nr is 1, plot the mean corr with std corr for each of the XX randoms
-        # that mean is the mean of all the max_corr for all the randoms
-
         # get its_index and corr-coeff from sorted dict
-        if r_nr == 0:
+        if name == 'real':
             indx, corr = zip(*[(r[0], r[1].corr_max) for r in sorted(ddict.items())])
-        else:
+
+        elif name == 'random':
             indx, corr = zip(*[(r[0], r[1].corr_mean) for r in sorted(ddict.items())])
             stds = [r[1].corr_std for r in sorted(ddict.items())]
 
@@ -3285,44 +3479,42 @@ def print_scrunch(results, rand_results, optimize, randomize, par_ranges):
         incrX = range(indx[0], indx[-1]+1)
 
         # if random, plot with errorbars
-        if r_nr == 0:
-            axes[r_nr][0].plot(incrX, corr, label=name, linewidth=2, color=colr)
-        else:
-            axes[r_nr][0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2, color=colr)
+        if name == 'real':
+            axes[0].plot(incrX, corr, label=name, linewidth=2, color=colr)
+
+        elif name == 'random':
+            axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2, color=colr)
 
         # get its_index parameter values (they are index-sorted)
-        if r_nr == 0:
+        if name == 'real':
             paramz_best = [r[1].params_best for r in sorted(ddict.items())]
-            paramz_mean = [r[1].params_mean for r in sorted(ddict.items())]
-            paramz_std = [r[1].params_std for r in sorted(ddict.items())]
-
-        if r_nr == 1:
             paramz_mean = [r[1].params_mean for r in sorted(ddict.items())]
             paramz_std = [r[1].params_std for r in sorted(ddict.items())]
 
         # each parameter should be plotted with its best (solid) and mean
         # (striped) values (mean should have std)
-        for parameter in params:
-            # only print 'best' if not-randomized. For randomized print the
-            # mean.
-            if r_nr == 0:
-                best_par_vals = [d[parameter] for d in paramz_best]
-                axes[r_nr][1].plot(incrX, best_par_vals, label=parameter, linewidth=2,
-                             color=par2col[parameter])
+        for parameter in plot_params:
+
+            # print the best parameters
+            best_par_vals = [d[parameter] for d in paramz_best]
+            axes[1].plot(incrX, best_par_vals, label=parameter, linewidth=2,
+                         color=par2col[parameter])
             # mean
             mean_par_vals = [d[parameter] for d in paramz_mean]
             # std
+            # print the mean and std of the top 20 parameters
             std_par_vals = [d[parameter] for d in paramz_std]
-            axes[r_nr][1].errorbar(incrX, mean_par_vals, yerr=std_par_vals,
+            axes[1].errorbar(incrX, mean_par_vals, yerr=std_par_vals,
                              color=par2col[parameter], linestyle='--')
 
 
     xticklabels = [str(integer) for integer in range(3,21)]
-    #yticklabels = [str(integer) for integer in np.arange(-1, 1.1, 0.1)]
-    yticklabels = [str(integer) for integer in np.arange(0, 1, 0.1)]
+    yticklabels = [str(integer) for integer in np.arange(-1, 1.1, 0.1)]
+    #yticklabels = [str(integer) for integer in np.arange(0, 1, 0.1)]
+    #yticklabels_1 = [str(integer) for integer in np.arange(-0.05, 0.5, 0.05)]
 
     # make the almost-zero into a zero if going from -1 to 1
-    #yticklabels[10] = '0'
+    yticklabels[10] = '0'
 
     for ax in axes.flatten():
         # legend
@@ -3332,34 +3524,31 @@ def print_scrunch(results, rand_results, optimize, randomize, par_ranges):
         ax.set_xticks(range(3,21))
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,21)
-        #ax.set_xlabel("Nucleotide from transcription start", size=23)
+        ax.set_xlabel("Nucleotide from transcription start", size=23)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
-            l.set_fontsize(16)
+            l.set_fontsize(14)
         for l in ax.get_yticklabels():
-            l.set_fontsize(16)
+            l.set_fontsize(14)
 
-    for col in range(2):
-        axes[col][0].set_ylabel("Correlation coefficient, $r$", size=23)
-        axes[col][1].set_ylabel("Model parameter values", size=23)
-        axes[col][1].set_xlabel("Nucleotide from transcription start", size=23)
+    axes[0].set_ylabel("Correlation coefficient, $r$", size=23)
+    axes[1].set_ylabel("Model parameter values", size=23)
 
-        #axes[0].set_yticks(np.arange(-1, 1.1, 0.1))
-        axes[col][0].set_yticks(np.arange(0, 1, 0.1))
-        axes[col][0].set_yticklabels(yticklabels)
-        # you need a grid to see your awsome 0.8 + correlation coefficient
-        axes[col][0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                  alpha=0.5)
+    axes[0].set_yticks(np.arange(-1, 1.1, 0.1))
+    #axes[0].set_yticks(np.arange(0, 1, 0.1))
+    axes[0].set_yticklabels(yticklabels)
+    # you need a grid to see your awsome 0.8 + correlation coefficient
+    axes[0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+              alpha=0.5)
+
+    #axes[1].set_yticks(np.arange(-0.05, 0.5, 0.05))
+    #axes[1].set_yticklabels(yticklabels_1)
+    #axes[1].set_ylim(-0.05, 0.5)
 
     #fig.set_figwidth(9)
     #fig.set_figheight(10)
 
-
-    # You need to make a title based on how this simulation was run
-    # Optimize or Grid?
-    # Number of random sequences?
-    # Type of model? -> a, b, c, d ... which are varied/constant/zero
     if optimize:
         approach = 'Least squares optimizer'
     else:
@@ -3379,18 +3568,9 @@ def print_scrunch(results, rand_results, optimize, randomize, par_ranges):
                                                                randomize, descr)
     fig.suptitle(hedr)
 
-    # now, print the results; include random results if they were requested.
-    # I propose a correlation plot similar to what you've done already
 
-    # use corr_max for results and corr_mean/corr_std for random
-
-    # The p-vals must come later, but you know it's around 0.3
-    # just copy-paste from new_ladder(), easy peasy.
-
-    # after that ... you have to do some serious analysis. Maybe you can change
-    # optimizer so that it doesn't go into positive exponet terretory.
-
-def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randomize, t):
+def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randize, t,
+                   init_bubble):
     """
     Wrapper around grid_scrunch and opt_scrunch.
     """
@@ -3413,15 +3593,16 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randomize, t):
             y0 = [1] + [0 for i in range(state_nr-1)]
 
             optimized_obj = opt_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                          state_nr)
+                                          state_nr, init_bubble)
 
             results[its_len] = optimized_obj
 
-            if randomize:
+            if randize:
                 # DO the randomization magic here
                 # What should that be? You have to re-calculate the ITSs
                 optimized_obj = opt_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                              state_nr, randomize)
+                                              state_nr, randomize=randize,
+                                              initial_bubble=init_bubble)
             else:
                 optimized_obj = False
 
@@ -3437,14 +3618,15 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randomize, t):
             y0 = [1] + [0 for i in range(state_nr-1)]
 
             # get the 'normal' results
-            normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr)
+            normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
+                                        state_nr, initial_bubble=init_bubble)
 
             results[its_len] = normal_obj
 
-            if randomize:
+            if randize:
                 # get the results for randomized ITS versions
                 random_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr,
-                                       randomize)
+                                       randomize=randize, initial_bubble=init_bubble)
             else:
                 random_obj = False
 
@@ -3508,7 +3690,7 @@ def get_optimized_result(variables, arguments, truth_table, constants):
 
     # change run_once to True compared to above
     arguments = arguments[:-3] + (True,)
-    finals = cost_function_scruncher(final_param, *arguments)
+    finals, time_series = cost_function_scruncher(final_param, *arguments)
 
     PYs = arguments[-2]
     corr, pval = pearsonr(PYs, finals)
@@ -3541,7 +3723,8 @@ def get_its_variables(ITSs, randomize=False):
 
     return new_ITSs
 
-def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0):
+def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
+                   initial_bubble=True):
     """
     Introduce scrunching to the model. This will give you values that reverse
     the sign that's bugging you.
@@ -3554,7 +3737,8 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0):
         #go from ITS object to dict to appease the impotent pickle
         ITS_variables = get_its_variables(ITSs)
 
-        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs)
+        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs,
+                     initial_bubble)
 
         return grid_scrunch(arguments, ranges)
 
@@ -3568,7 +3752,8 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0):
 
             ITS_variables = get_its_variables(ITSs, randomize=True)
 
-            arguments = (y0, t, its_len, state_nr, ITS_variables, PYs)
+            arguments = (y0, t, its_len, state_nr, ITS_variables, PYs,
+                         initial_bubble)
 
             rand_results.append(grid_scrunch(arguments, ranges))
 
@@ -3610,6 +3795,10 @@ def average_rand_result(rand_results):
     return new_result
 
 def grid_scrunch(arguments, ranges):
+    """
+    Wrapper around the multi-core solver. Return a Result object with
+    correlations and pvalues.
+    """
 
     # all possible compbinations
     params = [p for p in itertools.product(*ranges)]
@@ -3620,60 +3809,60 @@ def grid_scrunch(arguments, ranges):
     last = params[3*window:] # make sure you get all in the last one
     divide.append(last)
 
-    PYs = arguments[-1]
-
     t1 = time.time()
 
-    ## make a pool of 4/2 workers for multicore action
+    # make a pool of workers for multicore action
     my_pool = multiprocessing.Pool(4)
     #my_pool = multiprocessing.Pool(2)
-    results = [my_pool.apply_async(_multi_func, (p, arguments, PYs)) for p in divide]
+    results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
     my_pool.close()
     my_pool.join()
     # flatten the output
     all_results = sum([r.get() for r in results], [])
 
     # All_results is a list of tuples on the following form:
-    # ((finals, par, rp, pp))
+    # ((finals, time_series, par, rp, pp))
     # Sort them on the pearson correlation pvalue, 'pp'
 
-    # the non-parallell version for debugging purposes
-    # all_results = sum([_multi_func(*(pa, arguments, PYs)) for pa in divide], [])
+     #the non-parallell version for debugging purposes
+    #all_results = sum([_multi_func(*(pa, arguments)) for pa in divide], [])
 
     # Filter and pick the 20 with smalles pval
-    all_sorted = sorted(all_results, key=itemgetter(3))
+    all_sorted = sorted(all_results, key=itemgetter(4))
 
-    # wasteful, but you have at most a few thousand elements so it's not slow
-    top_hits = [r for nr, r in enumerate(all_sorted) if nr < 20]
+    # pick top 20
+    top_hits = all_sorted[:20]
 
     # now make separate corr, pvals, params, and finals arrays from these
     finals = np.array(top_hits[0][0]) # only get finals for the top top
-    corr = np.array([c[2] for c in top_hits])
-    pvals = np.array([c[3] for c in top_hits])
-    # params must be made into a dict
-    pars = [c[1] for c in top_hits]
+    time_series = top_hits[0][1] # only get time series for the top top
+    pars = [c[2] for c in top_hits]
+    corr = np.array([c[3] for c in top_hits])
+    pvals = np.array([c[4] for c in top_hits])
 
+    # params must be made into a dict
     # params[c1,c2,c3,c4] = [array]
     params = {}
     for par_nr in range(1, len(ranges)+1):
         params['c{0}'.format(par_nr)] = [p[par_nr-1] for p in pars]
 
     # make a Result object
-    result_obj = Result(corr, pvals, params, finals)
+    result_obj = Result(corr, pvals, params, finals, time_series)
 
     print time.time() - t1
 
     return result_obj
 
-def _multi_func(paras, arguments, PYs):
+def _multi_func(paras, arguments):
     """
     Evaluate the model for all parameter combinations. Return the final values,
     the parameters, and the correlation coefficients.
     """
     all_hits = []
+    PYs = arguments[-2]
 
     for par in paras:
-        finals = cost_function_scruncher(par, *arguments, run_once=True)
+        finals, time_series = cost_function_scruncher(par, *arguments, run_once=True)
 
         # XXX this one is easy to forget ... you don't want answers where the
         # final values are too small
@@ -3683,12 +3872,13 @@ def _multi_func(paras, arguments, PYs):
         # correlation
         rp, pp = pearsonr(PYs, finals)
 
-        all_hits.append((finals, par, rp, pp))
+        all_hits.append((finals, time_series, par, rp, pp))
 
     return all_hits
 
 def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
-                         run_once=False, const_par=False, truth_table=False):
+                            initial_bubble, run_once=False, const_par=False,
+                            truth_table=False):
     """
     k1 = c1*exp(-(c2*rna_dna_i - c3*dna_dna_{i+1} + c4*Keq_{i-1}) * 1/RT)
 
@@ -3698,12 +3888,17 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
 
     """
     # get the tuning parameters and the rna-dna and k1, kminus1 values
+    # RT is the gas constant * temperature
     RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
     finals = []
+    time_series = []
+
     # The energy of the initiation bubble
-    minus11_en = -9.95 # 'ATAATAGATTCAT'
-    #minus11_en = 0 # 'ATAATAGATTCAT' after nt 15, it seems that having initial
-    #energy at 0 improves the correlation quite a bit
+    # energy at 0 improves the correlation after +13 or so
+    if initial_bubble:
+        minus11_en = -9.95 # 'ATAATAGATTCAT'
+    else:
+        minus11_en = 0 # 'ATAATAGATTCAT' after nt 15, it seems that having initial
 
     for its_dict in ITSs:
 
@@ -3719,7 +3914,7 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         if len(start_values) == 4:
             (a, b, c, d) = start_values
 
-        # If optimization and not all 4 are used, a, b,c, d will be a mix
+        # If optimization and not all 4 are used, a, b, c, d will be a mix
         # between variable and fixed parameters
         elif len(start_values) < 4:
             (a, b, c, d) = get_mixed_params(truth_table, start_values, const_par)
@@ -3737,20 +3932,23 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
             else:
                 RNA_DNA = sum(rna_dna[i-9:i])
 
-            expo = (-b*RNA_DNA + c*DNA_DNA +d*KEQ)/RT
-            # if this value is above 0, what you are doing will not work
+            expo = (-b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
+
+            # if expo is above 0, the exponential will be greater than 1, and
+            # this will in general not work
             if run_once and expo > 0:
                 proceed = False
                 break
+
             # there should be way of introducing this constraint to the
-            # optimizer; maybe that will save you shitloads of time
+            # optimizer. Yes, but you have to change optimizers and it's not
+            # straightforward.
 
             rate = a*np.exp(expo)
 
             k1[i-2] = rate
 
-        # you must abort if proceed is false and run_once is tru
-        # a positive exponent is nonsense
+        # you must abort if proceed is false and run_once is true
         if run_once and not proceed:
             finals.append(0)
         else:
@@ -3763,9 +3961,29 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
                                                 full_output=True, Dfun=jacob_second)
             finals.append(soln[-1][-1])
 
+            steps = len(soln)
+
+            time_series.append([soln[steps*0.1], soln[int(steps/2)], soln[-1]])
+
+            # and here the problem is' finals is only the very last
+            # but first you must conclude: what exactly is it that you want to
+            # present? what do you want to plot?
+
+            # option 1) 1 promoter at time 0, 50, and 100
+            # you will see the time evolution for 1 promoter
+
+            # option 2) 5 promoters at time 100
+            # you will see the difference in promoter concentration at the 'end
+            # of time' ( lol )
+
+            # option 3) a combination of the two, in such a way that you can
+            # choose either of the two in the futurum.
+            # save beg, mind, and end of all states. = 3 arrays of length max
+            # 20.
+
     if run_once:
 
-        return np.array(finals)
+        return np.array(finals), time_series
 
     # if not run once, you're called from an optimizer -> return the distance
     # vector; also include the distance from var(PY) with var(finals)
