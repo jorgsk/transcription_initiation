@@ -3192,7 +3192,7 @@ def fitting_models(lizt, ITSs):
 
     debug()
 
-def new_models(lizt, ITSs):
+def new_models(ITSs):
     """
     Define a linear ODE system that solves the movement on RNAP on the ITS.
     Optimize the system based on 3 parameters that will quantify the effect of
@@ -3223,36 +3223,43 @@ def new_models(lizt, ITSs):
 
     # Parameter ranges you want to test out
     #c1 = np.linspace(7, 12, 5)
-    c1 = np.array([20]) # insensitive to variation here
+    c1 = np.array([10]) # insensitive to variation here
     c2 = np.array([0]) # c2 is best evaluated to 0
     #c2 = np.linspace(0.005, 0.3, 15)*-1
-    c3 = np.linspace(0.001, 0.1, 6)
+    c3 = np.linspace(0.001, 0.1, 8)
     #c3 = np.array([0])
-    c4 = np.linspace(0.05, 0.5, 6)
+    c4 = np.linspace(0.05, 0.5, 8)
 
     par_ranges = (c1, c2, c3, c4)
 
-    its_range = range(8, 11)
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    its_range = range(6, 13)
 
     optim = False   # GRID
     #optimize = True   # OPTIMIZER
     # I trust the Grid more than the opt. Stick with it.
 
-    #randomize = 5 # here 0 = False (or randomize 0 times)
-    randomize = 0 # here 0 = False (or randomize 0 times)
+    randomize = 5 # here 0 = False (or randomize 0 times)
+    #randomize = 0 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
     initial_bubble = True
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
+    # Fit with 50% of ITS and apply the parameters to the remaining 50%
+    retrofit = 5
+    #retrofit = 1
 
-    results, rand_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
-                                           optim, randomize, t, initial_bubble)
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
+                                 randomize, retrofit, t, initial_bubble)
+
+    # extract the specific results
+    results, rand_results, retrof_results = all_results
 
     # ladder plot
-    #print_scrunch_ladder(results, rand_results, optim, randomize, par_ranges,
-                  #initial_bubble)
+    print_scrunch_ladder(results, rand_results, retrof_results, optim,
+                         randomize, par_ranges, initial_bubble)
 
     # scatter plot 
     #print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
@@ -3261,7 +3268,7 @@ def new_models(lizt, ITSs):
     # TODO make a plot/figure where you see the distribution of RNAP for 5
     # selected sequences over time.
     # time series
-    print_rnap_distribution(results, rand_results, initial_bubble, ITSs)
+    #print_rnap_distribution(results, rand_results, initial_bubble, ITSs)
 
     # RESULT rna-dna with opposite sign together with keq is better than dna-dna
     # and keq from nt = 13 and onward. rna-dna peaks at 82 and dna-dna at 78.
@@ -3272,7 +3279,6 @@ def new_models(lizt, ITSs):
     # robust with respect to changes in c1.
     # Make the whole thing automated.
 
-    # auto_figure_maker()
 
 def print_rnap_distribution(results, par_ranges, initial_bubble, ITSs):
     """
@@ -3333,31 +3339,128 @@ def print_rnap_distribution(results, par_ranges, initial_bubble, ITSs):
             ax.set_xticklabels([])
             ax.set_yticklabels([])
 
-def auto_figure_maker():
+def auto_figure_maker_new_models(ITSs):
     """
-    Print out all variations of the models with c1 constant.
-    Also show a version where c1 is not constant.
-    """
-
-    # How to do this?
-    # Pre-define model1, 2,3,4 etc by parameter values. then simply call the
-    # plot_functions with those parameters.
-
-    model1, model2, model3, model3 = get_models()
-
-def get_models():
-    """
-    Define some models
+    Simulate a set of pre-defined models, then print figures for all of them.
     """
 
-    #c1 = np.linspace(7, 12, 5)
-    c1 = np.array([20]) # insensitive to variation here
-    c2 = np.array([0]) # c2 is best evaluated to 0
-    #c2 = np.linspace(0.005, 0.3, 15)*-1
-    c3 = np.linspace(0.001, 0.1, 6)
-    #c3 = np.array([0])
-    c4 = np.linspace(0.05, 0.5, 6)
+    # Compare with the PY percentages in this notation
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
 
+    # Range of its values
+    its_range = range(6, 16)
+
+    optim = False   # GRID
+    #optim = True   # OPTIMIZER
+
+    #randomize = 5 # here 0 = False (or randomize 0 times)
+    randomize = 0 # here 0 = False (or randomize 0 times)
+
+    #initial_bubble = False
+    initial_bubble = True
+
+    # Time-grid; arbitrary units
+    t = np.linspace(0, 1., 100)
+
+    # Fit with 50% of ITS and apply the parameters to the 50% remaining
+    retrofit = 5
+    retrofit = 0
+
+    modelz = get_models(stepsize=5)
+
+    for m in modelz:
+        (par_ranges, descr) = m[:-1], m[-1]  # extract parameters and description
+
+        results, rand_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
+                                               optim, randomize, t, initial_bubble)
+
+        print_scrunch_ladder(results, rand_results, optim, randomize, par_ranges,
+                      initial_bubble, descr)
+
+def get_models(stepsize=5):
+    """
+    Define some models that test various hypotheseses ...
+
+    The models are defined by their parameters
+    """
+    s = stepsize
+
+    # Model 1 --
+    # c1 = const, zero RNA-DNA, DNA-DNA and Keq variable
+    m1 = (np.array([10]),
+          np.array([0]),
+          np.linspace(0.001, 0.1, s),
+          np.linspace(0.05, 0.5, s),
+          'M1: c1 = const, zero RNA-DNA, DNA-DNA and Keq variable')
+
+    # Model 2 --
+    # c1 = const, RNA-DNA variable, zero DNA-DNA, and Keq variable
+    m2 = (np.array([10]),
+          np.linspace(0.001, 0.2, s),
+          np.array([0]),
+          np.linspace(0.05, 0.5, s),
+         'M2: c1 = const, RNA-DNA variable, zero DNA-DNA, and Keq variable')
+
+    # Model 3 --
+    # c1 = const, RNA-DNA and DNA-DNA variable, and Keq zero
+    m3 = (np.array([10]),
+          np.linspace(0.001, 0.2, s),
+          np.linspace(0.001, 0.2, s),
+          np.array([0]),
+         'M3: c1 = const, RNA-DNA and DNA-DNA variable, and Keq zero')
+
+    # Model 4 --
+    # c1 = const, RNA-DNA, DNA-DNA, and Keq variable
+    m4 = (np.array([10]),
+          np.linspace(0.001, 0.2, s),
+          np.linspace(0.001, 0.2, s),
+          np.linspace(0.05, 0.5, s),
+         'M4: c1 = const, RNA-DNA, DNA-DNA, and Keq variable')
+
+    # Model 5 --
+    # c1 variable, RNA-DNA, DNA-DNA, and Keq constant
+    m5 = (np.linspace(2, 20, s),
+            np.array([0]),
+            np.array([0.05]),
+            np.array([0.2]),
+         'M5: c1 variable, RNA-DNA, DNA-DNA, and Keq constant')
+
+    # Model 6 --
+    # c1 = const, RNA-DNA variable, DNA-DNA and Keq zero
+    m6 = (np.array([10]),
+          np.linspace(0.001, 0.2, s),
+          np.array([0]),
+          np.array([0]),
+        'M6: c1 = const, RNA-DNA variable, DNA-DNA and Keq zero')
+
+    # Model 7 --
+    # c1 = const, RNA-DNA zero, DNA-DNA variable, and Keq zero
+    m7 = (np.array([10]),
+          np.array([0]),
+          np.linspace(0.001, 0.2, s),
+          np.array([0]),
+         'M7: c1 = const, RNA-DNA zero, DNA-DNA variable, and Keq zero')
+
+    # Model 8 --
+    # c1 = const, RNA-DNA zero, DNA-DNA zero, and Keq variable
+    m8 = (np.array([10]),
+          np.array([0]),
+          np.array([0]),
+          np.linspace(0.05, 0.5, s),
+         'M8: c1 = const, RNA-DNA zero, DNA-DNA zero, and Keq variable')
+
+    # Model 9 --
+    # All constant
+    m9 = (np.array([10]),
+          np.array([0]),
+          np.array([0.02]),
+          np.array([0.2]),
+         'M9: All constant but RNA-DNA zero')
+
+    #models = [m1, m2, m3, m4, m5, m6, m7, m8, m9]
+    models = [m1, m2, m3, m4, m7, m8, m9] # model 6 dsnt work
+
+    return models
 
 class Model(object):
     """
@@ -3439,8 +3542,9 @@ def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
         # that doesn't work for values close to zero. You need an absolute
         # measure.
 
-def print_scrunch_ladder(results, rand_results, optimize, randomize, par_ranges,
-                  initial_bubble):
+def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
+                         randomize, par_ranges, initial_bubble,
+                         description=False):
     """
     Alternative print-scrunch.
     [0][0] is the pearson for the real and the control
@@ -3461,18 +3565,28 @@ def print_scrunch_ladder(results, rand_results, optimize, randomize, par_ranges,
     # go over both the real and random results
     # This loop covers [0][0] and [0][1]
     for (ddict, name, colr) in [(results, 'real', 'b'),
-                                (rand_results, 'random', 'g')]:
+                                (rand_results, 'random', 'g'),
+                               (retrof_results, 'retrofitted', 'r')]:
 
-        # don't plot 'random' if you haven't included it
+        # don't process 'random' or 'retrofit' if not evaluated
         if False in ddict.values():
             continue
 
         # get its_index and corr-coeff from sorted dict
         if name == 'real':
-            indx, corr = zip(*[(r[0], r[1].corr_max) for r in sorted(ddict.items())])
+            indx, corr = zip(*[(r[0], r[1].corr_max)
+                               for r in sorted(ddict.items())])
 
         elif name == 'random':
-            indx, corr = zip(*[(r[0], r[1].corr_mean) for r in sorted(ddict.items())])
+            indx, corr = zip(*[(r[0], r[1].corr_mean)
+                               for r in sorted(ddict.items())])
+
+            stds = [r[1].corr_std for r in sorted(ddict.items())]
+
+        elif name == 'retrofitted':
+            indx, corr = zip(*[(r[0], r[1].corr_mean)
+                               for r in sorted(ddict.items())])
+
             stds = [r[1].corr_std for r in sorted(ddict.items())]
 
         # make x-axis
@@ -3483,7 +3597,12 @@ def print_scrunch_ladder(results, rand_results, optimize, randomize, par_ranges,
             axes[0].plot(incrX, corr, label=name, linewidth=2, color=colr)
 
         elif name == 'random':
-            axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2, color=colr)
+            axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
+                             color=colr)
+
+        elif name == 'retrofitted':
+            axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
+                             color=colr)
 
         # get its_index parameter values (they are index-sorted)
         if name == 'real':
@@ -3563,13 +3682,17 @@ def print_scrunch_ladder(results, rand_results, optimize, randomize, par_ranges,
             mi, ma = (format(min(par), '.3f'), format(max(par), '.3f'))
             for_join.append(let + ':({0}--{1})'.format(mi, ma))
 
-    descr = ', '.join(for_join)
+    if description:
+        descr = ', '.join(for_join) + '\n' + description
+    else:
+        descr = ', '.join(for_join)
+
     hedr = 'Approach: {0}. Nr random samples: {1}\n\n{2}\n'.format(approach,
                                                                randomize, descr)
     fig.suptitle(hedr)
 
 
-def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randize, t,
+def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randize, retrofit, t,
                    init_bubble):
     """
     Wrapper around grid_scrunch and opt_scrunch.
@@ -3581,6 +3704,7 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randize, t,
 
     results = {}
     results_random = {}
+    results_retrof = {}
 
     ### OPTMIZER
     if optimize:
@@ -3606,7 +3730,12 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randize, t,
             else:
                 optimized_obj = False
 
-            results_random[its_len] = optimized_obj
+            if retrofit:
+                pass # ...
+            else:
+                retrof_obj = False
+
+            results_retrof[its_len] = retrof_obj
 
     ### GRID
     if not optimize:
@@ -3623,16 +3752,29 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randize, t,
 
             results[its_len] = normal_obj
 
+            # Randomize
             if randize:
                 # get the results for randomized ITS versions
-                random_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr,
-                                       randomize=randize, initial_bubble=init_bubble)
+                random_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
+                                            state_nr, randomize=randize,
+                                            initial_bubble=init_bubble)
             else:
                 random_obj = False
 
+
+            # Retrofit
+            if retrofit:
+                retrof_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
+                                            state_nr, retrof=retrofit,
+                                            initial_bubble=init_bubble)
+            else:
+                retrof_obj = False
+
+            results_retrof[its_len] = retrof_obj
             results_random[its_len] = random_obj
 
-    return results, results_random
+
+    return results, results_random, results_retrof
 
 def opt_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=False):
     """
@@ -3701,7 +3843,7 @@ def get_optimized_result(variables, arguments, truth_table, constants):
     return Result(corr, pval, params, finals)
 
 
-def get_its_variables(ITSs, randomize=False):
+def get_its_variables(ITSs, randomize=False, retrofit=False, PY=False):
     """
     Get ITS objects and return a dict of their energy variables: RNA-DNA,
     DNA-DNA, Keq
@@ -3721,29 +3863,73 @@ def get_its_variables(ITSs, randomize=False):
 
         new_ITSs.append(ITSs_dict)
 
-    return new_ITSs
+    # if retrofit, divide the list in 2 with random indices. ALso split the PYs
+    # in the same way cause you need the its-> PY relationship
+    if retrofit:
+        its_nr = len(ITSs)
+        pickme = np.random.randint(its_nr, size=np.ceil(its_nr/2.0))
+
+        ITS_fitting = [new_ITSs[i] for i in pickme]
+        ITS_compare = [new_ITSs[i] for i in range(43) if i not in pickme]
+
+        PYs_fitting = [PY[i] for i in pickme]
+        PYs_compare = [PY[i] for i in range(43) if i not in pickme]
+
+        return ITS_fitting, ITS_compare, PYs_fitting, PYs_compare
+
+    else:
+
+        return new_ITSs
 
 def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
-                   initial_bubble=True):
+                   initial_bubble=True, retrof=0):
     """
-    Introduce scrunching to the model. This will give you values that reverse
-    the sign that's bugging you.
-
-    Your model is as follows:
-        c1*exp(-c2*rna_dna + c3*dna_dna - c4*ln(Keq))
+    Separate scruch calls into randomize, retrofit, or neither.
     """
 
-    if not randomize:
-        #go from ITS object to dict to appease the impotent pickle
-        ITS_variables = get_its_variables(ITSs)
+    # RETROFIT
+    if retrof:
+        retro_results = []
+        for repeat in range(retrof):
 
-        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs,
-                     initial_bubble)
+            # Choose 50% of the ITS randomly; both energies and PYs
+            retrovar = get_its_variables(ITSs, retrofit=True, PY=PYs)
+            #extract the stuff
+            ITS_fitting, ITS_compare, PYs_fitting, PYs_compare = retrovar
 
-        return grid_scrunch(arguments, ranges)
+            arguments_fit = (y0, t, its_len, state_nr, ITS_fitting, PYs_fitting,
+                           initial_bubble)
 
-    # if randomize, return the averaged results of the 'randomized' runs
-    else:
+            fit_result = grid_scrunch(arguments_fit, ranges)
+
+            # Skip if you don't get a result (should B OK with large ranges)
+            if not fit_result:
+                continue
+
+            # update the ranges to the optimal for the fitting
+            par_order = ('c1', 'c2', 'c3', 'c4')
+            fit_ranges = [np.array([fit_result.params_best[p]])
+                          for p in par_order]
+
+            # rerun with new arguments
+            arguments_compare = (y0, t, its_len, state_nr, ITS_compare, PYs_compare,
+                         initial_bubble)
+
+            # run the rest of the ITS with the optimal parameters
+            control_result = grid_scrunch(arguments_compare, fit_ranges)
+
+            # Skip if you don't get a result (should B OK with large ranges)
+            if not control_result:
+                continue
+
+            else:
+                retro_results.append(control_result)
+
+        # I think I can average just like for the random ...
+        return average_rand_result(retro_results)
+
+    # RANDOMIZE
+    elif randomize:
         rand_results = []
         for repeat in range(randomize):
 
@@ -3755,9 +3941,27 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
             arguments = (y0, t, its_len, state_nr, ITS_variables, PYs,
                          initial_bubble)
 
-            rand_results.append(grid_scrunch(arguments, ranges))
+            rand_result = grid_scrunch(arguments, ranges)
+
+            # skip if you don't get anything from this randomizer
+            if not rand_result:
+                continue
+
+            else:
+                rand_results.append(rand_result)
+
 
         return average_rand_result(rand_results)
+
+    # NO RETROFIT AND NO RANDOMIZE
+    else:
+        #go from ITS object to dict to appease the impotent pickle
+        ITS_variables = get_its_variables(ITSs)
+
+        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs,
+                     initial_bubble)
+
+        return grid_scrunch(arguments, ranges)
 
 def average_rand_result(rand_results):
     """make new corr, pvals, and params; just add them together; ignore the
@@ -3812,8 +4016,8 @@ def grid_scrunch(arguments, ranges):
     t1 = time.time()
 
     # make a pool of workers for multicore action
-    my_pool = multiprocessing.Pool(4)
-    #my_pool = multiprocessing.Pool(2)
+    #my_pool = multiprocessing.Pool(4)
+    my_pool = multiprocessing.Pool(2)
     results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
     my_pool.close()
     my_pool.join()
@@ -3832,6 +4036,13 @@ def grid_scrunch(arguments, ranges):
 
     # pick top 20
     top_hits = all_sorted[:20]
+
+    # XXX sometimes all_sorted is [] because the exponent was positive or the
+    # final result was << 0.1
+    # What is best to do in this case? Return 'False'? How is that going to be
+    # handled downstream? ...
+    if top_hits == []:
+        return False
 
     # now make separate corr, pvals, params, and finals arrays from these
     finals = np.array(top_hits[0][0]) # only get finals for the top top
@@ -3866,7 +4077,7 @@ def _multi_func(paras, arguments):
 
         # XXX this one is easy to forget ... you don't want answers where the
         # final values are too small
-        if sum(finals) < 0.01:
+        if sum(finals) < 0.001:
             continue
 
         # correlation
@@ -4239,8 +4450,11 @@ def main():
 
     #new_scatter(lizt, ITSs)
 
-    # the ODE models
-    new_models(lizt, ITSs)
+    # XXX the new ODE models
+    #new_models(ITSs)
+
+    # Making figures from all the new models in one go
+    #auto_figure_maker_new_models(ITSs)
 
     # the naive exp-fitting models
     #fitting_models(lizt, ITSs)
