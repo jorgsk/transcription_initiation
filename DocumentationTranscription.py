@@ -969,7 +969,7 @@ def new_ladder(lizt):
                 ('RNA-DNA - Translocation', super_en)]
     # The r_f, k1, and K_eq correlate (r_f positively and k1 and K_eq negatively
 
-    plt.ion()
+    #plt.ion()
     fig, ax = plt.subplots()
 
     colors = ['b', 'g', 'c', 'k']
@@ -3220,6 +3220,7 @@ def new_models(ITSs):
     """
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
+    debug()
 
     # Parameter ranges you want to test out
     #c1 = np.linspace(7, 12, 5)
@@ -3265,19 +3266,9 @@ def new_models(ITSs):
     #print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
                   #initial_bubble, PYs)
 
-    # TODO make a plot/figure where you see the distribution of RNAP for 5
-    # selected sequences over time.
-    # time series
+    # a plot/figure where you see the distribution of RNAP for 5 selected
+    # sequences over time.
     #print_rnap_distribution(results, rand_results, initial_bubble, ITSs)
-
-    # RESULT rna-dna with opposite sign together with keq is better than dna-dna
-    # and keq from nt = 13 and onward. rna-dna peaks at 82 and dna-dna at 78.
-
-    # TODO make 3/4 figures with different models; show that the one with
-    # rna-dna is marginally better. Show what happens when you turn 'off' the
-    # initial scrunching parameter. Any more tweaks? Maybe that the solution is
-    # robust with respect to changes in c1.
-    # Make the whole thing automated.
 
 
 def print_rnap_distribution(results, par_ranges, initial_bubble, ITSs):
@@ -3348,13 +3339,13 @@ def auto_figure_maker_new_models(ITSs):
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Range of its values
-    its_range = range(6, 16)
+    its_range = range(3, 19)
 
     optim = False   # GRID
     #optim = True   # OPTIMIZER
 
-    #randomize = 5 # here 0 = False (or randomize 0 times)
-    randomize = 0 # here 0 = False (or randomize 0 times)
+    randomize = 10 # here 0 = False (or randomize 0 times)
+    #randomize = 0 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
     initial_bubble = True
@@ -3363,19 +3354,36 @@ def auto_figure_maker_new_models(ITSs):
     t = np.linspace(0, 1., 100)
 
     # Fit with 50% of ITS and apply the parameters to the 50% remaining
-    retrofit = 5
-    retrofit = 0
+    retrofit = 10
+    #retrofit = 0
 
-    modelz = get_models(stepsize=5)
+    modelz = get_models(stepsize=10)
+
+    # TODO include the paramaters in the plots so you know for the future ... 
 
     for m in modelz:
         (par_ranges, descr) = m[:-1], m[-1]  # extract parameters and description
 
-        results, rand_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
-                                               optim, randomize, t, initial_bubble)
+        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
+                                     randomize, retrofit, t, initial_bubble)
 
-        print_scrunch_ladder(results, rand_results, optim, randomize, par_ranges,
-                      initial_bubble, descr)
+        results, rand_results, retrof_results = all_results
+
+        fig = print_scrunch_ladder(results, rand_results, retrof_results, optim,
+                             randomize, par_ranges, initial_bubble, descr)
+
+        # save the figure (fig_dirs is global ..)
+        for fig_dir in fig_dirs:
+            for formt in ['pdf', 'eps', 'png']:
+
+                name = 'Model_{0}.'.format(descr[1]) + formt
+                odir = os.path.join(fig_dir, formt)
+
+                if not os.path.isdir(odir):
+                    os.makedirs(odir)
+
+                fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+
 
 def get_models(stepsize=5):
     """
@@ -3491,7 +3499,7 @@ def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
     Isn't it then marvelous that you got such a good match between PY and the
     'abortive propensity' initially? A little bit too marvelous for my flavor.
     """
-    plt.ion()
+    #plt.ion()
 
     PYs = PYs*100
 
@@ -3550,7 +3558,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     [0][0] is the pearson for the real and the control
     [0][1] is the parameters for the pearson fit
     """
-    plt.ion()
+    #plt.ion()
     fig, axes = plt.subplots(1,2)
 
     colors_params = ['r', 'c', 'm', 'k']
@@ -3643,16 +3651,16 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         ax.set_xticks(range(3,21))
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,21)
-        ax.set_xlabel("Nucleotide from transcription start", size=23)
+        ax.set_xlabel("Nucleotide from transcription start", size=20)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
-            l.set_fontsize(14)
+            l.set_fontsize(12)
         for l in ax.get_yticklabels():
-            l.set_fontsize(14)
+            l.set_fontsize(12)
 
-    axes[0].set_ylabel("Correlation coefficient, $r$", size=23)
-    axes[1].set_ylabel("Model parameter values", size=23)
+    axes[0].set_ylabel("Correlation coefficient, $r$", size=20)
+    axes[1].set_ylabel("Model parameter values", size=20)
 
     axes[0].set_yticks(np.arange(-1, 1.1, 0.1))
     #axes[0].set_yticks(np.arange(0, 1, 0.1))
@@ -3665,8 +3673,8 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     #axes[1].set_yticklabels(yticklabels_1)
     #axes[1].set_ylim(-0.05, 0.5)
 
-    #fig.set_figwidth(9)
-    #fig.set_figheight(10)
+    fig.set_figwidth(15)
+    fig.set_figheight(10)
 
     if optimize:
         approach = 'Least squares optimizer'
@@ -3690,6 +3698,8 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     hedr = 'Approach: {0}. Nr random samples: {1}\n\n{2}\n'.format(approach,
                                                                randomize, descr)
     fig.suptitle(hedr)
+
+    return fig
 
 
 def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randize, retrofit, t,
@@ -3926,6 +3936,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
                 retro_results.append(control_result)
 
         # I think I can average just like for the random ...
+        # XXX Bug what if this one is empty too! :S
         return average_rand_result(retro_results)
 
     # RANDOMIZE
@@ -4440,6 +4451,30 @@ def parameter_matrix(rates, states, variables):
 
     return np.array(rows)
 
+def candidate_its(ITSs):
+    """
+    Based on your models you must now suggest new sequences.
+    """
+
+    # 1) Choose a set of parameter values based on your simulations (not important
+    # which in the beginning)
+
+    # 2) Determine a range (of PY values) you would like the sequences output to
+    # be (from 0.003 to  0.08 - > 0.3 to 8 in the experiment; you can go from
+    # 0.1 to 10; and make sure that your values are equally spreadout like a
+    # linspace
+
+    # 3) Iteratively solve X random dna sequences (13 variables, but exclude
+    # poly X stretche). Note the score of each. Then use the same method as you
+    # used for the 'naive' approach to keep a set of sequences
+
+    # 4) Check these sequences against your 'naive' model. It should hold up
+    # there as well.
+
+    # 5) Profit? Send the seqs to Hsu ...
+
+    # 6) Start writing the paper, or look into 
+
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
@@ -4453,8 +4488,18 @@ def main():
     # XXX the new ODE models
     #new_models(ITSs)
 
-    # Making figures from all the new models in one go
-    #auto_figure_maker_new_models(ITSs)
+    # XXX Making figures from all the new models in one go
+    auto_figure_maker_new_models(ITSs)
+
+    # XXX Generate candidate sequences! :)
+    #candidate_its(ITSs)
+
+    # RESULT now you've got those figures. You'll need to let it run for a
+    # while witha huge grid, with random and with retrofitting. Then what? Is
+    # that going to be it? What more models must be included?
+    # Maybe you can rewrite the biophysics...? And make a latex-table for the
+    # Delta G energies. Einstein calling: add the 'equation' dir to the github
+    # repo ...
 
     # the naive exp-fitting models
     #fitting_models(lizt, ITSs)
@@ -4492,9 +4537,6 @@ def main():
     # Is there any covariance between DPKM and ribosomal gene for the energy
     # terms you've found? I suggest using only 1-promoter genes
 
-    # NOTE nothing on the AP ... maybe you got them wrong or somth. Dozntmatter.
-    # last thing to check: abortive probabilities. Would be awzm if they match.
-    # TODO: plot the AP against the super_values as bar-plots
     #new_AP(lizt, ITSs)
     # RESULT: variance of AP correlates with variance of energy
     # Does that mean that variance of AP correlates with PY? Yes, but
