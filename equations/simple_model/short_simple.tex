@@ -1,0 +1,175 @@
+%\documentclass[a4paper, draft]{article}
+\documentclass[a4paper]{article}
+
+% A new package for bibliography
+% Use biber for bibtex and pdflatex instead of latex
+\usepackage[backend=biber]{biblatex}
+% new from biblatex
+\addbibresource{/home/jorgsk/phdproject/bibtex/jorgsk.bib}
+
+% Support for unicode
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+\usepackage{amsmath,amsfonts,amssymb,amsthm,booktabs,array,mathtools,mhchem}
+% consider package mhchem for typesetting chemical formulas
+
+% Proper space and font for integral differential term
+\newcommand{\te}[1]{\text{#1}} 
+\newcommand{\dd}{\; \mathrm{d}} 
+% Shorcut for ODEs with proper font
+\newcommand{\diff}[2]{\frac{\mathrm{d} #1}{\mathrm{d} #2}}
+% Shortcut for PDEs with proper font (shortcut: PDB)
+\newcommand{\pdiff}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\pdiffn}[3]{\frac{\partial^{#3} #1}{\partial #2^{#3}}}
+
+% Absolute value and norm commands.
+% Read the mathtools.pdf to fix these!
+\providecommand{\abs}[1]{\lvert#1\rvert} 
+\providecommand{\norm}[1]{\lVert#1\rVert}
+
+% Set the depth of section numbering
+\setcounter{secnumdepth}{0}
+
+\begin{document} 
+\noindent
+
+\subsection{Background}
+We have found a strong and consistent correlation $(r ~ 0.8, p < 0.0001)$
+between the productive yield ($PY$) and the parameters $\Delta
+G_{\text{RNA-DNA}}$ and $Keq$. The correlation we found was
+on the following form:
+\\
+\begin{equation}
+	PY \sim \Delta G_{\text{RNA-DNA}} - Keq
+	\label{eq:FRS}
+\end{equation}
+\\
+We found this relationship almost by accident. Now  we need to ascertain the
+physical meaning of this relationship.
+
+A clue can be found in the scatterplot: there is an exponential relationship between
+the right and left side of equation \ref{eq:FRS}. Thus, we are looking for a
+term on the form
+\begin{equation}
+	PY \sim e^{\Delta G_{\text{RNA-DNA}} - Keq}
+	\label{eq:goal}
+\end{equation}
+
+\subsection{Chemical equation for RNAP movement}
+
+Below is a reaction equation for the RNA polymerase as it is translocating on DNA.
+
+\begin{itemize}
+	\item $\te{R}_i^{\te{e}}$ is the pre-translocated polymerase at nucleotide $i$
+	\item $\te{R}_{i+1}^{\te{e}}$ is the pre-translocated polymerase at nucleotide $i+1$
+	\item $\te{R}_i^{\te{s}}$ is the post-translocated polymerase at nucleotide $i$
+	\item $\te{N}_{\te{t}}$ is the incoming NTP
+	\item $\te{PP}_i$ is the released $\te{PP}_i$ from nucleotide incorporation
+\end{itemize}
+In the reaction equation RNAP osscillates between the pre-translocated and the
+post-translocated step at some nucleotide position $i$. In the
+post-translocated step, a nucleotide $\te{N}_{\te{t}}$ may bind in the active
+site. This nucleotide might then be incorporated, bringing RNAP to position
+$i+1$ and at the same time releasing $\te{PP}_i$.
+\\
+\begin{align}
+\dots\ce{R_i^{\text{e}}
+<=>
+R_i^{\text{s}}
+<=>
+R_i^{\text{s}}N_t
+<=>
+R_{i+1}^{\text{e}}
++ PP_i\dots
+}
+\label{eq:full}
+\end{align}
+\\
+This reaction ignores all pathways related to backtracking and abortion.
+
+By skipping the nucleotide binding step and assuming that translocation is at
+equilibrium, we obtain the following simplified equation:
+\\
+\begin{align}
+\dots\ce{R_i^{\text{e}}
+<=>[\ce{Keq_i}]
+R_i^{\text{s}}
+->[\ce{k1_i}]
+R_{i+1}^{\text{e}}\dots
+}
+\label{eq:reduced3}
+\end{align}
+\\
+Here ($Keq_i$) is the equilibrium constant for the translocation step:
+\begin{equation}
+	\te{R}_i^{\te{s}} = \frac{\te{R}_i^{\te{e}}}{Keq_i}
+	\label{eq:keq}
+\end{equation}
+Also the reaction rate $k_1$ is the rate of the nucleotide incorporation step:
+
+\subsection{From chemical equation to differential equation}
+By assuming mass action kinetics, and using
+\begin{equation*}
+	k_1 = Ke^{-\frac{\Delta G}{RT}},
+\end{equation*}
+we arrive at the following expression:
+\begin{equation*}
+	\diff{\te{R}_{i+1}^{\te{e}}}{t} = Ke^{-\frac{\Delta G}{RT}}\te{R}_{i}^{\te{s}}.
+\end{equation*}
+Inserting for equation \ref{eq:keq}, we get
+\begin{equation*}
+	\diff{\te{R}_{i+1}^{\te{e}}}{t} = Ke^{-\frac{\Delta G}{RT}}\frac{\te{R}_i^{\te{e}}}{Keq_i}
+\end{equation*}
+By using
+\begin{equation*}
+	Keq_i = e^{\te{ln}(Keq_i)}
+\end{equation*}
+we obtain
+\begin{align*}
+	\frac{k_1}{Keq} &= \frac{Ke^{-\frac{\Delta G}{RT}}}{e^{\te{ln}(Keq)}}\\
+	                &= Ke^{-\frac{\Delta G}{RT} - \te{ln}(Keq)}
+\end{align*}
+Thus 
+\begin{equation}
+	\diff{\te{R}_{i+1}^{\te{e}}}{t} \sim e^{-\frac{\Delta G}{RT} - \te{ln}(Keq)}
+	\label{eq:stuff}
+\end{equation}
+If we assume that $\Delta G$ from the rate of nucleotide incorporation is
+similar to $\Delta G_{\text{RNA-DNA}}$. Further the term $RT$ evaluates to
+0.62. Thus we have 
+\begin{equation*}
+	\diff{\te{R}_{i+1}^{\te{e}}}{t} \sim e^{-1.6\Delta G_{\text{RNA-DNA}} - \te{ln}(Keq)}
+\end{equation*}
+which is a term very similar to what we started out with, namely:
+\begin{equation*}
+	e^{\Delta G_{\text{RNA-DNA}} - Keq}
+\end{equation*}
+
+\subsection{Results}
+
+\subsection{Conclusion}
+By performing some simplifying assumptions on the reaction \ref{eq:full}, we
+have arrived at a term for the rate of RNAP elongation that is similar to the
+term we originally started with.
+
+The biggest difference between the two expressions is in the sign of $\Delta
+G_{\text{RNA-DNA}}$. Since values for $Keq$ are around 1, taking the logarithm
+does not change these values much in magnitude ($log(x)$ is near linear around
+$x = 1$).
+
+As a result, I simulated a set of ordinary differential equations based on
+equation \ref{eq:stuff}. I get a nice correlation $(r = 0.7)$ -- except that I
+must change the sign of $\Delta G_{\text{RNA-DNA}}$ from negative to positive.
+Otherwise the correlation breaks down.
+
+What is the cause of the sign-mismatch? I have gone over the maths several
+times and find no mistakes. Is there a way around this which makes sense
+physically?
+
+% new from biblatex
+%\printbibliography
+
+\end{document}
+
+
