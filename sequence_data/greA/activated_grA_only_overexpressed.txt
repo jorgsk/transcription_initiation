@@ -1,0 +1,104 @@
+rpsT 	b0023 	+2 	30S ribosomal subunit protein S20
+aceE 	b0114 	+4.9 	Pyruvate dehydrogenase (decarboxylase component)
+aceF 	Z0125 	+4.9 	(EDL933) pyruvate dehydrogenase (dihydrolipoyltransacetylase component)
+t44 	b4414 	+3.3 	Small RNA of unknown function (tff)
+rpsB 	b0169 	+2.3 	30S ribosomal subunit protein S2
+tsf 	b0170 	+2.0 	Protein chain elongation factor EF-Ts
+cyoD 	b0429 	+3.5 	Cytochrome o ubiquinol oxidase subunit IV
+cyoC 	b0430 	+3 	Cytochrome o ubiquinol oxidase subunit III
+cyoB 	b0431 	+2.3 	Cytochrome o ubiquinol oxidase subunit I
+cyoA 	b0432 	+4.4 	Cytochrome o ubiquinol oxidase subunit II
+ylaCc 	b0458 	+1.7 	Predicted inner membrane protein
+cusFb 	b0573 	+2.5 	Periplasmic copper-binding protein (ylcC)
+ompX 	b0814 	+2.3 	Outer membrane protein X
+rpsAb 	b0911 	+4.0 	30S ribosomal subunit protein S1
+flgEb 	b1076 	+2.0 	Flagellar biosynthesis, hook protein
+sraBc 	b4418 	+3.2 	Small RNA
+yceD 	b1088 	+3.1 	Conserved protein
+rpmF 	b1089 	+4.1 	50S ribosomal subunit protein L32
+ptsG 	b1101 	+2.5 	PTS system, glucose-specific IIBC component
+lpp 	b1677 	+1.8 	Murein lipoprotein
+rplT 	b1716 	+1.7 	50S ribosomal subunit protein L20 and regulator
+rpmI 	b1717 	+1.8 	50S ribosomal subunit protein A
+infC 	Z2747 	+2.0 	(EDL933) initiation factor IF-3
+rplYc 	b2185 	+2.5 	50S ribosomal subunit protein L25
+ackA 	b2296 	+3.9 	Acetate kinase
+pta 	b2297 	+3.4 	Phosphotransacetylase
+yfdHc 	b2351 	+2.5 	Putative glycan biosynthesis enzyme CPS-53 (KpLE1) prophage; bactoprenol glucosyl transferase
+rplS 	b2606 	+2.2 	50S ribosomal subunit protein L19
+trmD 	b2607 	+2.0 	tRNA methyltransferase; tRNA (guanine-7-)-methyltransferase
+rimM 	b2608 	+2.1 	16S rRNA processing protein; ribosome maturation protein
+rpsP 	b2609 	+2.3 	30S ribosomal subunit protein S16
+deaDc 	b3162 	+1.9 	Inducible ATP-independent RNA helicase
+nlpIc 	b3163 	+2.2 	Conserved proteins, lipoprotein involved in cell division
+rpsO 	b3165 	+2.5 	30S ribosomal subunit protein S15
+rbfA 	b3167 	+1.9 	Ribosome-binding factor A
+yhbC 	b3170 	+1.8 	Conserved protein
+yhbYc 	b3180 	+1.6 	Predicted RNA-binding protein containing KH domain; possibly a ribosomal protein
+yhbEc 	b3184 	+2.3 	Conserved inner membrane protein
+rplU 	b3186 	+2.2 	50S ribosomal subunit protein L21
+rpsI 	b3230 	+2.6 	30S ribosomal subunit protein S9
+rplM 	b3231 	+2.7 	50S ribosomal subunit protein L13
+accB 	b3255 	+1.9 	Acetyl-CoA carboxylase, BCCP (biotin carboxyl carrier protein) subunit; carrier of biotin
+accC 	b3256 	+1.8 	Acetyl-CoA carboxylase, biotin carboxylase subunit
+dusB 	b3260 	+2.2 	tRNA-dihydrouridine synthase B (putative dehydrogenase, aka yhdG)
+fis 	b3261 	+3.8 	Site-specific DNA inversion stimulation factor; DNA-binding protein; a transactivator for transcription
+rplQ 	b3294 	+2.8 	50S ribosomal subunit protein L17
+rpoA 	b3295 	+2.3 	RNA polymerase, alpha subunit
+rpsD 	b3296 	+2.5 	30S ribosomal subunit protein S4
+rpsK 	b3297 	+2.6 	30S ribosomal subunit protein S11
+rpsM 	b3298 	+2.3 	30S ribosomal subunit protein S13
+rpmJ 	b3299 	+2.7 	50S ribosomal subunit protein L36
+prlA 	b3300 	+4.3 	Putative ATPase subunit of translocase
+rplO 	b3301 	+3.1 	50S ribosomal subunit protein L15
+rpmD 	b3302 	+3.7 	50S ribosomal subunit protein L30
+rpsE 	b3303 	+3.7 	30S ribosomal subunit protein S5
+rplR 	b3304 	+3.1 	50S ribosomal subunit protein L18
+rplF 	b3305 	+4.1 	50S ribosomal subunit protein L6
+rpsH 	b3306 	+3.2 	30S ribosomal subunit protein S8, and regulator
+rpsN 	b3307 	+3.2 	30S ribosomal subunit protein S14
+rplE 	b3308 	+2.7 	50S ribosomal subunit protein L5
+rplX 	b3309 	+3.2 	50S ribosomal subunit protein L24
+rplN 	b3310 	+3.3 	50S ribosomal subunit protein L14
+rpsQ 	b3311 	+4.2 	30S ribosomal subunit protein S17
+rpmC 	b3312 	+3.1 	50S ribosomal subunit protein L29
+rplP 	b3313 	+3.5 	50S ribosomal subunit protein L16
+rpsC 	b3314 	+3.2 	30S ribosomal subunit protein S3
+rplV 	b3315 	+3.3 	50S ribosomal subunit protein L22
+rpsS 	b3316 	+3.1 	30S ribosomal subunit protein S19
+rplB 	b3317 	+3.1 	50S ribosomal subunit protein L2
+rplW 	b3318 	+2.9 	50S ribosomal subunit protein L23
+rplD 	b3319 	+3.0 	50S ribosomal subunit protein L4, regulator of rpsJ operon
+rplC 	b3320 	+2.3 	50S ribosomal subunit protein L3
+rpsJ 	b3321 	+2.9 	30S ribosomal subunit protein S10
+fusA 	b3340 	+2.0 	GTP-binding protein chain elongation factor EF-G
+rpsG 	b3341 	+2.0 	30S ribosomal subunit protein S7, initiates assembly
+rpsL 	b3342 	+2.5 	30S ribosomal subunit protein S12
+htrLc 	b3618 	+1.6 	Involved in lipopolysaccharide biosynthesis
+rpmG 	b3636 	+2.4 	50S ribosomal subunit protein L33
+rpmB 	b3637 	+2.6 	50S ribosomal subunit protein L28
+rpmH 	b3703 	+2.4 	50S ribosomal subunit protein L34
+rnpA 	b3704 	+2.6 	RNase P, protein component; protein C5
+atpD 	b3732 	+1.9 	Membrane-bound ATP synthase, F1 sector, beta-subunit
+atpG 	b3733 	+1.7 	Membrane-bound ATP synthase, F1 sector, gamma-subunit
+atpA 	b3734 	+2.2 	Membrane-bound ATP synthase, F1 sector, alpha-subunit
+atpH 	b3735 	+1.7 	Membrane-bound ATP synthase, F1 sector, delta-subunit
+atpE 	b3737 	+2.4 	Membrane-bound ATP synthase, F0 sector, subunit c
+atpB 	b3738 	+1.6 	Membrane-bound ATP synthase, F0 sector, subunit a
+rbsDb 	b3748 	+1.7 	d-Ribose high-affinity transport system; membrane-associated protein
+trxAc 	b3781 	+1.6 	Thioredoxin 1
+rhoL 	b3782 	+2.3 	rho operon leader peptide
+rho 	b3783 	+1.9 	Transcription termination factor Rho; polarity suppressor
+typAc 	b3871 	+1.8 	GTP-binding protein; predicted membrane GTPase involved in stress response
+rpmE 	b3936 	+3.4 	50S ribosomal subunit protein L31
+rplK 	b3983 	+3.2 	50S ribosomal subunit protein L11
+rplA 	b3984 	+2.5 	50S ribosomal subunit protein L1, regulates synthesis of L1 and L11
+rplJ 	b3985 	+2 	50S ribosomal subunit protein L10
+rplL 	b3986 	+1.9 	50S ribosomal subunit protein L7L12
+rpoB 	b3987 	+1.9 	RNA polymerase, beta subunit
+rpoC 	b3988 	+2 	RNA polymerase, beta prime subunit
+rpsF 	b4200 	+4.5 	30S ribosomal subunit protein S6
+priB 	b4201 	+5.2 	Primosomal replication protein N
+rpsR 	b4202 	+4.2 	30S ribosomal subunit protein S18
+rplI 	b4203 	+2.1 	50S ribosomal subunit protein L9
+hsdSc 	b4348 	+1.9 	Specificity determinant for hsdM and hsdR

@@ -1,0 +1,81 @@
+talB 	b0008 	−1.9 	−2.0 	Transaldolase
+dnaK 	b0014 	−3.5 	−3.1 	Hsp70 chaperone; DNA biosynthesis; autoregulated heat shock proteins
+dnaJ 	b0015 	−2.4 	−2.3 	Heat shock protein; chaperone with DnaK
+acnB 	b0118 	−1.9 	−1.7 	Aconitate hydrase B (TCA cycle)
+betA 	b0311 	−1.7 	−2.6 	Choline dehydrogenase, a flavoprotein
+betB 	b0312 	−2.5 	−3.2 	NAD+-dependent betaine aldehyde dehydrogenase
+betI 	b0313 	−4.4 	−4.3 	Probably transcriptional repressor of bet genes
+bolA 	b0435 	−2.8 	−2.8 	Transcription regulator of penicillin binding proteins, β-lactamase, and possibly, of murein genes; osmotic stress-induced morphogen
+clpP 	b0437 	−2.0 	−2.3 	ATP-dependent proteolytic subunit of clpA-clpP and clpX-clpP serine protease, heat shock protein
+clpX 	b0438 	−2.4 	−2.1 	ATPase and specificity subunit of ClpX-ClpP ATP-dependent serine protease
+lon 	b0439 	−2.1 	−2.8 	DNA-binding, ATP-dependent protease La; heat shock K protein
+sucA 	b0726 	−4.1 	−3.7 	2-Oxoglutarate dehydrogenase (decarboxylase component)
+sucB 	b0727 	−2.9 	−4.1 	2-Oxoglutarate dehydrogenase (dihydrolipoyltranssuccinase E2 component)
+sucC 	b0728 	−3.1 	−4.4 	Succinyl-CoA synthetase, beta subunit
+sucD 	b0729 	−2.4 	−3.7 	Succinyl-CoA synthetase, alpha subunit
+gpmA 	b0755 	−1.9 	−3.2 	Phosphoglyceromutase 1
+galM 	b0756 	−2.0 	−1.9 	Galactose-1-epimerase (mutarotase)
+galK 	b0757 	−1.9 	−2.9 	Galactokinase
+galT 	b0758 	−1.9 	−2.8 	Galactose-1-phosphate uridylyltransferase
+galE 	b0759 	−1.7 	−2.6 	UDP-galactose-4-epimerase
+glnHb 	b0811 	−1.8 	−2.3 	Periplasmic glutamine-binding protein; permease
+cspD 	b0880 	−1.8 	−1.9 	Cold shock protein homolog; stress induced DNA replication inhibitor
+clpA 	b0882 	−2 	−2.8 	ATP-binding component of serine protease, chaperone activity
+lrp 	b0889 	−3.3 	−2.2 	Regulator for leucine (or lrp) regulon and high-affinity branched-chain amino acid transport system
+lolAc 	b0891 	−2.1 	−1.9 	Chaperone for lipoproteins; periplasmic protein effects translocation of lipoproteins from inner membrane to outer membrane
+ompF 	b0929 	−1.7 	−2.6 	Outer membrane protein 1a (Ia;b;F)
+pepNc 	b0932 	−1.8 	−2.5 	Aminopeptidase N
+icdA 	b1136 	−2.6 	−2.5 	Isocitrate dehydrogenase, specific for NADP+ (TCA cycle)
+oppA 	b1243 	−2.8 	−2.4 	Oligopeptide transport; periplasmic binding protein
+oppB 	b1244 	−2.9 	−2.5 	Oligopeptide transport permease protein
+trpA 	b1260 	−1.8 	−3.5 	Tryptophan synthase, alpha protein
+trpB 	b1261 	−1.8 	−2.5 	Tryptophan synthase, beta protein
+aldA 	b1415 	−4.5 	−5.1 	Aldehyde dehydrogenase A, NAD-linked
+maeA 	b1479 	−2.1 	−2.6 	NAD-linked malate dehydrogenase (decarboxylating, NAD-requiring) (malic enzyme) (TCA cycle)
+rpsV 	b1480 	−2.7 	−3.2 	30S ribosomal subunit protein S22; stationary phase-induced ribosome-associated protein
+fumA 	b1612 	−3.4 	−2.6 	Fumarase A fumarate hydratase class I; aerobic isozyme
+mglC 	b2148 	−3.0 	−2.6 	Methyl-galactoside transport and galactose taxis
+mglA 	b2149 	−3.2 	−2.8 	ATP-binding component of methyl-galactoside transport and galactose taxis
+mglB 	b2150 	−4.1 	−4.6 	Galactose-binding transport protein; receptor for galactose taxis
+galS 	b2151 	−1.5 	−1.9 	mgl repressor, galactose operon inducer
+glpQ 	b2239 	−2.2 	−3.2 	Glycerophosphodiester phosphodiesterase, periplasmic
+glpT 	b2240 	−2.9 	−3.3 	sn-Glycerol-3-phosphate permease
+maeBc 	b2463 	−1.8 	−2.6 	Fused malic enzyme predicted oxidoreductase/predicted phosphotransacetylase
+clpB 	b2592 	−2 	−3.7 	Heat shock protein
+raiAc 	b2597 	−1.5 	−2.3 	Putative yhbH sigma 54 modulator; cold shock protein associated with 30S ribosomal subunit (also known as yfiA)
+rpoS 	b2741 	−2.3 	−2.6 	RNA polymerase, sigma S (sigma38) factor; synthesis of many growth phase related proteins
+nlpD 	b2742 	−2.1 	−2.1 	Lipoprotein
+yqjCc 	b3097 	−1.7 	−2.8 	Conserved protein
+yqjDc 	b3098 	−1.5 	−2.3 	Conserved protein
+yhcH 	c3975 	−2.6 	−2.6 	(CFT073) hypothetical protein
+nanK 	b3222 	−2.4 	−1.8 	Predicted N-acetylmannosamine kinase
+nanE 	b3223 	−2.8 	−3.0 	Predicted N-acetylmannosamine-6-P epimerase
+nanA 	b3225 	−3.6 	−5.4 	N-Acetylneuraminate lyase (aldolase); catabolism of sialic acid; not K-12?
+mdh 	b3236 	−2.5 	−4.1 	Malate dehydrogenase (TCA cycle)
+hslRc 	b3400 	−1.8 	−1.9 	Ribosome-associated heat shock protein Hsp15
+malQ 	b3416 	−1.8 	−2.8 	4-Alpha-glucanotransferase (amylomaltase)
+malP 	c4194 	−2.0 	−3.5 	(CFT073) Maltodextrin phosphorylase
+glpD 	b3426 	−2.1 	−4.9 	sn-Glycerol-3-phosphate dehydrogenase (aerobic) (divergent from glpEGR operon)
+dppAc 	b3544 	−2.5 	−2.7 	Dipeptide transport protein
+lldP 	b3603 	−2 	−2.6 	l-Lactate permease
+lldR 	b3604 	−2.5 	−3.5 	Transcriptional regulator
+lldD 	b3605 	−3.1 	−2 	l-Lactate dehydrogenase
+glpK 	b3926 	−2.3 	−4.4 	Glycerol kinase
+glpF 	b3927 	−2.9 	−4.9 	Facilitated diffusion of glycerol
+hslU 	b3931 	−2.2 	−2.6 	Heat shock protein hslVU, ATPase subunit, homologous to chaperones
+hslV 	b3932 	−3.2 	−2.8 	Heat shock protein hslVU, proteasome-related peptidase subunit
+ftsNc 	b3933 	−1.6 	−1.6 	Essential cell division protein
+aceB 	b4014 	−2.3 	−4.3 	Malate synthase A (glyoxylate cycle)
+aceA 	b4015 	−2.2 	−4.1 	Isocitrate lyase (glyoxylate cycle)
+malG 	b4032 	−2.1 	−2.8 	Part of maltose permease, inner membrane
+malF 	b4033 	−3.2 	−3.7 	Part of maltose permease, periplasmic
+malE 	b4034 	−1.9 	−5.8 	Periplasmic maltose-binding protein; substrate recognition for transport and chemotaxis
+malK 	b4035 	−4.2 	−7.5 	ATP-binding component of transport system for maltose
+lamB 	b4036 	−3.1 	−7.1 	Phage lambda receptor protein; maltose high-affinity receptor
+malM 	b4037 	−4.5 	−6.5 	Periplasmic protein of mal regulon
+groS 	b4142 	−2.7 	−3.5 	GroES, 10-kDa chaperone binds to Hsp60 in presence of Mg-ATP, suppressing its ATPase activity
+groL 	b4143 	−3.1 	−3.2 	GroEL, chaperone Hsp60, peptide-dependent ATPase, heat shock protein
+yjiA 	b4352 	−3.4 	−2.2 	Predicted GTPase
+yjiX 	b4353 	−3.9 	−3.7 	Conserved protein
+yjiY 	b4354 	−5.1 	−7.1 	Putative carbon starvation protein; predicted inner membrane protein
+osmY 	b4376 	−2.5 	−2.8 	Hyperosmotically inducible periplasmic protein

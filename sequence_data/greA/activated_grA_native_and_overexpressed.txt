@@ -1,0 +1,19 @@
+cydA 	b0733 	+1.7 	+1.6 	Cytochrome d terminal oxidase, polypeptide subunit I
+cydB 	b0734 	+1.5 	+1.6 	Cytochrome d terminal oxidase polypeptide subunit II
+ndh 	b1109 	+1.5 	+2.6 	Respiratory NADH dehydrogenase/cupric reductase
+emrYb 	b2367 	+2.4 	+1.6 	Predicted multidrug resistance protein Y (multidrug efflux system)
+yfiD 	b2579 	+2.4 	+2.5 	Formate acetyltransferase; stress-induced alternate pyruvate formate-lyase subunit
+ypjLc 	b2639 	+1.9 	+2.2 	Putative pump protein, CP4-57 prophage; predicted inner membrane protein
+dctRc 	b3507 	+1.9 	+1.6 	Protein involved in metabolism of C4-dicarboxylates; involved in acid resistance (yhiF)
+gadW 	b3515 	+1.7 	+1.7 	AraC-type transcriptional repressor; controls several genes of acid resistance system (yhiW)
+yibHc 	b3597 	+2.1 	+5.7 	Putative membrane protein
+nlpAc 	b3661 	+1.8 	+1.6 	Cytoplasmic membrane lipoprotein 28
+dgoTc 	b3691 	+1.7 	+1.6 	d-Galactonate transport
+tnaL 	b3707 	+3.4 	+4.2 	Tryptophanase leader peptide
+tnaA 	b3708 	+2.2 	+1.5 	Tryptophanase
+tnaB 	b3709 	+1.7 	+2 	Low-affinity tryptophan permease
+yidZc 	b3711 	+1.8 	+1.7 	LysR-type putative transcriptional regulator; involved in protection against NO
+yieHc 	b3715 	+1.6 	+1.7 	6-Phosphogluconate phosphatase
+cbrBc 	b3716 	+2.1 	+1.8 	Predicted inner membrane protein (yieI)
+yijFc 	b3944 	+1.9 	+1.6 	Conserved protein
+yjfZc 	b4204 	+1.8 	+1.9 	ORF, hypothetical protein

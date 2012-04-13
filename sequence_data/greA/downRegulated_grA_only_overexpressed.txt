@@ -1,0 +1,14 @@
+ybeLb 	b0643 	−3.2 	Conserved protein; putative alpha helical protein
+gatD 	b2091 	−3.2 	Galactitol-1-phosphate dehydrogenase
+gatC 	b2092 	−5.6 	PTS system galactitol-specific enzyme IIC
+gatB 	b2093 	−3.4 	Galactitol-specific enzyme IIB of phosphotransferase system
+gatA 	b2094 	−2.9 	Galactitol-specific enzyme IIA of phosphotransferase system
+gatZ 	b2095 	−2.6 	Putative tagatose 6-phosphate kinase 1
+gatY 	b2096 	−2.0 	Tagatose-bisphosphate aldolase 1
+glpB 	b2242 	−2.7 	sn-Glycerol-3-phosphate dehydrogenase (anaerobic), membrane anchor subunit
+glpC 	b2243 	−3.5 	sn-Glycerol-3-phosphate dehydrogenase (anaerobic), K-small subunit
+elaBb 	b2266 	−2.5 	Conserved protein
+talA 	b2464 	−2.7 	Transaldolase A
+gcvHb 	b2904 	−2.7 	In glycine cleavage complex, carrier of aminomethyl moiety via covalently bound lipoyl cofactor
+srlE_bb 	Z4007 	−3.3 	(EDL933) PTS system, glucitolsorbitol-specific IIB component and second of two IIC components; frag
+srlE_2b 	Z4009 	−2.8 	(EDL933) PTS system, glucitolsorbitol-specific IIB component and second of two IIC components; frag
