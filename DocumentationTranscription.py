@@ -5,6 +5,7 @@
 from __future__ import division
 # You need future division even in numpy
 import os
+import re
 import random
 import matplotlib
 import matplotlib.pyplot as plt
@@ -341,7 +342,7 @@ class Result(object):
     the X*20 best. For random, mean and std are what's interesting (the mean and
     std of the best for each random sample)
     """
-    def __init__(self, corr, pvals, params, finals, time_series=False):
+    def __init__(self, corr=np.nan, pvals=np.nan, params=np.nan, finals=np.nan, time_series=False):
 
         self.corr = corr
         self.pvals = pvals
@@ -369,6 +370,13 @@ class Result(object):
         # The parameters are not so easy to do something with; the should be
         # supplied in a dictionray [c1,c2,c3,c4] = arrays; so make mean, std,
         # min, max for them as well
+
+        # handle nan
+        if params is np.nan:
+            params = {'c1':[np.nan],
+                      'c2':[np.nan],
+                      'c3':[np.nan],
+                      'c4':[np.nan]}
 
         self.params_mean = dict((k, np.mean(v)) for k,v in params.items())
         self.params_std = dict((k, np.std(v)) for k,v in params.items())
@@ -2949,6 +2957,29 @@ def new_designer(lizt):
     min20, max20, boxed_seqs = seq_parser(beg, N25, repeat_nr, sample_nr,
                                           at_test_nr)
 
+def seq_generator(beg, variable_nr, nucs):
+    """
+    """
+
+    repReg = re.compile('G{5,}|A{5,}|T{5,}|C{5,}')
+    nucs = set(['G', 'A', 'T', 'C'])
+
+    for seq in itertools.product(nucs, repeat=variable_nr):
+
+        # don't let the first two or two and three nucs be the same
+        if (seq[0] == seq[1] == 'T') or (seq[0] == seq[1] == seq[2]):
+            continue
+
+        sequence = beg + ''.join(seq) + end
+
+        # don't allow repeats of more than 4
+        if repReg.search(sequence):
+            continue
+
+        energies.append(Ec.super_f(sequence))
+
+        seqs.append(sequence)
+
 def seq_parser(beg, N25, repeat_nr, sample_nr, at_test_nr):
     """
     """
@@ -2965,7 +2996,6 @@ def seq_parser(beg, N25, repeat_nr, sample_nr, at_test_nr):
 
     t1 = time.time()
 
-    import re
     repReg = re.compile('G{5,}|A{5,}|T{5,}|C{5,}')
 
     for seq in itertools.product(nucleotides, repeat=repeat_nr):
@@ -2976,10 +3006,11 @@ def seq_parser(beg, N25, repeat_nr, sample_nr, at_test_nr):
 
         sequence = beg + ''.join(seq) + end
 
-        energies.append(Ec.super_f(sequence))
         # don't allow repeats of more than 4
         if repReg.search(sequence):
             continue
+
+        energies.append(Ec.super_f(sequence))
 
         seqs.append(sequence)
 
@@ -3136,17 +3167,6 @@ def fitting_models(lizt, ITSs):
     #maxval = max(fitted_vals)
     #plot_range = np.arange(minval, maxval, 0.01)
     #plot_data = c1*np.exp(plot_range)
-    # RESULT dividing rna-dna by 2500 is essensially to silence the term. The
-    # term plays a part, so you'll have to do something about that.
-    # RESULT interestingly np.exp(rna_dna - np.log(keq)) does not work well with
-    # this kind of fitting, but it works well with the ODE. Just confirm that
-    # OK? Confirmed. The 5*np.exp(rna_dna - np.log(keq)) works just fine. It
-    # gives correlation coefficicents of more than 0.7. That's interesting.
-    # However, trying and dividing by KT gave 0.61 nad 0.37 spearman, pearson.
-    # It's better than for the naive model, but it's still a far shot away.
-    # XXX wonderful, my friend. The \G energy was in kcal/mol. The RT energy I
-    # had was not in the same unit! When I use the same units I get RT = 0.62 *
-    # kcal/mol which is MUUUUUUUUCH better
 
     print fitted_parm
     print spearmanr(PYs, outp)
@@ -3220,37 +3240,37 @@ def new_models(ITSs):
     """
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
-    debug()
 
     # Parameter ranges you want to test out
-    #c1 = np.linspace(7, 12, 5)
-    c1 = np.array([10]) # insensitive to variation here
+    c1 = np.linspace(1, 50, 50)
+    #c1 = np.array([10]) # insensitive to variation here
     c2 = np.array([0]) # c2 is best evaluated to 0
-    #c2 = np.linspace(0.005, 0.3, 15)*-1
-    c3 = np.linspace(0.001, 0.1, 8)
-    #c3 = np.array([0])
-    c4 = np.linspace(0.05, 0.5, 8)
+    #c2 = np.linspace(0.005, 0.3, 10)*-1
+    #c3 = np.linspace(0.001, 0.1, 12)
+    c3 = np.array([0.03])
+    #c4 = np.linspace(0.05, 0.5, 10)
+    c4 = np.array([0.2])
 
     par_ranges = (c1, c2, c3, c4)
 
     # Time-grid
     t = np.linspace(0, 1., 100)
 
-    its_range = range(6, 13)
+    its_range = range(3, 20)
 
     optim = False   # GRID
     #optimize = True   # OPTIMIZER
     # I trust the Grid more than the opt. Stick with it.
 
-    randomize = 5 # here 0 = False (or randomize 0 times)
-    #randomize = 0 # here 0 = False (or randomize 0 times)
+    #randomize = 10 # here 0 = False (or randomize 0 times)
+    randomize = 0 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
     initial_bubble = True
 
     # Fit with 50% of ITS and apply the parameters to the remaining 50%
-    retrofit = 5
-    #retrofit = 1
+    #retrofit = 10
+    retrofit = 1
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
                                  randomize, retrofit, t, initial_bubble)
@@ -3335,16 +3355,18 @@ def auto_figure_maker_new_models(ITSs):
     Simulate a set of pre-defined models, then print figures for all of them.
     """
 
+    plt.ioff()
+
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Range of its values
-    its_range = range(3, 19)
+    its_range = range(3, 20)
 
     optim = False   # GRID
     #optim = True   # OPTIMIZER
 
-    randomize = 10 # here 0 = False (or randomize 0 times)
+    randomize = 15 # here 0 = False (or randomize 0 times)
     #randomize = 0 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
@@ -3354,14 +3376,12 @@ def auto_figure_maker_new_models(ITSs):
     t = np.linspace(0, 1., 100)
 
     # Fit with 50% of ITS and apply the parameters to the 50% remaining
-    retrofit = 10
+    retrofit = 15
     #retrofit = 0
 
-    modelz = get_models(stepsize=10)
+    modelz = get_models(stepsize=15)
 
-    # TODO include the paramaters in the plots so you know for the future ... 
-
-    for m in modelz:
+    for (model_name, m) in modelz.items():
         (par_ranges, descr) = m[:-1], m[-1]  # extract parameters and description
 
         all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
@@ -3376,7 +3396,9 @@ def auto_figure_maker_new_models(ITSs):
         for fig_dir in fig_dirs:
             for formt in ['pdf', 'eps', 'png']:
 
-                name = 'Model_{0}.'.format(descr[1]) + formt
+                adj = 'bootstrapnr_{0}_randomnr{1}'.format(retrofit, randomize)
+
+                name = 'Model_{0}_{1}.'.format(model_name, adj) + formt
                 odir = os.path.join(fig_dir, formt)
 
                 if not os.path.isdir(odir):
@@ -3430,7 +3452,7 @@ def get_models(stepsize=5):
     m5 = (np.linspace(2, 20, s),
             np.array([0]),
             np.array([0.05]),
-            np.array([0.2]),
+            np.array([0.3]),
          'M5: c1 variable, RNA-DNA, DNA-DNA, and Keq constant')
 
     # Model 6 --
@@ -3465,8 +3487,29 @@ def get_models(stepsize=5):
           np.array([0.2]),
          'M9: All constant but RNA-DNA zero')
 
-    #models = [m1, m2, m3, m4, m5, m6, m7, m8, m9]
-    models = [m1, m2, m3, m4, m7, m8, m9] # model 6 dsnt work
+    m10 = (np.array([10]),
+          np.linspace(0.001, 0.2, s)*(-1),
+          np.array([0]),
+          np.linspace(0.05, 0.5, s),
+         'M10: Reversed RNA-DNA sign')
+
+    m11 = (np.array([10]),
+          np.linspace(0.001, 0.2, s)*(-1),
+          np.linspace(0.001, 0.2, s)*(-1),
+          np.linspace(0.05, 0.5, s),
+         'M11: Reversed RNA-DNA sign AND reversed DNA-DNA sign')
+
+    models = {'m1': m1,
+              'm2': m2,
+              'm3': m3,
+              'm4': m4,
+              'm5': m5,
+              'm6': m6,
+              'm7': m7,
+              'm8': m8,
+              'm10': m10,
+              'm11': m11,
+              'm9': m9}
 
     return models
 
@@ -3574,7 +3617,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     # This loop covers [0][0] and [0][1]
     for (ddict, name, colr) in [(results, 'real', 'b'),
                                 (rand_results, 'random', 'g'),
-                               (retrof_results, 'retrofitted', 'r')]:
+                               (retrof_results, 'bootstrapped', 'r')]:
 
         # don't process 'random' or 'retrofit' if not evaluated
         if False in ddict.values():
@@ -3618,20 +3661,20 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
             paramz_mean = [r[1].params_mean for r in sorted(ddict.items())]
             paramz_std = [r[1].params_std for r in sorted(ddict.items())]
 
-        # each parameter should be plotted with its best (solid) and mean
-        # (striped) values (mean should have std)
-        for parameter in plot_params:
+            # each parameter should be plotted with its best (solid) and mean
+            # (striped) values (mean should have std)
+            for parameter in plot_params:
 
-            # print the best parameters
-            best_par_vals = [d[parameter] for d in paramz_best]
-            axes[1].plot(incrX, best_par_vals, label=parameter, linewidth=2,
-                         color=par2col[parameter])
-            # mean
-            mean_par_vals = [d[parameter] for d in paramz_mean]
-            # std
-            # print the mean and std of the top 20 parameters
-            std_par_vals = [d[parameter] for d in paramz_std]
-            axes[1].errorbar(incrX, mean_par_vals, yerr=std_par_vals,
+                # print the best parameters
+                best_par_vals = [d[parameter] for d in paramz_best]
+                axes[1].plot(incrX, best_par_vals, label=parameter, linewidth=2,
+                             color=par2col[parameter])
+                # mean
+                mean_par_vals = [d[parameter] for d in paramz_mean]
+                # std
+                # print the mean and std of the top 20 parameters
+                std_par_vals = [d[parameter] for d in paramz_std]
+                axes[1].errorbar(incrX, mean_par_vals, yerr=std_par_vals,
                              color=par2col[parameter], linestyle='--')
 
 
@@ -3770,7 +3813,6 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randize, retrofit, t,
                                             initial_bubble=init_bubble)
             else:
                 random_obj = False
-
 
             # Retrofit
             if retrofit:
@@ -3935,8 +3977,6 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
             else:
                 retro_results.append(control_result)
 
-        # I think I can average just like for the random ...
-        # XXX Bug what if this one is empty too! :S
         return average_rand_result(retro_results)
 
     # RANDOMIZE
@@ -3997,17 +4037,25 @@ def average_rand_result(rand_results):
     # Add the values from the X random versions
     # You don't want all 20, you just want the best ones
 
+    # check if 
+
     for res_obj in rand_results:
+        # check if this is a NaN object; skip it
+        if res_obj.corr is np.nan:
+            continue
+
         new_corr.append(res_obj.corr[0])
         new_pvals.append(res_obj.pvals[0])
 
         for k, v in res_obj.params.items():
             new_params[k].append(v[0])
 
-    # make a new result object
-    new_result = Result(new_corr, new_pvals, new_params, res_obj.finals)
-
-    return new_result
+    # Check if new_corr is empty (means all results were NaN)
+    if new_corr == []:
+        return Result()
+    else:
+        # make a new result object
+        return Result(new_corr, new_pvals, new_params, res_obj.finals)
 
 def grid_scrunch(arguments, ranges):
     """
@@ -4027,8 +4075,8 @@ def grid_scrunch(arguments, ranges):
     t1 = time.time()
 
     # make a pool of workers for multicore action
-    #my_pool = multiprocessing.Pool(4)
-    my_pool = multiprocessing.Pool(2)
+    my_pool = multiprocessing.Pool(4)
+    #my_pool = multiprocessing.Pool(2)
     results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
     my_pool.close()
     my_pool.join()
@@ -4048,12 +4096,9 @@ def grid_scrunch(arguments, ranges):
     # pick top 20
     top_hits = all_sorted[:20]
 
-    # XXX sometimes all_sorted is [] because the exponent was positive or the
-    # final result was << 0.1
-    # What is best to do in this case? Return 'False'? How is that going to be
-    # handled downstream? ...
+    # if top_hits is empty, return NaNs (created by default)
     if top_hits == []:
-        return False
+        return Result() # all values are NaN
 
     # now make separate corr, pvals, params, and finals arrays from these
     finals = np.array(top_hits[0][0]) # only get finals for the top top
@@ -4458,22 +4503,37 @@ def candidate_its(ITSs):
 
     # 1) Choose a set of parameter values based on your simulations (not important
     # which in the beginning)
+    params = (10, 0, 0.02, 0.2)
 
     # 2) Determine a range (of PY values) you would like the sequences output to
     # be (from 0.003 to  0.08 - > 0.3 to 8 in the experiment; you can go from
     # 0.1 to 10; and make sure that your values are equally spreadout like a
     # linspace
+    desired_pys = np.linspace(0.01, 0.1, 26)
 
     # 3) Iteratively solve X random dna sequences (13 variables, but exclude
     # poly X stretche). Note the score of each. Then use the same method as you
     # used for the 'naive' approach to keep a set of sequences
+    #rand_seq = 
+
+    plt.ion()
+
+    beg = 'AT'
+    #N25 = 'ATAAATTTGAGAGAGGAGTT'
+    N25 = 'ATAAATTTGAGAGAG' # len 15 variant for comparing energies
+
+    variable_nr = 5 # total number of sequences allowed to vary
+    sample_nr = 26
+
+    for seq in seq_generator(beg, variable_nr, nucs):
+        pass
 
     # 4) Check these sequences against your 'naive' model. It should hold up
     # there as well.
 
     # 5) Profit? Send the seqs to Hsu ...
 
-    # 6) Start writing the paper, or look into 
+    # 6) Start writing the paper,
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
@@ -4489,10 +4549,13 @@ def main():
     #new_models(ITSs)
 
     # XXX Making figures from all the new models in one go
-    auto_figure_maker_new_models(ITSs)
+    #auto_figure_maker_new_models(ITSs)
 
     # XXX Generate candidate sequences! :)
-    #candidate_its(ITSs)
+    candidate_its(ITSs)
+
+    # old one
+    new_designer(lizt)
 
     # RESULT now you've got those figures. You'll need to let it run for a
     # while witha huge grid, with random and with retrofitting. Then what? Is
