@@ -2970,6 +2970,8 @@ def seq_generator(beg, variable_nr, rest, batch_size):
 
     for seq in itertools.product(nucleotides, repeat=variable_nr):
 
+        # random event that cancels the show
+
         # count the nucleotide frequencies; 
         slen = float(len(seq))
         nfreqs = [seq.count(n)/slen for n in nucleotides]
@@ -4373,7 +4375,7 @@ def mini_scrunch(seqs, params, state_nr, y0, t):
                                             full_output=True, Dfun=jacob_second)
         py_like.append((soln[-1][-1], seq))
 
-    print time.time() - t1
+    #print time.time() - t1
     return py_like
 
 def calculate_k1(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
@@ -4736,7 +4738,38 @@ def candidate_its(ITSs):
     beg = 'AT'
     #N25 = 'ATAAATTTGAGAGAGGAGTT'
     N25 = 'ATAAATTTGAGAGAG' # len 15 variant for comparing energies
-    variable_nr = 10 # total number of sequences allowed to vary after AT
+    variable_nr = 9 # total number of sequences allowed to vary after AT
+
+    # 5 => 0.4, 6 => 1.9, 7 =>8.9, 8 => 32.8, 9 => 128
+
+    #  for x in range(9, 16):
+   #...    print x, 128*4**(x-9)/3600.0
+            #9 0.0355555555556
+            #10 0.142222222222
+            #11 0.568888888889
+            #12 2.27555555556
+            #13 9.10222222222
+            #14 36.4088888889
+            #15 145.635555556
+
+    # Even if you divide by 2, still 3 days to calculate all 15. The first 11
+    # are OK, but then I'll have to do what? The library is getting very big
+    # fast. quadrupling at each step. What if you cut the library size in 4
+    # after the 10th step by randomization? Then you would have linear time from
+    # that on. 10 minuts per nuc -> 1 hour for the whole thing. The problem is
+    # that I'm not working like that; I'm getting full-length sequences at once.
+    # What if you start with 10 variations. That gets you to 12, where most
+    # variation is done. Then you have 1 mill sequences. Then you could cut that
+    # number by 100 -> take the 500 lowest, highest, and in the middles of all
+    # selected sequences. Then take all random ones for 3 runs, putting you at
+    # 15 which is your peak. Here, again slice by getting the xxx best.
+
+    # scales with 4.8 in the beginning, but then with less, as more and more
+    # seqs are being disqualified. With 9 we should start to see a trend.
+    # maybe 15 is within reach. Assume half the time at work.
+    # 60 sec in 1 min -> 3600 sec in1 hr
+    #for x in range(5, 16)
+    #8
 
     rest = N25[2+variable_nr:]
 
@@ -4756,6 +4789,7 @@ def candidate_its(ITSs):
     # Make a workers' pool
     my_pool = multiprocessing.Pool(2)
 
+    t1 = time.time()
     results = []
     for batch in seq_generator(beg, variable_nr, rest, batch_size):
 
@@ -4770,6 +4804,10 @@ def candidate_its(ITSs):
     my_pool.close()
     my_pool.join()
 
+    print('\nVariable nt: {0} -- Total time: {1}'.format(variable_nr,
+                                                         time.time()-t1))
+
+    debug()
     # flatten the output
     all_results = sum([r.get() for r in results], [])
 
@@ -4795,8 +4833,8 @@ def candidate_its(ITSs):
     # RESULT it seems that the naive energies are in good correlation with the
     # diffmodel, but there are some few exceptions. I think that you'll have
     # good correlations on average anyway.
-    # TODO find optimal correlation coefficients for the predictive model.
-    # You'll want PYs in as wide ranges as possible.
+
+    # XXX what do do about the randomness? Try to time the time incease.
 
     # 5) Profit? Send the seqs to Hsu ...
 
@@ -4945,7 +4983,7 @@ def main():
     #new_scatter(lizt, ITSs)
 
     # XXX the new ODE models
-    new_models(ITSs)
+    #new_models(ITSs)
 
     # XXX Making figures from all the new models in one go
     #auto_figure_maker_new_models(ITSs)
