@@ -118,6 +118,10 @@ for dinuc, val in kminus1.items():
 #invEq['TA'] = 5
 #invEq['TG'] = 6
 
+def seq2din(sequence):
+    indiv = list(sequence) # splitting sequence into individual letters
+    return [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
+
 ## XXX Big news: create a super_function by subtracting reKeq from RNA_DNA
 super_en = {}
 for name, val in EnLibRNA.items():
@@ -132,11 +136,16 @@ RT = 1.9858775*(37 + 273.15)
 for din, en in Keq_EC8_EC9.items():
     delta_keq[din] = -RT*en/1000  #divide by 1000 to get kcal
 
-def super_f(sequence):
-    indiv = list(sequence) # splitting sequence into individual letters
-    neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
+def Delta_trans(sequence):
+    """
+    Delta values for keq
+    """
 
-    return sum([super_en[nei] for nei in neigh])
+    return sum([delta_keq[din] for din in seq2din(sequence)])
+
+def super_f(sequence):
+
+    return sum([super_en[din] for din in seq2din(sequence)])
 
 def res_frac(sequence):
     """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
@@ -144,40 +153,28 @@ def res_frac(sequence):
     if len(sequence) < 2:
         return 0
 
-    indiv = list(sequence) # splitting sequence into individual letters
-    neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
-
-    return sum([resistant_fraction[nei] for nei in neigh])
+    return sum([resistant_fraction[din] for din in seq2din(sequence)])
 
 def K1(sequence):
     """ Calculate the K1 of 'sequence' """
     if len(sequence) < 2:
         return 0
 
-    indiv = list(sequence) # splitting sequence into individual letters
-    neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
-
-    return sum([k1[nei] for nei in neigh])
+    return sum([k1[din] for din in seq2din(sequence)])
 
 def Kminus1(sequence):
     """ Calculate the K_-1 of 'sequence'. """
     if len(sequence) < 2:
         return 0
 
-    indiv = list(sequence) # splitting sequence into individual letters
-    neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
-
-    return sum([kminus1[nei] for nei in neigh])
+    return sum([kminus1[din] for din in seq2din(sequence)])
 
 def Keq(sequence):
     """ Calculate the Keq of 'sequence'. """
     if len(sequence) < 2:
         return 0
 
-    indiv = list(sequence) # splitting sequence into individual letters
-    neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
-
-    return sum([Keq_EC8_EC9[nei] for nei in neigh])
+    return sum([Keq_EC8_EC9[din] for din in seq2din(sequence)])
 
 def invKeq(sequence):
     """
@@ -185,7 +182,5 @@ def invKeq(sequence):
     """
     if len(sequence) < 2:
         return 0
-    indiv = list(sequence) # splitting sequence into individual letters
-    neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
-    return sum([invEq[nei] for nei in neigh])
+    return sum([invEq[din] for din in seq2din(sequence)])

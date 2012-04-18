@@ -2891,49 +2891,49 @@ def new_designer(lizt):
     """
     Design sequences to span PY from 0 to 10 in the 0-13 range
 
-    # Is there a way to quantify when 90% of the abortive transcription is over?
-    # Maybe by the imagequant? Maybe you'll find a correlation. What would that
-    # prove exactly? The msat? How? At each point there is a stochastic chance
-    # of falling off. MSAT means that the active site has not fallen off yet. It
-    # could be that MSAT is higher for those with weak PY? But then I should
-    # have seen it. Or maybe not use MSAT but use 90% of MSAT. You might then
-    # find that 
-    # What do I expect, biochemically? I expect that MSAT is limited by an
-    # energy barrier that RNAP is unlikely to pass while still attached to
-    # promoter.
-    # This suggests that it is not the "free energy" held up in scrunching, but
-    # 
-    # The model is that RNAP has at any point a chance of aborting, as long as
-    # it's attached to SIGMA. Mayby thermodynamic fluctuations play a part,
-    # making the process stochastic in nature. The determining factor then
-    # becomes the ease at which RNAP synthisizes the first XX nucleotides. Then
-    # sigma release is also stochastic. Sigma is pulling backward and RNAP is
-    # pulling forward. The probability of each one winning is the ease at which
-    # RNAP translocates the first 10-15 nucleotiedes. But pulling? RNAP is
-    # standing still at the promoter. However, if the DNA-DNA buildup is not the
-    # case, what is? I should re-read that article. That's for T7 though. What
-    # is the stressor? Why escape? Is this important only for strong promoters?
-    # If RNAP continues straight from initiation to escape, what is escape? Why
-    # does sigma fall off? Or why does sigma dissasociate from promoter
-    # contacts? That's the most relevant question.
+    Is there a way to quantify when 90% of the abortive transcription is over?
+    Maybe by the imagequant? Maybe you'll find a correlation. What would that
+    prove exactly? The msat? How? At each point there is a stochastic chance
+    of falling off. MSAT means that the active site has not fallen off yet. It
+    could be that MSAT is higher for those with weak PY? But then I should
+    have seen it. Or maybe not use MSAT but use 90% of MSAT. You might then
+    find that 
+    What do I expect, biochemically? I expect that MSAT is limited by an
+    energy barrier that RNAP is unlikely to pass while still attached to
+    promoter.
+    This suggests that it is not the "free energy" held up in scrunching, but
 
-    # They say that rnap moves by random fluctuations that occasionally becomes
-    # blocked backwards by nucleotide incorporations. The free energy of nt
-    # incorporation should also somehow be a driving force, even if it's not
-    # well explained.
+    The model is that RNAP has at any point a chance of aborting, as long as
+    it's attached to SIGMA. Mayby thermodynamic fluctuations play a part,
+    making the process stochastic in nature. The determining factor then
+    becomes the ease at which RNAP synthisizes the first XX nucleotides. Then
+    sigma release is also stochastic. Sigma is pulling backward and RNAP is
+    pulling forward. The probability of each one winning is the ease at which
+    RNAP translocates the first 10-15 nucleotiedes. But pulling? RNAP is
+    standing still at the promoter. However, if the DNA-DNA buildup is not the
+    case, what is? I should re-read that article. That's for T7 though. What
+    is the stressor? Why escape? Is this important only for strong promoters?
+    If RNAP continues straight from initiation to escape, what is escape? Why
+    does sigma fall off? Or why does sigma dissasociate from promoter
+    contacts? That's the most relevant question.
 
-    # Design sequences which are both AT rich but have opposite effects on
-    # transcription initiation, showing that it's not just the AT-richness, but
-    # the specific order of the AT-richness
-    # What about that -10 like element? Is that a particularly weak one? Would
-    # be interesting if it were the weakest possible association of these
-    # values. It's TATAAT
-    #
-    # The 10 pause site had more variation in RNA-DNA than in super_en, so I'm
-    # ruling it out as a super_en effect.
+    They say that rnap moves by random fluctuations that occasionally becomes
+    blocked backwards by nucleotide incorporations. The free energy of nt
+    incorporation should also somehow be a driving force, even if it's not
+    well explained.
 
-    # RNAP is using force from nucleotide incorporation to propel itself?
-    # Conclusion of 1998 Science.
+    Design sequences which are both AT rich but have opposite effects on
+    transcription initiation, showing that it's not just the AT-richness, but
+    the specific order of the AT-richness
+    What about that -10 like element? Is that a particularly weak one? Would
+    be interesting if it were the weakest possible association of these
+    values. It's TATAAT.
+
+    The 10 pause site had more variation in RNA-DNA than in super_en, so I'm
+    ruling it out as a super_en effect.
+
+    RNAP is using force from nucleotide incorporation to propel itself?
+    Conclusion of 1998 Science.
 
     How many possible combinations are there? If I vary from 3 to 15? 12. 4**12
     is 1.6 million :S But actually that is not so much. I'm doing dinucleotiding
@@ -2957,28 +2957,51 @@ def new_designer(lizt):
     min20, max20, boxed_seqs = seq_parser(beg, N25, repeat_nr, sample_nr,
                                           at_test_nr)
 
-def seq_generator(beg, variable_nr, nucs):
+def seq_generator(beg, variable_nr, rest, batch_size):
     """
+    Yield sequences in batches (list of sequences of length batch_size)
     """
+
+    buff_count = 0
+    batch = []
 
     repReg = re.compile('G{5,}|A{5,}|T{5,}|C{5,}')
-    nucs = set(['G', 'A', 'T', 'C'])
+    nucleotides = set(['G', 'A', 'T', 'C'])
 
-    for seq in itertools.product(nucs, repeat=variable_nr):
+    for seq in itertools.product(nucleotides, repeat=variable_nr):
+
+        # count the nucleotide frequencies; 
+        slen = float(len(seq))
+        nfreqs = [seq.count(n)/slen for n in nucleotides]
+
+        # none should be above 60% and there should be at least one of each
+        # nucleotide there. maybe you will have to waive the last demand.
+        if max(nfreqs) > 0.6:
+            continue
+
+        if nfreqs.count(0) > 1:
+            continue
 
         # don't let the first two or two and three nucs be the same
         if (seq[0] == seq[1] == 'T') or (seq[0] == seq[1] == seq[2]):
             continue
 
-        sequence = beg + ''.join(seq) + end
+        sequence = beg + ''.join(seq) + rest
 
         # don't allow repeats of more than 4
         if repReg.search(sequence):
             continue
 
-        energies.append(Ec.super_f(sequence))
+        # add sequences to the batch until you reach the set batch size
+        if buff_count < batch_size:
+            batch.append(sequence)
+            buff_count += 1
 
-        seqs.append(sequence)
+        else:
+            yield batch
+            batch = []
+            buff_count = 0
+
 
 def seq_parser(beg, N25, repeat_nr, sample_nr, at_test_nr):
     """
@@ -2992,6 +3015,7 @@ def seq_parser(beg, N25, repeat_nr, sample_nr, at_test_nr):
 
     energies = []
     seqs = []
+
     import time
 
     t1 = time.time()
@@ -3063,6 +3087,119 @@ def seq_parser(beg, N25, repeat_nr, sample_nr, at_test_nr):
     for seqLow in min10:
         subseq = seqLow[2:]
 
+def naive_energies(ITSs, new_set=False):
+    """
+    Return the energy range of the ITSs for the naive model. If a new_set is
+    provided, return the range for those values in the same order in which they
+    came in. If new_set is False, return the sorted order for the ITS sequences.
+
+    Somehow I want to know what PY value they would be associated with. To do
+    that I'll have to return the its energies with PYs so I can compare.
+    OKdothat.
+    """
+
+    ITSlen = 15
+
+    if not new_set:
+        # get the variables you need 
+        #rna_dna = np.array([Ec.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+        dna_dna = np.array([Ec.DNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+        keq_delta = np.array([Ec.Delta_trans(s.sequence[:ITSlen]) for s in ITSs])
+    else:
+        dna_dna = np.array([Ec.DNA_DNAenergy(s[:ITSlen]) for s in new_set])
+        keq_delta = np.array([Ec.Delta_trans(s[:ITSlen]) for s in new_set])
+
+    #### the exp model with log(keq) and /RT
+    parameters = (10, 0.1, 0.1)
+    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
+    c1, c2, c3 = parameters
+
+    exponential = (c2*dna_dna + c3*keq_delta)/RT
+    #exponential = (c2*rna_dna + c3*keq_delta)/RT
+    outp = c1*np.exp(exponential)
+    PYs = np.array([itr.PY for itr in ITSs])
+
+    if new_set:
+        return outp
+    else:
+        return zip(outp, PYs)
+
+def naive_model(ITSs, new_set=[]):
+    """
+    Plot the ITS according to the naive model
+
+        PY = c1*exp(b1*DNADNA + b2*delta_KEQ)
+
+    And then plot how the new_set looks accordingly
+
+    How are you going to plot the new set if you don't know their PYs?
+
+    You'll have to plot their distribution in the energies only. Shit what a
+    responsibility.
+    """
+
+    ITSlen = 15
+    # get the variables you need 
+    #rna_dna = np.array([Ec.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+    dna_dna = np.array([Ec.DNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+    keq_delta = np.array([Ec.Delta_trans(s.sequence[:ITSlen]) for s in ITSs])
+
+    #### the exp model with log(keq) and /RT
+    parameters = (10, 0.1, 0.1)
+    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
+    c1, c2, c3 = parameters
+
+    exponential = (c2*dna_dna + c3*keq_delta)/RT
+    #exponential = (c2*rna_dna + c3*keq_delta)/RT
+    outp = c1*np.exp(exponential)
+
+    return outp
+
+    # Make a continuous energy values for plotting
+    minval = min(exponential)
+    maxval = max(exponential)
+    plot_range = np.arange(minval, maxval, 0.01)
+
+    plot_data = c1*np.exp(plot_range)
+
+    debug()
+
+    # PYs
+    PYs = np.array([itr.PY for itr in ITSs])
+    PYs_std = [itr.PY_std for itr in ITSs]
+    names = [itr.name for itr in ITSs]
+
+    print spearmanr(PYs, outp)
+    print pearsonr(PYs, outp)
+
+    plt.ion()
+
+    fig, ax = plt.subplots()
+    ax.errorbar(c1*exponential, PYs, yerr=PYs_std, fmt='go')
+    for name, py, fit in zip(names, PYs, c1*exponential):
+
+        # only annotate these
+        if name not in ('N25', 'DG115a', 'DG133', 'N25/A1anti'):
+            continue
+
+        ax.annotate(name,
+                xy=(fit, py), xytext=(-20,20),
+                textcoords='offset points', ha='right', va='bottom',
+                bbox=dict(boxstyle='round, pad=0.5', fc='g', alpha=0.9),
+                arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+
+    # define the x-values for plot_data
+    xbeg = min(c1*exponential)
+    xend = max(c1*exponential)
+    x_range = np.linspace(xbeg, xend, len(plot_data))
+
+    ax.plot(x_range, plot_data)
+
+    ax.set_xticklabels([])
+    ax.set_xlabel('Abortive propensity', size=20)
+    ax.set_ylabel('Productive yield', size=20)
+    ax.set_title('Fitting $PY = Ke^{-(b1\Delta G_1 + b2\Delta G_2)}$')
+
 def fitting_models(lizt, ITSs):
     """
     You have implicitly assumed the linear relationship with unity-parameters
@@ -3110,10 +3247,6 @@ def fitting_models(lizt, ITSs):
 
     import scipy.optimize as optimize
 
-    # XXX a quandary; Keq gives the best correlation but makes the least sense
-    # Maybe the best solution is the differential equations with r =
-    # r_1*exp(r2*DeltaG(RNA-DNA))
-
     #variables = (k1, rna_dna)
     #variables = (kMinus1, rna_dna)
 
@@ -3121,7 +3254,8 @@ def fitting_models(lizt, ITSs):
     #parameters = (100, -0.1, 0.5)
     #variables = (keq, rna_dna)
 
-    #plsq = optimize.leastsq(Models.residuals_mainM, parameters, args=(variables, PYs))
+    #plsq = optimize.leastsq(Models.residuals_mainM, parameters,
+        #args=(variables, PYs))
     #fitted_parm = plsq[0]
     #outp = Models.mainM(fitted_parm, variables)
     #fitted_vals = np.dot(fitted_parm[1:], variables)
@@ -3242,35 +3376,38 @@ def new_models(ITSs):
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Parameter ranges you want to test out
-    c1 = np.linspace(1, 50, 50)
-    #c1 = np.array([10]) # insensitive to variation here
+    #c1 = np.linspace(1, 50, 50)
+    c1 = np.array([15]) # insensitive to variation here
     c2 = np.array([0]) # c2 is best evaluated to 0
-    #c2 = np.linspace(0.005, 0.3, 10)*-1
-    #c3 = np.linspace(0.001, 0.1, 12)
-    c3 = np.array([0.03])
-    #c4 = np.linspace(0.05, 0.5, 10)
-    c4 = np.array([0.2])
+    #c2 = np.linspace(0.002, 0.4, 15)*-1
+    c3 = np.linspace(0.001, 0.1, 15)
+    #c3 = np.array([0.05])
+    #c3 = np.array([0])
+    c4 = np.linspace(0.05, 0.5, 15)
+    #c4 = np.array([0.2])
+    #c4 = np.array([0])
 
     par_ranges = (c1, c2, c3, c4)
 
     # Time-grid
     t = np.linspace(0, 1., 100)
 
+    # XXX you should get it to work with 21
     its_range = range(3, 20)
 
     optim = False   # GRID
     #optimize = True   # OPTIMIZER
     # I trust the Grid more than the opt. Stick with it.
 
-    #randomize = 10 # here 0 = False (or randomize 0 times)
+    #randomize = 5 # here 0 = False (or randomize 0 times)
     randomize = 0 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
     initial_bubble = True
 
     # Fit with 50% of ITS and apply the parameters to the remaining 50%
-    #retrofit = 10
-    retrofit = 1
+    #retrofit = 12
+    retrofit = 0
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
                                  randomize, retrofit, t, initial_bubble)
@@ -3279,12 +3416,18 @@ def new_models(ITSs):
     results, rand_results, retrof_results = all_results
 
     # ladder plot
-    print_scrunch_ladder(results, rand_results, retrof_results, optim,
+    plt.ion()
+    fig = print_scrunch_ladder(results, rand_results, retrof_results, optim,
                          randomize, par_ranges, initial_bubble)
+
+    # parameter plot (best and average for each its)
+    parameter_relationship(results, optim, randomize, par_ranges)
 
     # scatter plot 
     #print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
                   #initial_bubble, PYs)
+
+    # Maybe plot the optimal and average parameter values for each ITS-len?
 
     # a plot/figure where you see the distribution of RNAP for 5 selected
     # sequences over time.
@@ -3366,7 +3509,7 @@ def auto_figure_maker_new_models(ITSs):
     optim = False   # GRID
     #optim = True   # OPTIMIZER
 
-    randomize = 15 # here 0 = False (or randomize 0 times)
+    randomize = 10 # here 0 = False (or randomize 0 times)
     #randomize = 0 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
@@ -3376,7 +3519,7 @@ def auto_figure_maker_new_models(ITSs):
     t = np.linspace(0, 1., 100)
 
     # Fit with 50% of ITS and apply the parameters to the 50% remaining
-    retrofit = 15
+    retrofit = 10
     #retrofit = 0
 
     modelz = get_models(stepsize=15)
@@ -3593,6 +3736,51 @@ def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
         # that doesn't work for values close to zero. You need an absolute
         # measure.
 
+def parameter_relationship(results, optim, randomize, par_ranges):
+    """
+    Print the relationship between the optimal and the average parameters for
+    the different ITS lengths. XXX maybe this one is better to have next to the
+    ladder plot.
+    """
+    fig, ax = plt.subplots()
+
+    # sorted -> in ITS increasing order
+    paramz_best = [r[1].params_best for r in sorted(results.items())]
+    paramz_mean = [r[1].params_mean for r in sorted(results.items())]
+
+    best_c3, best_c4 = zip(*[(pb['c3'], pb['c4']) for pb in paramz_best])
+    mean_c3, mean_c4 = zip(*[(pb['c3'], pb['c4']) for pb in paramz_mean])
+
+    # You want the relationship between them
+
+    best_rel = np.array(best_c4)/np.array(best_c3)
+
+    mean_rel = np.array(mean_c4)/np.array(mean_c3)
+
+    #x_range = range(3, 21) # bug -- you don't go to 20
+    x_range = range(3, 20)
+
+    #ax.scatter(best_rel, color='b', label='Best')
+    ax.plot(x_range, best_rel, color='b', label='Best')
+
+    ax.plot(x_range, mean_rel, color='g', label='Average')
+    #ax.scatter(mean_rel, color='g', label='Average')
+
+    ax.set_xlabel('Nucleotide past +3')
+    ax.set_ylabel('c4/c3 ratio')
+
+    ax.legend(loc='lower right')
+
+    # xticks
+    xticklabels = [str(integer) for integer in range(3,21)]
+    ax.set_xticks(x_range)
+    ax.set_xticklabels(xticklabels)
+    #ax.set_xlim(3,21)
+    ax.set_xlabel("Nucleotide from transcription start", size=20)
+
+    debug()
+
+
 def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
                          randomize, par_ranges, initial_bubble,
                          description=False):
@@ -3601,7 +3789,6 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     [0][0] is the pearson for the real and the control
     [0][1] is the parameters for the pearson fit
     """
-    #plt.ion()
     fig, axes = plt.subplots(1,2)
 
     colors_params = ['r', 'c', 'm', 'k']
@@ -3634,7 +3821,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
             stds = [r[1].corr_std for r in sorted(ddict.items())]
 
-        elif name == 'retrofitted':
+        elif name == 'bootstrapped':
             indx, corr = zip(*[(r[0], r[1].corr_mean)
                                for r in sorted(ddict.items())])
 
@@ -3651,7 +3838,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
             axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
 
-        elif name == 'retrofitted':
+        elif name == 'bootstrapped':
             axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
 
@@ -4075,8 +4262,8 @@ def grid_scrunch(arguments, ranges):
     t1 = time.time()
 
     # make a pool of workers for multicore action
-    my_pool = multiprocessing.Pool(4)
-    #my_pool = multiprocessing.Pool(2)
+    #my_pool = multiprocessing.Pool(4)
+    my_pool = multiprocessing.Pool(2)
     results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
     my_pool.close()
     my_pool.join()
@@ -4133,7 +4320,7 @@ def _multi_func(paras, arguments):
 
         # XXX this one is easy to forget ... you don't want answers where the
         # final values are too small
-        if sum(finals) < 0.001:
+        if sum(finals) < 0.00001:
             continue
 
         # correlation
@@ -4142,6 +4329,85 @@ def _multi_func(paras, arguments):
         all_hits.append((finals, time_series, par, rp, pp))
 
     return all_hits
+
+def get_variables(seq):
+    """
+    Return rna_dna, dna_dna and keq energies from sequence
+    """
+
+    __indiv = list(seq)
+    __dinucs = [__indiv[c] + __indiv[c+1] for c in range(len(seq)-1)]
+
+    # Make di-nucleotide vectors for all the energy parameters
+    rna_dna = [Ec.NNRD[di] for di in __dinucs]
+    dna_dna = [Ec.NNDD[di] for di in __dinucs]
+    keq_delta = [Ec.delta_keq[di] for di in __dinucs]
+
+    return rna_dna, dna_dna, keq_delta
+
+def mini_scrunch(seqs, params, state_nr, y0, t):
+    """
+    A new wrapper around scipy.integrate.odeint. The previous one was too
+    focused on optimization and you don't need that here.
+    """
+
+    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
+    minus11_en = -9.95 # 'ATAATAGATTCAT'
+
+    py_like = []
+
+    t1 = time.time()
+    for seq in seqs:
+
+        # energy variables from sequence
+        rna_dna, dna_dna, keq_delta = get_variables(seq)
+
+        (a, b, c, d) = params
+        its_len = state_nr + 1
+        k1, proceed = calculate_k1(minus11_en, RT, its_len, keq_delta, dna_dna,
+                                   rna_dna, a, b, c, d)
+
+        A = equlib_matrix(k1, state_nr)
+        # pass the jacobian matrix to ease calculation
+        soln, info = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,),
+                                            full_output=True, Dfun=jacob_second)
+        py_like.append((soln[-1][-1], seq))
+
+    print time.time() - t1
+    return py_like
+
+def calculate_k1(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
+
+    # initialize empty rates
+    k1 = np.zeros(its_len-2)
+
+    proceed = True  # don't proceed for bad exponenitals and run_once = True
+
+    for i in range(1, its_len-1):
+        KEQ = keq[i-1]
+        DNA_DNA = minus11_en + sum(dna_dna[:i])
+        if i < 9:
+            RNA_DNA = sum(rna_dna[:i])
+        else:
+            RNA_DNA = sum(rna_dna[i-9:i])
+
+        expo = (-b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
+
+        # if expo is above 0, the exponential will be greater than 1, and
+        # this will in general not work
+        #if run_once and expo > 0:
+            #proceed = False
+            #break
+
+        # there should be way of introducing this constraint to the
+        # optimizer. Yes, but you have to change optimizers and it's not
+        # straightforward.
+
+        rate = a*np.exp(expo)
+
+        k1[i-2] = rate
+
+    return k1, proceed
 
 def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
                             initial_bubble, run_once=False, const_par=False,
@@ -4177,7 +4443,7 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         rna_dna = its_dict['rna_dna_di'][:its_len-1]
         keq = its_dict['keq_di'][:its_len-1]
 
-        # For run_once and if all 4 are used for optimization
+        # For run_once and if all 4 parameters are used
         if len(start_values) == 4:
             (a, b, c, d) = start_values
 
@@ -4186,34 +4452,8 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         elif len(start_values) < 4:
             (a, b, c, d) = get_mixed_params(truth_table, start_values, const_par)
 
-        # initialize empty rates
-        k1 = np.zeros(its_len-2)
-
-        proceed = True  # don't proceed for bad exponenitals and run_once = True
-
-        for i in range(1, its_len-1):
-            KEQ = keq[i-1]
-            DNA_DNA = minus11_en + sum(dna_dna[:i])
-            if i < 9:
-                RNA_DNA = sum(rna_dna[:i])
-            else:
-                RNA_DNA = sum(rna_dna[i-9:i])
-
-            expo = (-b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
-
-            # if expo is above 0, the exponential will be greater than 1, and
-            # this will in general not work
-            if run_once and expo > 0:
-                proceed = False
-                break
-
-            # there should be way of introducing this constraint to the
-            # optimizer. Yes, but you have to change optimizers and it's not
-            # straightforward.
-
-            rate = a*np.exp(expo)
-
-            k1[i-2] = rate
+        k1, proceed = calculate_k1(minus11_en, RT, its_len, keq, dna_dna,
+                                   rna_dna, a, b, c, d)
 
         # you must abort if proceed is false and run_once is true
         if run_once and not proceed:
@@ -4221,9 +4461,7 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         else:
 
             A = equlib_matrix(k1, state_nr)
-            # pass the jacobian matrix to ease things
-            # you can also pass the jacobian of the objective function, but since
-            # you're using the correlation, that's going to be more trixy.
+            # pass the jacobian matrix to ease calculation
             soln, info = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,),
                                                 full_output=True, Dfun=jacob_second)
             finals.append(soln[-1][-1])
@@ -4231,22 +4469,6 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
             steps = len(soln)
 
             time_series.append([soln[steps*0.1], soln[int(steps/2)], soln[-1]])
-
-            # and here the problem is' finals is only the very last
-            # but first you must conclude: what exactly is it that you want to
-            # present? what do you want to plot?
-
-            # option 1) 1 promoter at time 0, 50, and 100
-            # you will see the time evolution for 1 promoter
-
-            # option 2) 5 promoters at time 100
-            # you will see the difference in promoter concentration at the 'end
-            # of time' ( lol )
-
-            # option 3) a combination of the two, in such a way that you can
-            # choose either of the two in the futurum.
-            # save beg, mind, and end of all states. = 3 arrays of length max
-            # 20.
 
     if run_once:
 
@@ -4259,9 +4481,6 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         # Retry optimizer with PYs as objective
         objective = np.array(PYs)
         result = np.array(finals)
-
-        # weight with 100 to get most emphasis on the pearsonr correlation
-        #result = np.array([1, np.std(finals), np.median(finals), 100*pearsonr(finals, PYs)[0]])
 
         return objective - result
 
@@ -4499,41 +4718,221 @@ def parameter_matrix(rates, states, variables):
 def candidate_its(ITSs):
     """
     Based on your models you must now suggest new sequences.
+
+    Previously you could solve all 13-variants without problem. Now, running 10,
+    you're starting to run into some serious trouble. It's taking a long time.
+    You won't be able to test all possible variants. I think you should test all
+    possible variants for the first 8;  well, 10 took like 15 minutes. that's
+    not too bad. Will be 7 on work computer.
     """
-
-    # 1) Choose a set of parameter values based on your simulations (not important
-    # which in the beginning)
-    params = (10, 0, 0.02, 0.2)
-
-    # 2) Determine a range (of PY values) you would like the sequences output to
-    # be (from 0.003 to  0.08 - > 0.3 to 8 in the experiment; you can go from
-    # 0.1 to 10; and make sure that your values are equally spreadout like a
-    # linspace
-    desired_pys = np.linspace(0.01, 0.1, 26)
-
-    # 3) Iteratively solve X random dna sequences (13 variables, but exclude
-    # poly X stretche). Note the score of each. Then use the same method as you
-    # used for the 'naive' approach to keep a set of sequences
-    #rand_seq = 
-
     plt.ion()
+
+    #XXX OK you've got the optimalz. Now party! Gen'rate seqs.
+    params = (15, 0, 0.022, 0.24)
+
+    # Desired range of PY values
+    desired_pys = np.linspace(0.001, 0.1, 26)
 
     beg = 'AT'
     #N25 = 'ATAAATTTGAGAGAGGAGTT'
     N25 = 'ATAAATTTGAGAGAG' # len 15 variant for comparing energies
+    variable_nr = 10 # total number of sequences allowed to vary after AT
 
-    variable_nr = 5 # total number of sequences allowed to vary
+    rest = N25[2+variable_nr:]
+
     sample_nr = 26
 
-    for seq in seq_generator(beg, variable_nr, nucs):
-        pass
+    # batch size (multiproess in batches)
+    batch_size = 300
+
+    its_len = 15
+    t = np.linspace(0, 1., 100)
+
+    state_nr = its_len - 1
+    y0 = [1] + [0 for i in range(state_nr-1)]
+
+    arguments = (params, state_nr, y0, t)
+
+    # Make a workers' pool
+    my_pool = multiprocessing.Pool(2)
+
+    results = []
+    for batch in seq_generator(beg, variable_nr, rest, batch_size):
+
+        args = (batch,) + arguments # join the arguments
+        result = my_pool.apply_async(mini_scrunch, args)
+
+        # non-multi version
+        #result = mini_scrunch(*args)
+
+        results.append(result)
+
+    my_pool.close()
+    my_pool.join()
+
+    # flatten the output
+    all_results = sum([r.get() for r in results], [])
+
+    # get a dict of several candidate sets
+    py_ranges = get_py_ranges(all_results, sample_nr, variable_nr)
 
     # 4) Check these sequences against your 'naive' model. It should hold up
     # there as well.
+    # Get the energy ranges for the naive model for the 43 variants
+
+    ITS_ens, ITS_pys = zip(*naive_energies(ITSs, new_set=False))
+
+    IE = np.array(sorted(ITS_ens))
+
+    for set_nr, candidate_set in py_ranges.items():
+
+        predPys, seqs = zip(*candidate_set)
+
+        set_Enrange = naive_energies(ITSs, new_set=seqs)
+
+        print spearmanr(set_Enrange, predPys)
+
+    # RESULT it seems that the naive energies are in good correlation with the
+    # diffmodel, but there are some few exceptions. I think that you'll have
+    # good correlations on average anyway.
+    # TODO find optimal correlation coefficients for the predictive model.
+    # You'll want PYs in as wide ranges as possible.
 
     # 5) Profit? Send the seqs to Hsu ...
 
     # 6) Start writing the paper,
+
+def verify_final_set(py_ranges):
+    """
+    Compare to incoming sequences to the 'naive' model. See how well it fits.
+    """
+
+    # You had come to the point where you had a scatter with a line through it;
+    # add the sequences to that scatter in different colors
+
+    debug()
+
+def get_py_ranges(all_results, sample_nr, variable_nr):
+    """
+    Given the set of sequences, output a set of sample_nr compartments where
+    sequences are sorted linearly according to their PYs
+    """
+    pys, seqs = zip(*all_results)
+
+    minPy, maxPy = min(pys), max(pys)
+
+    # Gen the py-range from smallest to largest
+    pyRange = np.linspace(maxPy, minPy, sample_nr+1)[::-1]
+
+    # Create limits for the bounding boxes
+    boundaries = []
+    for inx, val in enumerate(pyRange[:-1]):
+        boundaries.append((val, pyRange[inx+1]))
+
+    # Save seqs into bounding boxes according to the 'boundaries'
+    savers = [[] for i in range(sample_nr)]
+
+    pos = 0 # counter for which bounding box you are in
+    for (pyval, seq) in sorted(all_results):
+
+        # change pos when you reach a boundary
+        if pyval > boundaries[pos][1] and pos != len(savers)-1:
+            pos += 1
+
+        if boundaries[pos][0] <= pyval <= boundaries[pos][1]:
+            savers[pos].append((pyval, seq))
+
+    # choose a final set where no nucleotiee has more than 60% presence and
+    # (every nucleotide is present at least once)
+    final_sets = {}
+    set_nr = 10
+
+    for i in range(set_nr):
+        this_set = []
+        # for each bounding box
+        for bbox in savers:
+
+            # start a bit before the middle of it
+            box_start = int(len(bbox)/2-10)
+            # if less than zero, start at zero
+            if box_start < 0:
+                box_start = 0
+
+            # if one of the boxes is empty, it's time to pack up and leave
+            if bbox == []:
+                break
+
+            # if not, remeove the tuple from bbox and add it to final_sets
+            tup = bbox.pop(box_start)
+            this_set.append(tup)
+
+        final_sets[i+1] = this_set
+
+    return final_sets
+
+
+def variable_corr():
+    """
+    What power do the 3 sequence-dependent variables have? Show their
+    correlation. Production friendly kthnx.
+    """
+
+    plt.ion()
+
+    RD = Ec.NNRD
+    DD = Ec.NNDD
+    TR = Ec.delta_keq
+
+    dinucs = TR.keys()
+
+    RD_en = [RD[din] for din in dinucs]
+    DD_en = [DD[din] for din in dinucs]
+    TR_en = [TR[din] for din in dinucs]
+
+    fix, axes = plt.subplots(1,3)
+    #fix, axes = plt.subplots(1,1)
+
+    RD_tup = (RD_en, '$\Delta G$ RNA-DNA')
+    DD_tup = (DD_en, '$\Delta G$ DNA-DNA')
+    TR_tup = (TR_en, '$\Delta G$ Translocation')
+
+    group = [TR_tup, RD_tup, DD_tup]
+    #group = [TR_tup, RD_tup]
+
+    from itertools import combinations
+
+    for nr, (comx, comy) in enumerate(combinations(group, 2)):
+
+        (x_en, x_label) = comx
+        (y_en, y_label) = comy
+
+        ax = axes[nr]
+        #ax = axes
+
+        ax.scatter(x_en, y_en)
+        ax.set_xlabel(x_label, size=18)
+        ax.set_ylabel(y_label, size=18)
+        # correlation
+        #corr, p = spearmanr(x_en, y_en)
+        corr, p = pearsonr(x_en, y_en)
+        ax.set_title('Correlation {0:.2f}, p-value {1:.3f}\n'.format(corr, p))
+
+        # set a label
+        for label, x, y in zip(dinucs, x_en, y_en):
+            if label not in ['GC', 'TA']:
+                continue
+
+            ax.annotate(
+                label,
+                xy = (x, y), xytext = (20, 20),
+                textcoords = 'offset points', ha = 'right', va = 'bottom',
+                bbox = dict(boxstyle = 'round,pad=0.5', fc = 'yellow', alpha = 0.3),
+                arrowprops = dict(arrowstyle = '->', connectionstyle = 'arc3,rad=0'))
+
+    fix.subplots_adjust(wspace=0.5)
+    fix.set_figheight(5)
+    fix.set_figwidth(12)
+
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
@@ -4546,16 +4945,23 @@ def main():
     #new_scatter(lizt, ITSs)
 
     # XXX the new ODE models
-    #new_models(ITSs)
+    new_models(ITSs)
 
     # XXX Making figures from all the new models in one go
     #auto_figure_maker_new_models(ITSs)
 
-    # XXX Generate candidate sequences! :)
+    # XXX Generate candidate sequences! : )
     candidate_its(ITSs)
 
     # old one
-    new_designer(lizt)
+    #new_designer(lizt)
+
+    # naive mini
+    #naive_model(ITSs)
+
+    # XXX parameter-correlations
+    # Kew-RD, Keq-DD, RD-DD
+    #variable_corr()
 
     # RESULT now you've got those figures. You'll need to let it run for a
     # while witha huge grid, with random and with retrofitting. Then what? Is
