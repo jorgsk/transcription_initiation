@@ -3242,14 +3242,14 @@ def new_models(ITSs):
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Parameter ranges you want to test out
-    c1 = np.linspace(1, 50, 50)
-    #c1 = np.array([10]) # insensitive to variation here
+    #c1 = np.linspace(1, 50, 50)
+    c1 = np.array([10]) # insensitive to variation here
     c2 = np.array([0]) # c2 is best evaluated to 0
     #c2 = np.linspace(0.005, 0.3, 10)*-1
-    #c3 = np.linspace(0.001, 0.1, 12)
-    c3 = np.array([0.03])
-    #c4 = np.linspace(0.05, 0.5, 10)
-    c4 = np.array([0.2])
+    c3 = np.linspace(0.001, 0.1, 12)
+    #c3 = np.array([0.03])
+    c4 = np.linspace(0.05, 0.5, 10)
+    #c4 = np.array([0.2])
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -3262,15 +3262,15 @@ def new_models(ITSs):
     #optimize = True   # OPTIMIZER
     # I trust the Grid more than the opt. Stick with it.
 
-    #randomize = 10 # here 0 = False (or randomize 0 times)
-    randomize = 0 # here 0 = False (or randomize 0 times)
+    randomize = 10 # here 0 = False (or randomize 0 times)
+    #randomize = 0 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
     initial_bubble = True
 
     # Fit with 50% of ITS and apply the parameters to the remaining 50%
-    #retrofit = 10
-    retrofit = 1
+    retrofit = 10
+    #retrofit = 1
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
                                  randomize, retrofit, t, initial_bubble)
@@ -3634,7 +3634,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
             stds = [r[1].corr_std for r in sorted(ddict.items())]
 
-        elif name == 'retrofitted':
+        elif name == 'bootstrapped':
             indx, corr = zip(*[(r[0], r[1].corr_mean)
                                for r in sorted(ddict.items())])
 
@@ -3651,7 +3651,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
             axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
 
-        elif name == 'retrofitted':
+        elif name == 'bootstrapped':
             axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
 
@@ -4546,16 +4546,17 @@ def main():
     #new_scatter(lizt, ITSs)
 
     # XXX the new ODE models
-    #new_models(ITSs)
+    new_models(ITSs)
 
     # XXX Making figures from all the new models in one go
     #auto_figure_maker_new_models(ITSs)
+    # TODO you're not printing the bootstrapping any more
 
     # XXX Generate candidate sequences! :)
-    candidate_its(ITSs)
+    #candidate_its(ITSs)
 
     # old one
-    new_designer(lizt)
+    #new_designer(lizt)
 
     # RESULT now you've got those figures. You'll need to let it run for a
     # while witha huge grid, with random and with retrofitting. Then what? Is
