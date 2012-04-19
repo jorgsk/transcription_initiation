@@ -2957,9 +2957,11 @@ def new_designer(lizt):
     min20, max20, boxed_seqs = seq_parser(beg, N25, repeat_nr, sample_nr,
                                           at_test_nr)
 
-def seq_generator(beg, variable_nr, rest, batch_size):
+def seq_generator(variable_nr, batch_size, beg=False, starts=False):
     """
     Yield sequences in batches (list of sequences of length batch_size)
+
+    stricht will add the 'beg'. If 'starts', add the new seq to each start
     """
 
     buff_count = 0
@@ -2968,41 +2970,49 @@ def seq_generator(beg, variable_nr, rest, batch_size):
     repReg = re.compile('G{5,}|A{5,}|T{5,}|C{5,}')
     nucleotides = set(['G', 'A', 'T', 'C'])
 
+    # a trick so that you don't have to change the code a lot to include leading
+    # sequences
+    if not starts:
+        starts = ['']
+
     for seq in itertools.product(nucleotides, repeat=variable_nr):
 
-        # random event that cancels the show
+        for pre_seq in starts:
+            # If having supplied a start ('AG' for example)
+            if beg:
 
-        # count the nucleotide frequencies; 
-        slen = float(len(seq))
-        nfreqs = [seq.count(n)/slen for n in nucleotides]
+                sequence = beg + ''.join(seq)
 
-        # none should be above 60% and there should be at least one of each
-        # nucleotide there. maybe you will have to waive the last demand.
-        if max(nfreqs) > 0.6:
-            continue
+                # don't let the first three nucs be the same
+                if (sequence[1] == sequence[2] == sequence[3]):
+                    continue
 
-        if nfreqs.count(0) > 1:
-            continue
+            # if not beg, you should just add the pre_seq
+            else:
+                # second round -> add the 'rest'
+                # pre_seq is empty unless start_seqs have been given as input
+                sequence = pre_seq + ''.join(seq)
 
-        # don't let the first two or two and three nucs be the same
-        if (seq[0] == seq[1] == 'T') or (seq[0] == seq[1] == seq[2]):
-            continue
+            # count the nucleotide frequencies; 
+            slen = float(len(sequence))
+            nfreqs = [sequence.count(n)/slen for n in nucleotides]
+            # none should be above 60%
+            if max(nfreqs) > 0.6:
+                continue
 
-        sequence = beg + ''.join(seq) + rest
+            # don't allow repeats of more than 4
+            if repReg.search(sequence):
+                continue
 
-        # don't allow repeats of more than 4
-        if repReg.search(sequence):
-            continue
+            # add sequences to the batch until you reach the set batch size
+            if buff_count < batch_size:
+                batch.append(sequence)
+                buff_count += 1
 
-        # add sequences to the batch until you reach the set batch size
-        if buff_count < batch_size:
-            batch.append(sequence)
-            buff_count += 1
-
-        else:
-            yield batch
-            batch = []
-            buff_count = 0
+            else:
+                yield batch
+                batch = []
+                buff_count = 0
 
 
 def seq_parser(beg, N25, repeat_nr, sample_nr, at_test_nr):
@@ -3382,11 +3392,11 @@ def new_models(ITSs):
     c1 = np.array([15]) # insensitive to variation here
     c2 = np.array([0]) # c2 is best evaluated to 0
     #c2 = np.linspace(0.002, 0.4, 15)*-1
-    c3 = np.linspace(0.001, 0.1, 15)
-    #c3 = np.array([0.05])
+    #c3 = np.linspace(0.001, 0.1, 15)
+    c3 = np.array([0.022])
     #c3 = np.array([0])
-    c4 = np.linspace(0.05, 0.5, 15)
-    #c4 = np.array([0.2])
+    #c4 = np.linspace(0.05, 0.5, 15)
+    c4 = np.array([0.24])
     #c4 = np.array([0])
 
     par_ranges = (c1, c2, c3, c4)
@@ -3423,7 +3433,7 @@ def new_models(ITSs):
                          randomize, par_ranges, initial_bubble)
 
     # parameter plot (best and average for each its)
-    parameter_relationship(results, optim, randomize, par_ranges)
+    #parameter_relationship(results, optim, randomize, par_ranges)
 
     # scatter plot 
     #print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
@@ -3541,7 +3551,7 @@ def auto_figure_maker_new_models(ITSs):
         for fig_dir in fig_dirs:
             for formt in ['pdf', 'eps', 'png']:
 
-                adj = 'bootstrapnr_{0}_randomnr{1}'.format(retrofit, randomize)
+                adj = 'crossvalid_{0}_randomnr{1}'.format(retrofit, randomize)
 
                 name = 'Model_{0}_{1}.'.format(model_name, adj) + formt
                 odir = os.path.join(fig_dir, formt)
@@ -3806,7 +3816,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     # This loop covers [0][0] and [0][1]
     for (ddict, name, colr) in [(results, 'real', 'b'),
                                 (rand_results, 'random', 'g'),
-                               (retrof_results, 'bootstrapped', 'r')]:
+                               (retrof_results, 'cross-validated', 'r')]:
 
         # don't process 'random' or 'retrofit' if not evaluated
         if False in ddict.values():
@@ -3823,7 +3833,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
             stds = [r[1].corr_std for r in sorted(ddict.items())]
 
-        elif name == 'bootstrapped':
+        elif name == 'cross-validated':
             indx, corr = zip(*[(r[0], r[1].corr_mean)
                                for r in sorted(ddict.items())])
 
@@ -3840,7 +3850,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
             axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
 
-        elif name == 'bootstrapped':
+        elif name == 'cross-validated':
             axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
 
@@ -4264,8 +4274,8 @@ def grid_scrunch(arguments, ranges):
     t1 = time.time()
 
     # make a pool of workers for multicore action
-    #my_pool = multiprocessing.Pool(4)
-    my_pool = multiprocessing.Pool(2)
+    my_pool = multiprocessing.Pool(4)
+    #my_pool = multiprocessing.Pool(2)
     results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
     my_pool.close()
     my_pool.join()
@@ -4351,6 +4361,8 @@ def mini_scrunch(seqs, params, state_nr, y0, t):
     """
     A new wrapper around scipy.integrate.odeint. The previous one was too
     focused on optimization and you don't need that here.
+
+    If supplied with start seqs, you should Start seqs
     """
 
     RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
@@ -4358,7 +4370,6 @@ def mini_scrunch(seqs, params, state_nr, y0, t):
 
     py_like = []
 
-    t1 = time.time()
     for seq in seqs:
 
         # energy variables from sequence
@@ -4375,7 +4386,6 @@ def mini_scrunch(seqs, params, state_nr, y0, t):
                                             full_output=True, Dfun=jacob_second)
         py_like.append((soln[-1][-1], seq))
 
-    #print time.time() - t1
     return py_like
 
 def calculate_k1(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
@@ -4732,97 +4742,34 @@ def candidate_its(ITSs):
     #XXX OK you've got the optimalz. Now party! Gen'rate seqs.
     params = (15, 0, 0.022, 0.24)
 
-    # Desired range of PY values
+    # Desired range of PY values ( this doesn't seem to work ...)
     desired_pys = np.linspace(0.001, 0.1, 26)
 
     beg = 'AT'
-    #N25 = 'ATAAATTTGAGAGAGGAGTT'
-    N25 = 'ATAAATTTGAGAGAG' # len 15 variant for comparing energies
-    variable_nr = 9 # total number of sequences allowed to vary after AT
+    N25 = 'ATAAATTTGAGAGAGGAGTT'
+
+    pruning_stop = 10 # stop after this many variations; trim the dataset; continue
 
     # 5 => 0.4, 6 => 1.9, 7 =>8.9, 8 => 32.8, 9 => 128
-
-    #  for x in range(9, 16):
-   #...    print x, 128*4**(x-9)/3600.0
-            #9 0.0355555555556
-            #10 0.142222222222
-            #11 0.568888888889
-            #12 2.27555555556
-            #13 9.10222222222
-            #14 36.4088888889
-            #15 145.635555556
-
-    # Even if you divide by 2, still 3 days to calculate all 15. The first 11
-    # are OK, but then I'll have to do what? The library is getting very big
-    # fast. quadrupling at each step. What if you cut the library size in 4
-    # after the 10th step by randomization? Then you would have linear time from
-    # that on. 10 minuts per nuc -> 1 hour for the whole thing. The problem is
-    # that I'm not working like that; I'm getting full-length sequences at once.
-    # What if you start with 10 variations. That gets you to 12, where most
-    # variation is done. Then you have 1 mill sequences. Then you could cut that
-    # number by 100 -> take the 500 lowest, highest, and in the middles of all
-    # selected sequences. Then take all random ones for 3 runs, putting you at
-    # 15 which is your peak. Here, again slice by getting the xxx best.
-
-    # scales with 4.8 in the beginning, but then with less, as more and more
-    # seqs are being disqualified. With 9 we should start to see a trend.
-    # maybe 15 is within reach. Assume half the time at work.
-    # 60 sec in 1 min -> 3600 sec in1 hr
-    #for x in range(5, 16)
-    #8
-
-    rest = N25[2+variable_nr:]
+    # At work: 7 => 1.95,  8 => 7.2, 9 => 30.1
 
     sample_nr = 26
 
     # batch size (multiproess in batches)
     batch_size = 300
 
-    its_len = 15
-    t = np.linspace(0, 1., 100)
+    its_len = 15 # the ultimate goal
+    #its_len = 13 # the ultimate goal
 
-    state_nr = its_len - 1
-    y0 = [1] + [0 for i in range(state_nr-1)]
-
-    arguments = (params, state_nr, y0, t)
-
-    # Make a workers' pool
-    my_pool = multiprocessing.Pool(2)
-
-    t1 = time.time()
-    results = []
-    for batch in seq_generator(beg, variable_nr, rest, batch_size):
-
-        args = (batch,) + arguments # join the arguments
-        result = my_pool.apply_async(mini_scrunch, args)
-
-        # non-multi version
-        #result = mini_scrunch(*args)
-
-        results.append(result)
-
-    my_pool.close()
-    my_pool.join()
-
-    print('\nVariable nt: {0} -- Total time: {1}'.format(variable_nr,
-                                                         time.time()-t1))
-
-    debug()
-    # flatten the output
-    all_results = sum([r.get() for r in results], [])
-
-    # get a dict of several candidate sets
-    py_ranges = get_py_ranges(all_results, sample_nr, variable_nr)
+    # get a dict of some candidate sets
+    candidates = get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
+                                      params, its_len)
 
     # 4) Check these sequences against your 'naive' model. It should hold up
     # there as well.
-    # Get the energy ranges for the naive model for the 43 variants
-
     ITS_ens, ITS_pys = zip(*naive_energies(ITSs, new_set=False))
 
-    IE = np.array(sorted(ITS_ens))
-
-    for set_nr, candidate_set in py_ranges.items():
+    for set_nr, candidate_set in candidates.items():
 
         predPys, seqs = zip(*candidate_set)
 
@@ -4830,27 +4777,160 @@ def candidate_its(ITSs):
 
         print spearmanr(set_Enrange, predPys)
 
-    # RESULT it seems that the naive energies are in good correlation with the
-    # diffmodel, but there are some few exceptions. I think that you'll have
-    # good correlations on average anyway.
+    # Print the G, A, T, C distributions
+    for set_nr, entries in candidates.items():
+        seqs = [e[1] for e in entries]
 
-    # XXX what do do about the randomness? Try to time the time incease.
+        As = sum([t.count('A') for t in seqs])
+        Gs = sum([t.count('G') for t in seqs])
+        Ts = sum([t.count('T') for t in seqs])
+        Cs = sum([t.count('C') for t in seqs])
+
+        tot = sum([As, Gs, Ts, Cs])
+
+        #percentages
+        Ap = As*100/float(tot)
+        Gp = Gs*100/float(tot)
+        Tp = Ts*100/float(tot)
+        Cp = Cs*100/float(tot)
+
+        print set_nr
+        print 'A: {0}. G: {1}. T: {2}. C: {3}'.format(Ap, Gp, Tp, Cp)
+
+    # print the same distribution for the native ITS up to 15
+    print('')
+    print('Compare this with the distribution of nucs for the ITS up to 15')
+    its_seqs = [s.sequence[:15] for s in ITSs]
+
+    As = sum([s.count('A') for s in its_seqs])
+    Gs = sum([s.count('G') for s in its_seqs])
+    Ts = sum([s.count('T') for s in its_seqs])
+    Cs = sum([s.count('C') for s in its_seqs])
+
+    tot = sum([As, Gs, Ts, Cs])
+
+    #percentages
+    Ap = As*100/float(tot)
+    Gp = Gs*100/float(tot)
+    Tp = Ts*100/float(tot)
+    Cp = Cs*100/float(tot)
+
+    print 'Its up to 15'
+    print 'A: {0}. G: {1}. T: {2}. C: {3}'.format(Ap, Gp, Tp, Cp)
+
+
+
+    debug()
+
+    # RESULT You get a correlation coefficient between 0.81 and 0.88 for the
+    # 'naive' and the 'diff' models full set, 15 nt. I'm not so sure about how
+    # to interpret that.
+
+    # What about the issue that Hsu's sequences are a lot more A/T rich than
+    # expected? Are yours that as well?
+
+    # What remains now? Are there more checks you can do?
+    # Check what the ITS get on these energies. What is their range.
+    # Their rainge is from 0.0018 to 0.0225 12.5 fold
+    # Yours is from 0.016 to 0.025 *15.6 fold
+    # Theoretically this should give you smth better.
+
+    # Now you are considering that the entire 1 to 15 counts equal, you know ...
+    # or how does that selection step at 10 work here? That's not clear ...
 
     # 5) Profit? Send the seqs to Hsu ...
 
     # 6) Start writing the paper,
 
-def verify_final_set(py_ranges):
+def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
+                         params, its_len):
     """
-    Compare to incoming sequences to the 'naive' model. See how well it fits.
+    Select candidates in a 2-step process. In the first step, solve up until
+    pruning_stop and select 1% of the candidates in each group. Then resume,
+    generating all possible combinations between pruning_stop and 15.
     """
 
-    # You had come to the point where you had a scatter with a line through it;
-    # add the sequences to that scatter in different colors
+    # In the first round, calculate until pruning_stop + 2 (AT)
+    state_nr = (pruning_stop+2) - 1
+    y0 = [1] + [0 for i in range(state_nr-1)]
+    t = np.linspace(0, 1., 100)
+    # change variable nr to reflect this
+    variable_nr = pruning_stop
 
-    debug()
+    arguments = (params, state_nr, y0, t)
 
-def get_py_ranges(all_results, sample_nr, variable_nr):
+    # Make a workers' pool
+    first_pool = multiprocessing.Pool(4)
+
+    # get first results
+    first_results = multicore_scrunch_wrap(beg, variable_nr, batch_size,
+                                         arguments, first_pool)
+
+    # get a dict of several candidate sets
+    set_nr = 0 # this parameter doesn't matter here
+    set_subsize = 100 # get 100 sequences from each of the 25 lumpings 
+    first_outp = get_py_ranges(first_results, sample_nr, set_nr, set_subsize)
+
+    #Extract only the sequences from the first batch
+    first_seqs = [f[1] for f in first_outp]
+
+    # Make the second batch of results
+    # fex; its_len = 15; pruning_stop=10 -> 3 variable
+    variable_nr = its_len - (pruning_stop+2)
+    print variable_nr
+
+    # get second results
+    batch_size = 200
+
+    state_nr = its_len - 1 # now going full its_len
+    y0 = [1] + [0 for i in range(state_nr-1)]
+    arguments = (params, state_nr, y0, t)
+
+    second_pool = multiprocessing.Pool(4)
+    beg=False # don't add an AT second time around
+
+    second_results = multicore_scrunch_wrap(beg, variable_nr, batch_size,
+                                           arguments, second_pool,
+                                           start_seqs=first_seqs)
+
+    set_nr = 10 # get 5 final outputs to choose from
+    return get_py_ranges(second_results, sample_nr, set_nr)
+
+def multicore_scrunch_wrap(beg, variable_nr, batch_size, arguments,
+                           my_pool, start_seqs=False):
+    """
+    """
+
+    results = []
+    t1 = time.time()
+    for batch in seq_generator(variable_nr, batch_size, beg=beg,
+                               starts=start_seqs):
+
+        # if you have start_seqs, send them in
+        args = (batch,) + arguments # join the arguments
+
+
+        #if start_seqs:
+            ## non-multi version
+            #result = mini_scrunch(*args)
+            #debug()
+
+        result = my_pool.apply_async(mini_scrunch, args)
+
+
+        results.append(result)
+
+    my_pool.close()
+    my_pool.join()
+
+    print time.time() - t1
+
+    # flatten the output and return
+    results = sum([r.get() for r in results], [])
+
+    return results
+
+def get_py_ranges(all_results, sample_nr, set_nr, set_subsize=False):
     """
     Given the set of sequences, output a set of sample_nr compartments where
     sequences are sorted linearly according to their PYs
@@ -4880,33 +4960,60 @@ def get_py_ranges(all_results, sample_nr, variable_nr):
         if boundaries[pos][0] <= pyval <= boundaries[pos][1]:
             savers[pos].append((pyval, seq))
 
-    # choose a final set where no nucleotiee has more than 60% presence and
-    # (every nucleotide is present at least once)
-    final_sets = {}
-    set_nr = 10
+    # If this is the first step before pruning, just return a set with
+    # set_subsize sequences from each boundary
+    if set_subsize:
+        return randomly_selected_seqs(savers, set_subsize)
 
-    for i in range(set_nr):
-        this_set = []
-        # for each bounding box
-        for bbox in savers:
+    else:
 
-            # start a bit before the middle of it
-            box_start = int(len(bbox)/2-10)
-            # if less than zero, start at zero
-            if box_start < 0:
-                box_start = 0
+        # choose a final set where no nucleotide has more than 60% presence and
+        # (every nucleotide is present at least once)
+        final_sets = {}
 
-            # if one of the boxes is empty, it's time to pack up and leave
-            if bbox == []:
-                break
+        for i in range(set_nr):
+            this_set = []
+            # for each bounding box
+            for bbox in savers:
 
-            # if not, remeove the tuple from bbox and add it to final_sets
-            tup = bbox.pop(box_start)
-            this_set.append(tup)
+                # start a bit before the middle of it
+                box_start = int(len(bbox)/2-10)
+                # if less than zero, start at zero
+                if box_start < 0:
+                    box_start = 0
 
-        final_sets[i+1] = this_set
+                # if one of the boxes is empty, it's time to pack up and leave
+                if bbox == []:
+                    break
 
-    return final_sets
+                # if not, remeove the tuple from bbox and add it to final_sets
+                tup = bbox.pop(box_start)
+                this_set.append(tup)
+
+            final_sets[i+1] = this_set
+
+        return final_sets
+
+def randomly_selected_seqs(savers, set_subsize):
+    """
+    From each box in savers, select 'set_subsize' nr of random sequences. Return
+    them all in a list.
+    """
+    outp = []
+
+    for bbox in savers:
+
+        # if the bbox size is less than set_subsize, add all of them
+        if len(bbox) < set_subsize:
+            [outp.append(t) for t in bbox]
+
+        # if not, add 'set_subsize' random ones
+        else:
+            for _ in range(set_subsize):
+                random_index = random.randrange(len(bbox))
+                outp.append(bbox.pop(random_index))
+
+    return outp
 
 
 def variable_corr():
@@ -4983,7 +5090,7 @@ def main():
     #new_scatter(lizt, ITSs)
 
     # XXX the new ODE models
-    new_models(ITSs)
+    #new_models(ITSs)
 
     # XXX Making figures from all the new models in one go
     #auto_figure_maker_new_models(ITSs)
