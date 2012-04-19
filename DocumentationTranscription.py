@@ -3381,7 +3381,12 @@ def new_models(ITSs):
     #normal_obj = scruncher(PYs, its_len, ITSs, ranges)
 
     Your model is as follows:
-        c1*exp(-c2*rna_dna + c3*dna_dna - c4*ln(Keq))
+        c1*exp(-c2*rna_dna + c3*dna_dna + c4*keq)
+
+    # rna_dna is stabilizing, whreas dna_dna and keq are destabilizing (keq is
+    # for reverse translocation)
+
+    # modeling shows that c2 goes to zero.
 
     """
     # Compare with the PY percentages in this notation
@@ -3389,14 +3394,15 @@ def new_models(ITSs):
 
     # Parameter ranges you want to test out
     #c1 = np.linspace(1, 50, 50)
-    c1 = np.array([15]) # insensitive to variation here
-    c2 = np.array([0]) # c2 is best evaluated to 0
-    #c2 = np.linspace(0.002, 0.4, 15)*-1
-    #c3 = np.linspace(0.001, 0.1, 15)
-    c3 = np.array([0.022])
-    #c3 = np.array([0])
-    #c4 = np.linspace(0.05, 0.5, 15)
-    c4 = np.array([0.24])
+    c1 = np.array([20]) # insensitive to variation here
+    #c2 = np.array([0]) # c2 is best evaluated to 0
+    #c2 = np.array([0.01]) # c2 is best evaluated to 0
+    c2 = np.linspace(0.001, 0.2, 10)
+    #c3 = np.linspace(0.001, 0.2, 10)
+    #c3 = np.array([0.022])
+    c3 = np.array([0])
+    c4 = np.linspace(0.1, 0.3, 10)
+    #c4 = np.array([0.1])
     #c4 = np.array([0])
 
     par_ranges = (c1, c2, c3, c4)
@@ -3426,6 +3432,7 @@ def new_models(ITSs):
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
+    debug()
 
     # ladder plot
     plt.ion()
@@ -3521,7 +3528,7 @@ def auto_figure_maker_new_models(ITSs):
     optim = False   # GRID
     #optim = True   # OPTIMIZER
 
-    randomize = 10 # here 0 = False (or randomize 0 times)
+    randomize = 5 # here 0 = False (or randomize 0 times)
     #randomize = 0 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
@@ -3531,7 +3538,7 @@ def auto_figure_maker_new_models(ITSs):
     t = np.linspace(0, 1., 100)
 
     # Fit with 50% of ITS and apply the parameters to the 50% remaining
-    retrofit = 10
+    retrofit = 5
     #retrofit = 0
 
     modelz = get_models(stepsize=15)
@@ -3572,23 +3579,23 @@ def get_models(stepsize=5):
 
     # Model 1 --
     # c1 = const, zero RNA-DNA, DNA-DNA and Keq variable
-    m1 = (np.array([10]),
+    m1 = (np.array([15]),
           np.array([0]),
           np.linspace(0.001, 0.1, s),
-          np.linspace(0.05, 0.5, s),
+          np.linspace(0.05, 0.4, s),
           'M1: c1 = const, zero RNA-DNA, DNA-DNA and Keq variable')
 
     # Model 2 --
     # c1 = const, RNA-DNA variable, zero DNA-DNA, and Keq variable
-    m2 = (np.array([10]),
+    m2 = (np.array([15]),
           np.linspace(0.001, 0.2, s),
           np.array([0]),
-          np.linspace(0.05, 0.5, s),
+          np.linspace(0.05, 0.4, s),
          'M2: c1 = const, RNA-DNA variable, zero DNA-DNA, and Keq variable')
 
     # Model 3 --
     # c1 = const, RNA-DNA and DNA-DNA variable, and Keq zero
-    m3 = (np.array([10]),
+    m3 = (np.array([15]),
           np.linspace(0.001, 0.2, s),
           np.linspace(0.001, 0.2, s),
           np.array([0]),
@@ -3596,31 +3603,31 @@ def get_models(stepsize=5):
 
     # Model 4 --
     # c1 = const, RNA-DNA, DNA-DNA, and Keq variable
-    m4 = (np.array([10]),
+    m4 = (np.array([15]),
           np.linspace(0.001, 0.2, s),
           np.linspace(0.001, 0.2, s),
-          np.linspace(0.05, 0.5, s),
+          np.linspace(0.05, 0.4, s),
          'M4: c1 = const, RNA-DNA, DNA-DNA, and Keq variable')
 
     # Model 5 --
     # c1 variable, RNA-DNA, DNA-DNA, and Keq constant
     m5 = (np.linspace(2, 20, s),
             np.array([0]),
-            np.array([0.05]),
-            np.array([0.3]),
+            np.array([0.02]),
+            np.array([0.2]),
          'M5: c1 variable, RNA-DNA, DNA-DNA, and Keq constant')
 
     # Model 6 --
     # c1 = const, RNA-DNA variable, DNA-DNA and Keq zero
-    m6 = (np.array([10]),
-          np.linspace(0.001, 0.2, s),
+    m6 = (np.array([15]),
+          np.linspace(0.001, 0.2, s)*-1,
           np.array([0]),
           np.array([0]),
-        'M6: c1 = const, RNA-DNA variable, DNA-DNA and Keq zero')
+        'M6: c1 = const, minus RNA-DNA variable, DNA-DNA and Keq zero')
 
     # Model 7 --
     # c1 = const, RNA-DNA zero, DNA-DNA variable, and Keq zero
-    m7 = (np.array([10]),
+    m7 = (np.array([15]),
           np.array([0]),
           np.linspace(0.001, 0.2, s),
           np.array([0]),
@@ -3628,31 +3635,32 @@ def get_models(stepsize=5):
 
     # Model 8 --
     # c1 = const, RNA-DNA zero, DNA-DNA zero, and Keq variable
-    m8 = (np.array([10]),
+    m8 = (np.array([15]),
           np.array([0]),
           np.array([0]),
-          np.linspace(0.05, 0.5, s),
+          np.linspace(0.05, 0.4, s),
          'M8: c1 = const, RNA-DNA zero, DNA-DNA zero, and Keq variable')
 
     # Model 9 --
     # All constant
-    m9 = (np.array([10]),
+    m9 = (np.array([15]),
           np.array([0]),
           np.array([0.02]),
           np.array([0.2]),
          'M9: All constant but RNA-DNA zero')
 
-    m10 = (np.array([10]),
+    # Model 10 Reversed RNA-DNA
+    m10 = (np.array([15]),
           np.linspace(0.001, 0.2, s)*(-1),
           np.array([0]),
-          np.linspace(0.05, 0.5, s),
-         'M10: Reversed RNA-DNA sign')
+          np.linspace(0.05, 0.4, s),
+         'M10: DNA-DNA zero, reversed RNA-DNA and Keq variable')
 
-    m11 = (np.array([10]),
+    m11 = (np.array([15]),
           np.linspace(0.001, 0.2, s)*(-1),
           np.linspace(0.001, 0.2, s)*(-1),
-          np.linspace(0.05, 0.5, s),
-         'M11: Reversed RNA-DNA sign AND reversed DNA-DNA sign')
+          np.linspace(0.05, 0.4, s),
+         'M11: Reversed RNA-DNA sign AND reversed DNA-DNA sign, all variable')
 
     models = {'m1': m1,
               'm2': m2,
@@ -3760,8 +3768,10 @@ def parameter_relationship(results, optim, randomize, par_ranges):
     paramz_best = [r[1].params_best for r in sorted(results.items())]
     paramz_mean = [r[1].params_mean for r in sorted(results.items())]
 
-    best_c3, best_c4 = zip(*[(pb['c3'], pb['c4']) for pb in paramz_best])
-    mean_c3, mean_c4 = zip(*[(pb['c3'], pb['c4']) for pb in paramz_mean])
+    #best_c3, best_c4 = zip(*[(pb['c3'], pb['c4']) for pb in paramz_best])
+    #mean_c3, mean_c4 = zip(*[(pb['c3'], pb['c4']) for pb in paramz_mean])
+    best_c3, best_c4 = zip(*[(pb['c2'], pb['c4']) for pb in paramz_best])
+    mean_c3, mean_c4 = zip(*[(pb['c2'], pb['c4']) for pb in paramz_mean])
 
     # You want the relationship between them
 
@@ -4406,6 +4416,7 @@ def calculate_k1(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
         expo = (-b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
 
         # if expo is above 0, the exponential will be greater than 1, and
+        # XXX why? have you given this a lot of thought?
         # this will in general not work
         #if run_once and expo > 0:
             #proceed = False
@@ -4740,10 +4751,10 @@ def candidate_its(ITSs):
     plt.ion()
 
     #XXX OK you've got the optimalz. Now party! Gen'rate seqs.
-    params = (15, 0, 0.022, 0.24)
-
-    # Desired range of PY values ( this doesn't seem to work ...)
-    desired_pys = np.linspace(0.001, 0.1, 26)
+    #params = (15, 0, 0.022, 0.24)
+    # XXX these are the optimals for the rna-dna model ...
+    params = (15, -0.022, 0, 0.24)
+    # Interstingly, they are the mirrors of the dna-dna model ...!
 
     beg = 'AT'
     N25 = 'ATAAATTTGAGAGAGGAGTT'
@@ -4818,25 +4829,26 @@ def candidate_its(ITSs):
     print 'Its up to 15'
     print 'A: {0}. G: {1}. T: {2}. C: {3}'.format(Ap, Gp, Tp, Cp)
 
-
-
-    debug()
-
     # RESULT You get a correlation coefficient between 0.81 and 0.88 for the
     # 'naive' and the 'diff' models full set, 15 nt. I'm not so sure about how
     # to interpret that.
 
+    # Q: how does this look if I optimize for RNA-DNA instead?
+
     # What about the issue that Hsu's sequences are a lot more A/T rich than
-    # expected? Are yours that as well?
+    # expected? Yours have the A a lot more, but not the others. 
+    # A: 35.3846153846. G: 26.4102564103. T: 21.0256410256. C: 17.1794871795
 
-    # What remains now? Are there more checks you can do?
-    # Check what the ITS get on these energies. What is their range.
-    # Their rainge is from 0.0018 to 0.0225 12.5 fold
-    # Yours is from 0.016 to 0.025 *15.6 fold
-    # Theoretically this should give you smth better.
+    # vs ITS:
+    # A: 36.8992248062. G: 15.1937984496. T: 27.5968992248. C: 20.3100775194
 
-    # Now you are considering that the entire 1 to 15 counts equal, you know ...
-    # or how does that selection step at 10 work here? That's not clear ...
+    # By using the RNA-centric model I have:
+    #A: 35.1282051282. G: 22.5641025641. T: 23.0769230769. C: 19.2307692308
+
+    # This model is definitely pushing in the direction of the ITS
+
+    # These sequences are not followign the normal distirbution. That's the
+    # selection pressure. But is there more than that?
 
     # 5) Profit? Send the seqs to Hsu ...
 
@@ -5090,14 +5102,14 @@ def main():
     #new_scatter(lizt, ITSs)
 
     # XXX the new ODE models
-    #new_models(ITSs)
+    new_models(ITSs)
 
     # XXX Making figures from all the new models in one go
     #auto_figure_maker_new_models(ITSs)
     # TODO you're not printing the bootstrapping any more
 
     # XXX Generate candidate sequences! : )
-    candidate_its(ITSs)
+    #candidate_its(ITSs)
 
     # old one
     #new_designer(lizt)
