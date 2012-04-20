@@ -120,7 +120,7 @@ def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
 
     if ran == 'yes':
         nrseq = len(seqdata) #how many sequences. (might remove some)
-        seqs = ITSgenerator_local(nrseq)
+        seqs = ITS_generator(nrseq)
 #    labels = ['Name','Sequence','PY','PYst','RPY','RPYst','RIF','RIFst','APR','MSAT','R']
 
     PY = rowdata[2]
@@ -220,11 +220,18 @@ def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
 
     return output
 
-def ITSgenerator_local(nrseq):
-    """Generate list of nrseq RNA random sequences """
+def ITS_generator(nrseq, length=18, ATstart=True):
+    """Generate list of nrseq RNA random sequences. Return length+2 length. """
+
     gatc = list('GATC')
-    return ['AT'+ ''.join([random.choice(gatc) for dummy1 in range(18)]) for dummy2 in
-            range(nrseq)]
+
+    if ATstart:
+        beg = 'AT'
+    else:
+        beg = ''
+
+    return [beg + ''.join([random.choice(gatc) for dummy1 in range(length)])
+            for dummy2 in range(nrseq)]
 
 def LadderScrutinizer(lizt, n=10):
     """ Calculate sets of size n of random sequences, perform RNA/DNA energy
@@ -252,7 +259,7 @@ def LadderScrutinizer(lizt, n=10):
 
     for dummy in range(n):
         # Generate 39-43 random sequences of length 20
-        ranITS = ITSgenerator_local(nrseq)
+        ranITS = ITS_generator(nrseq)
         # Calculate the energy
         enRNA = [Ec.PhysicalRNA(seq, msat, msatyes) for seq in ranITS]
         RNAen = [[[row[val][0] for row in enRNA], row[val][1]] for val in
@@ -298,7 +305,7 @@ def Purine_RNADNA(repnr=100, ranNr=39, rand='biased', upto=20):
         purTable = np.zeros(ranNr)
         enTable = np.zeros(ranNr)
         for nr in range(ranNr):
-            sequence = ITSgenerator_local(1)[0][:upto]
+            sequence = ITS_generator(1)[0][:upto]
             purTable[nr] = sequence.count('G') + sequence.count('A')
             enTable[nr] = Ec.RNA_DNAenergy(sequence)
         cor, pval = scipy.stats.spearmanr(purTable, enTable)
@@ -5090,19 +5097,174 @@ def variable_corr():
     fix.set_figheight(5)
     fix.set_figwidth(12)
 
+def selection_pressure(ITSs):
+    """
+    The nucleotide distribution in the ITSs is not uniform. What has caused the
+    selection pressure? Hsu's bet is on the DNA-DNA. According to the
+    literature, modern random PCA (after mid 90s) is no longer biased toward any
+    nucleotide distribution. Whatever selection has occured is due to the
+    selection steps Hsu has made.
+
+    Good results! Question: the ITS with 'normal' DNA-DNA folding, do they make
+    up for it with translocation energies? For the first 15, choose those
+    DNA-DNA sequences with less than -17 DNA-DNA and calculate their
+    translocation values. Plot this in the translocation histogram.
+    """
+
+    plt.ion()
+
+    # Get the DNA-DNA, translocation, and RNA-RNA energies for the first 10
+    # nucleotides. Then obtain the distribution from completely random DNA.
+    # Do it for the first 10 and then for the second 10
+
+    # Mandatory AT start
+    DD10 = [Ec.DNA_DNAenergy(i.sequence[:15]) for i in ITSs]
+    RR10 = [Ec.RNA_DNAenergy(i.sequence[:15]) for i in ITSs]
+    TR10 = [Ec.Delta_trans(i.sequence[:15]) for i in ITSs]
+
+    # Generate 100000 random DNA of length 10 and calculate the above energies
+    # WITH AT START
+    rDD10 = []
+    rRR10 = []
+    rTR10 = []
+
+    for random_dna in ITS_generator(10000, length=13):
+        rDD10.append(Ec.DNA_DNAenergy(random_dna))
+        rRR10.append(Ec.RNA_DNAenergy(random_dna))
+        rTR10.append(Ec.Delta_trans(random_dna))
+
+    fig, [ax1, ax2, ax3] = plt.subplots(3)
+
+    ax1.hist(DD10, label='DG100 First 15 nt of ITS', alpha=0.7, color='r',
+             normed=True, bins=10)
+    ax1.hist(rDD10, bins=50, alpha=0.3, color='g', normed=True,
+             label='Random DNA starting with AT length 15')
+    ax1.set_title('DNA-DNA')
+
+    ax2.hist(RR10, label='DG100 First 15 nt of ITS', alpha=0.7, color='r',
+             normed=True, bins=10)
+    ax2.hist(rRR10, bins=50, alpha=0.3, color='g', normed=True,
+             label='Random DNA starting with AT length 15')
+    ax2.set_title('RNA-DNA')
+
+    ax3.hist(TR10, label='DG100 First 15 nt of ITS', alpha=0.7, color='r',
+             normed=True, bins=10)
+    ax3.hist(rTR10, bins=50, alpha=0.3, color='g', normed=True,
+             label='Random DNA starting with AT length 15')
+    ax3.set_title('Translocation')
+
+    ax1.legend(loc='upper left')
+
+    fig.suptitle('The ITS sequences in the DG100 series are pre-selected for a '
+                 'high-energy DNA-DNA bubble')
+
+    for ax in [ax1, ax2, ax3]:
+        ax.set_ylabel('Normalized counts')
+        ax.set_yticklabels([])
+
+    ax3.set_xlabel('Energy')
+
+    fig.subplots_adjust(wspace=None, hspace=0.4)
+
+    # Dow low DNA-DNA have  high translocation?
+
+    # Low DNA-DNA
+    limit = -18
+    lowDD = [i for i in ITSs if Ec.DNA_DNAenergy(i.sequence[:15]) < limit]
+
+    mini_trans = [Ec.Delta_trans(i.sequence[:15]) for i in lowDD]
+    print len(mini_trans)
+
+    TR10_mean, TR10_std = np.mean(TR10), np.std(TR10)
+    mini_mean, mini_std = np.mean(mini_trans), np.std(mini_trans)
+
+    fiG, aX = plt.subplots()
+
+    aX.bar([0.5, 1.5], [-TR10_mean, -mini_mean], alpha=0.3, width=0.5)
+    aX.errorbar([0.75, 1.75], [-TR10_mean, -mini_mean], yerr = [TR10_std, mini_std],
+                fmt=None)
+
+    aX.set_xlim(0, 2.5)
+    aX.set_xticks([0.75, 1.75])
+    aX.set_xticklabels(['All ITS ({0})'.format(len(TR10)),
+                        'ITS with DNA energy < {0} ({1})'.format(limit, 
+                                                                 len(lowDD))])
+    aX.set_ylabel('Translocation energy')
+
+    # do a welchs test
+    n1 = len(TR10)
+    mean1 = TR10_mean
+    sem1 = TR10_std/np.sqrt(n1)
+
+    n2 = len(lowDD)
+    mean2 = mini_mean
+    sem2 = mini_std/np.sqrt(n2)
+
+    alpha = 0.05
+
+    welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
+
+    debug()
+
+
+    # XXX you can do the same with bar-plots. It shows that the low-DNA-DNA
+    # variants compensate by having very high translocation values! Wonderful!
+
+
+    ### XXX do the same with the last 10, but now choose completely random DNA
+    ### last 8 last 6?
+    ### No mandatory start
+    #DD20 = [Ec.DNA_DNAenergy(i.sequence[-10:]) for i in ITSs]
+    #RR20 = [Ec.RNA_DNAenergy(i.sequence[-10:]) for i in ITSs]
+    #TR20 = [Ec.Delta_trans(i.sequence[-10:]) for i in ITSs]
+
+    ## Generate 100000 random DNA of length 10 and calculate the above energies
+    ## WITHOUT AT START
+    #rDD20 = []
+    #rRR20 = []
+    #rTR20 = []
+
+    #for random_dna in ITS_generator(10000, length=10, ATstart=False):
+        #rDD20.append(Ec.DNA_DNAenergy(random_dna))
+        #rRR20.append(Ec.RNA_DNAenergy(random_dna))
+        #rTR20.append(Ec.Delta_trans(random_dna))
+
+    #fig2, [ax12, ax22, ax32] = plt.subplots(3)
+
+    #ax12.hist(DD20, label='DG100 Last 10 nt of ITS', alpha=0.7, color='r',
+              #normed=True)
+    #ax12.hist(rDD20, bins=40, alpha=0.3, color='g', normed=True,
+              #label='Random DNA starting with AT length 10')
+    #ax12.set_title('DNA-DNA: ITS and random compared')
+
+    #ax22.hist(RR20, label='DG100 Last 10 nt of ITS', alpha=0.7, color='r',
+              #normed=True)
+    #ax22.hist(rRR20, bins=40, alpha=0.3, color='g', normed=True,
+              #label='Random DNA starting with AT length 10')
+    #ax22.set_title('RNA-DNA: ITS and random compared')
+
+    #ax32.hist(TR20, label='DG100 Last 10 nt of ITS', alpha=0.7, color='r',
+              #normed=True)
+    #ax32.hist(rTR20, bins=40, alpha=0.3, color='g', normed=True,
+              #label='Random DNA starting with AT length 10')
+    #ax32.set_title('Translocation: ITS and random compared')
+
+    #debug()
+
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
     #genome_wide()
     #new_genome()
-    #for i in range(10):
-        #new_ladder(lizt)
-
+    #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
+    # XXX which parameter is most different from the random expected?
+    selection_pressure(ITSs)
+
     # XXX the new ODE models
-    new_models(ITSs)
+    #new_models(ITSs)
 
     # XXX Making figures from all the new models in one go
     #auto_figure_maker_new_models(ITSs)
