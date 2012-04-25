@@ -5240,6 +5240,46 @@ def full_model_grid_and_scatter(ITSs, testing):
 
     return fig_lad, fig_sct
 
+def predicted_vs_measured(ITSs):
+    """
+    Return the correlation between predicted and measured PYs
+
+    You ran, I think, with these parameters.
+    params = (15, 0, 0.022, 0.24)
+
+    But maybe you should get the PYs with 20? Should be trivial.
+
+    """
+
+    # 1) Get the sequences you sent to Hsu
+    # 2) Calculate the PY scores for them.
+
+    params = (20, 0, 0.022, 0.24)
+    par_ranges = [np.array([p]) for p in params]
+
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    # XXX you should get it to work with 21
+    its_range = range(3, 20)
+
+    optim = False # GRID
+    randomize = 0 # here 0 = False (or randomize 0 times)
+    retrofit = 0
+    initial_bubble = True
+
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, randomize,
+                             retrofit, t, initial_bubble)
+
+    # extract the specific results
+    results, rand_results, retrof_results = all_results
+
+    # ladder plot
+    plt.ion()
+
+    testseqs = [l.split()[1] for l in open('seqs_for_testing.txt', 'rb')]
 
 def paper_figures(ITSs):
     """
@@ -5257,35 +5297,40 @@ def paper_figures(ITSs):
     figs = []
 
     # Figure 1 -> Full model with grid-evaluation
-    ladder_name = 'Full_model_grid' + append
-    fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing)
-    figs.append((fig_ladder, ladder_name))
+    #ladder_name = 'Full_model_grid' + append
+    #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing)
+    #figs.append((fig_ladder, ladder_name))
 
-    # Figure 2 -> Full model at nt 15, fixed values, scatterplot
-    scatter_name = 'Full_model_scatter' + append
-    figs.append((fig_scatter, scatter_name))
+    ## Figure 2 -> Full model at nt 15, fixed values, scatterplot
+    #scatter_name = 'Full_model_scatter' + append
+    #figs.append((fig_scatter, scatter_name))
 
-    # Figure 3 -> Reduced model with fixed values
-    fixed_lad_name = 'Reduced_model_fixedvals' + append
-    fig_reduced_fixed = reduced_model_fixed_ladder(ITSs)
-    figs.append((fig_reduced_fixed, fixed_lad_name))
+    ## Figure 3 -> Reduced model with fixed values
+    #fixed_lad_name = 'Reduced_model_fixedvals' + append
+    #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs)
+    #figs.append((fig_reduced_fixed, fixed_lad_name))
 
     # Figure 4 -> Scatter of predicted VS actual PY
+    predicted_name = 'Predicted_vs_measured' + append
+    fig_predicted = predicted_vs_measured(ITSs)
 
-
-
+    # TODO make a linear model from the RNAP concentration with give coordinates
+    # and given time to the actual PY.
+    # Then predict new sequences with the exact same settings and use the linear
+    # model to obtain the PY ranges. Don't actually predict new sequences, but
+    # use those you sent to Hsu
 
     # Save the figures
-    for (fig, name) in figs:
-        for fig_dir in fig_dirs:
-            for formt in ['pdf', 'eps', 'png']:
+    #for (fig, name) in figs:
+        #for fig_dir in fig_dirs:
+            #for formt in ['pdf', 'eps', 'png']:
 
-                odir = os.path.join(fig_dir, formt)
+                #odir = os.path.join(fig_dir, formt)
 
-                if not os.path.isdir(odir):
-                    os.makedirs(odir)
+                #if not os.path.isdir(odir):
+                    #os.makedirs(odir)
 
-                fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+                #fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
 def selection_pressure(ITSs):
     """
@@ -5655,7 +5700,7 @@ def main():
     # look OK. I think you should just change that one C to something else and
     # you're good to go. What to change it to?
 
-    s_shaped(ITSs)
+    #s_shaped(ITSs)
 
     # old one
     #new_designer(lizt)
