@@ -120,7 +120,7 @@ def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
 
     if ran == 'yes':
         nrseq = len(seqdata) #how many sequences. (might remove some)
-        seqs = ITSgenerator_local(nrseq)
+        seqs = ITS_generator(nrseq)
 #    labels = ['Name','Sequence','PY','PYst','RPY','RPYst','RIF','RIFst','APR','MSAT','R']
 
     PY = rowdata[2]
@@ -220,11 +220,18 @@ def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
 
     return output
 
-def ITSgenerator_local(nrseq):
-    """Generate list of nrseq RNA random sequences """
+def ITS_generator(nrseq, length=18, ATstart=True):
+    """Generate list of nrseq RNA random sequences. Return length+2 length. """
+
     gatc = list('GATC')
-    return ['AT'+ ''.join([random.choice(gatc) for dummy1 in range(18)]) for dummy2 in
-            range(nrseq)]
+
+    if ATstart:
+        beg = 'AT'
+    else:
+        beg = ''
+
+    return [beg + ''.join([random.choice(gatc) for dummy1 in range(length)])
+            for dummy2 in range(nrseq)]
 
 def LadderScrutinizer(lizt, n=10):
     """ Calculate sets of size n of random sequences, perform RNA/DNA energy
@@ -252,7 +259,7 @@ def LadderScrutinizer(lizt, n=10):
 
     for dummy in range(n):
         # Generate 39-43 random sequences of length 20
-        ranITS = ITSgenerator_local(nrseq)
+        ranITS = ITS_generator(nrseq)
         # Calculate the energy
         enRNA = [Ec.PhysicalRNA(seq, msat, msatyes) for seq in ranITS]
         RNAen = [[[row[val][0] for row in enRNA], row[val][1]] for val in
@@ -298,7 +305,7 @@ def Purine_RNADNA(repnr=100, ranNr=39, rand='biased', upto=20):
         purTable = np.zeros(ranNr)
         enTable = np.zeros(ranNr)
         for nr in range(ranNr):
-            sequence = ITSgenerator_local(1)[0][:upto]
+            sequence = ITS_generator(1)[0][:upto]
             purTable[nr] = sequence.count('G') + sequence.count('A')
             enTable[nr] = Ec.RNA_DNAenergy(sequence)
         cor, pval = scipy.stats.spearmanr(purTable, enTable)
@@ -2957,7 +2964,8 @@ def new_designer(lizt):
     min20, max20, boxed_seqs = seq_parser(beg, N25, repeat_nr, sample_nr,
                                           at_test_nr)
 
-def seq_generator(variable_nr, batch_size, beg=False, starts=False):
+def seq_generator(variable_nr, batch_size, DNADNAfilter, beg=False,
+                  starts=False):
     """
     Yield sequences in batches (list of sequences of length batch_size)
 
@@ -2992,6 +3000,12 @@ def seq_generator(variable_nr, batch_size, beg=False, starts=False):
                 # second round -> add the 'rest'
                 # pre_seq is empty unless start_seqs have been given as input
                 sequence = pre_seq + ''.join(seq)
+
+                # If DNADNAfilter, screen for DNA-DNA energy; not less than -18
+                # for all 15 nt.
+                if DNADNAfilter and len(sequence) == 15:
+                    if Ec.DNA_DNAenergy(sequence) < -18:
+                        continue
 
             # count the nucleotide frequencies; 
             slen = float(len(sequence))
@@ -4754,7 +4768,7 @@ def parameter_matrix(rates, states, variables):
 
     return np.array(rows)
 
-def candidate_its(ITSs):
+def candidate_its(ITSs, DNADNAfilter=True):
     """
     Based on your models you must now suggest new sequences.
 
@@ -4767,16 +4781,15 @@ def candidate_its(ITSs):
     plt.ion()
 
     #XXX OK you've got the optimalz. Now party! Gen'rate seqs.
-    #params = (15, 0, 0.022, 0.24)
+    params = (15, 0, 0.022, 0.24)
     # XXX these are the optimals for the rna-dna model ...
-    params = (15, -0.022, 0, 0.24)
+    #params = (15, -0.022, 0, 0.24)
     # Interstingly, they are the mirrors of the dna-dna model ...!
 
     beg = 'AT'
     N25 = 'ATAAATTTGAGAGAGGAGTT'
 
     pruning_stop = 10 # stop after this many variations; trim the dataset; continue
-
     # 5 => 0.4, 6 => 1.9, 7 =>8.9, 8 => 32.8, 9 => 128
     # At work: 7 => 1.95,  8 => 7.2, 9 => 30.1
 
@@ -4786,11 +4799,10 @@ def candidate_its(ITSs):
     batch_size = 300
 
     its_len = 15 # the ultimate goal
-    #its_len = 13 # the ultimate goal
 
     # get a dict of some candidate sets
     candidates = get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
-                                      params, its_len)
+                                      params, its_len, DNADNAfilter)
 
     # 4) Check these sequences against your 'naive' model. It should hold up
     # there as well.
@@ -4845,6 +4857,27 @@ def candidate_its(ITSs):
     print 'Its up to 15'
     print 'A: {0}. G: {1}. T: {2}. C: {3}'.format(Ap, Gp, Tp, Cp)
 
+    # XXX Print the DNA-DNA energy distribution compared to ITS and random.
+    dna_dna = {}
+    for set_nr, candidate_set in candidates.items():
+
+        ens = []
+        predPys, seqs = zip(*candidate_set)
+        for cand_seq in seqs:
+            ens.append(Ec.DNA_DNAenergy(cand_seq[:15]))
+
+        dna_dna[set_nr] = ens
+
+    DNA_its = [Ec.DNA_DNAenergy(s.sequence[:15]) for s in ITSs]
+
+    fig, ax = plt.subplots()
+
+    ax.hist(DNA_its, normed=True, alpha=0.7, color = 'r')
+
+    for (new_set, col) in zip(dna_dna.values(), ['b', 'g', 'k', 'c', 'yellow']):
+
+        ax.hist(new_set, normed=True, alpha=0.3, color=col)
+
     # RESULT You get a correlation coefficient between 0.81 and 0.88 for the
     # 'naive' and the 'diff' models full set, 15 nt. I'm not so sure about how
     # to interpret that.
@@ -4871,7 +4904,7 @@ def candidate_its(ITSs):
     # 6) Start writing the paper,
 
 def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
-                         params, its_len):
+                         params, its_len, DNADNAfilter):
     """
     Select candidates in a 2-step process. In the first step, solve up until
     pruning_stop and select 1% of the candidates in each group. Then resume,
@@ -4892,7 +4925,7 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
 
     # get first results
     first_results = multicore_scrunch_wrap(beg, variable_nr, batch_size,
-                                         arguments, first_pool)
+                                         arguments, first_pool, DNADNAfilter)
 
     # get a dict of several candidate sets
     set_nr = 0 # this parameter doesn't matter here
@@ -4921,17 +4954,17 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
                                            arguments, second_pool,
                                            start_seqs=first_seqs)
 
-    set_nr = 10 # get 5 final outputs to choose from
+    set_nr = 5 # get 5 final outputs to choose from
     return get_py_ranges(second_results, sample_nr, set_nr)
 
 def multicore_scrunch_wrap(beg, variable_nr, batch_size, arguments,
-                           my_pool, start_seqs=False):
+                           my_pool, DNADNAfilter, start_seqs=False):
     """
     """
 
     results = []
     t1 = time.time()
-    for batch in seq_generator(variable_nr, batch_size, beg=beg,
+    for batch in seq_generator(variable_nr, batch_size, DNADNAfilter, beg=beg,
                                starts=start_seqs):
 
         # if you have start_seqs, send them in
@@ -5254,29 +5287,375 @@ def paper_figures(ITSs):
 
                 fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
+def selection_pressure(ITSs):
+    """
+    The nucleotide distribution in the ITSs is not uniform. What has caused the
+    selection pressure? Hsu's bet is on the DNA-DNA. According to the
+    literature, modern random PCA (after mid 90s) is no longer biased toward any
+    nucleotide distribution. Whatever selection has occured is due to the
+    selection steps Hsu has made.
+
+    Good results! Question: the ITS with 'normal' DNA-DNA folding, do they make
+    up for it with translocation energies? For the first 15, choose those
+    DNA-DNA sequences with less than -17 DNA-DNA and calculate their
+    translocation values. Plot this in the translocation histogram.
+    """
+
+    plt.ion()
+
+    # Get the DNA-DNA, translocation, and RNA-RNA energies for the first 10
+    # nucleotides. Then obtain the distribution from completely random DNA.
+    # Do it for the first 10 and then for the second 10
+
+    # Mandatory AT start
+    DD10 = [Ec.DNA_DNAenergy(i.sequence[:15]) for i in ITSs]
+    RR10 = [Ec.RNA_DNAenergy(i.sequence[:15]) for i in ITSs]
+    TR10 = [Ec.Delta_trans(i.sequence[:15]) for i in ITSs]
+
+    # Generate 100000 random DNA of length 10 and calculate the above energies
+    # WITH AT START
+    rDD10 = []
+    rRR10 = []
+    rTR10 = []
+
+    for random_dna in ITS_generator(10000, length=13):
+        rDD10.append(Ec.DNA_DNAenergy(random_dna))
+        rRR10.append(Ec.RNA_DNAenergy(random_dna))
+        rTR10.append(Ec.Delta_trans(random_dna))
+
+    fig, [ax1, ax2, ax3] = plt.subplots(3)
+
+    ax1.hist(DD10, label='DG100 First 15 nt of ITS', alpha=0.7, color='r',
+             normed=True, bins=10)
+    ax1.hist(rDD10, bins=50, alpha=0.3, color='g', normed=True,
+             label='Random DNA starting with AT length 15')
+    ax1.set_title('DNA-DNA')
+
+    ax2.hist(RR10, label='DG100 First 15 nt of ITS', alpha=0.7, color='r',
+             normed=True, bins=10)
+    ax2.hist(rRR10, bins=50, alpha=0.3, color='g', normed=True,
+             label='Random DNA starting with AT length 15')
+    ax2.set_title('RNA-DNA')
+
+    ax3.hist(TR10, label='DG100 First 15 nt of ITS', alpha=0.7, color='r',
+             normed=True, bins=10)
+    ax3.hist(rTR10, bins=50, alpha=0.3, color='g', normed=True,
+             label='Random DNA starting with AT length 15')
+    ax3.set_title('Translocation')
+
+    ax1.legend(loc='upper left')
+
+    fig.suptitle('The ITS sequences in the DG100 series are pre-selected for a '
+                 'high-energy DNA-DNA bubble')
+
+    for ax in [ax1, ax2, ax3]:
+        ax.set_ylabel('Normalized counts')
+        ax.set_yticklabels([])
+
+    ax3.set_xlabel('Energy')
+
+    fig.subplots_adjust(wspace=None, hspace=0.4)
+
+    # Dow low DNA-DNA have  high translocation?
+
+    # Low DNA-DNA
+    limit = -18
+    lowDD = [i for i in ITSs if Ec.DNA_DNAenergy(i.sequence[:15]) < limit]
+
+    mini_trans = [Ec.Delta_trans(i.sequence[:15]) for i in lowDD]
+    print len(mini_trans)
+
+    TR10_mean, TR10_std = np.mean(TR10), np.std(TR10)
+    mini_mean, mini_std = np.mean(mini_trans), np.std(mini_trans)
+
+    fiG, aX = plt.subplots()
+
+    aX.bar([0.5, 1.5], [-TR10_mean, -mini_mean], alpha=0.3, width=0.5)
+    aX.errorbar([0.75, 1.75], [-TR10_mean, -mini_mean], yerr = [TR10_std, mini_std],
+                fmt=None)
+
+    aX.set_xlim(0, 2.5)
+    aX.set_xticks([0.75, 1.75])
+    aX.set_xticklabels(['All ITS ({0})'.format(len(TR10)),
+                        'ITS with DNA energy < {0} ({1})'.format(limit, 
+                                                                 len(lowDD))])
+    aX.set_ylabel('Translocation energy')
+
+    # do a welchs test
+    n1 = len(TR10)
+    mean1 = TR10_mean
+    sem1 = TR10_std/np.sqrt(n1)
+
+    n2 = len(lowDD)
+    mean2 = mini_mean
+    sem2 = mini_std/np.sqrt(n2)
+
+    alpha = 0.05
+
+    welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
+
+    debug()
+
+
+    # XXX you can do the same with bar-plots. It shows that the low-DNA-DNA
+    # variants compensate by having very high translocation values! Wonderful!
+
+
+    ### XXX do the same with the last 10, but now choose completely random DNA
+    ### last 8 last 6?
+    ### No mandatory start
+    #DD20 = [Ec.DNA_DNAenergy(i.sequence[-10:]) for i in ITSs]
+    #RR20 = [Ec.RNA_DNAenergy(i.sequence[-10:]) for i in ITSs]
+    #TR20 = [Ec.Delta_trans(i.sequence[-10:]) for i in ITSs]
+
+    ## Generate 100000 random DNA of length 10 and calculate the above energies
+    ## WITHOUT AT START
+    #rDD20 = []
+    #rRR20 = []
+    #rTR20 = []
+
+    #for random_dna in ITS_generator(10000, length=10, ATstart=False):
+        #rDD20.append(Ec.DNA_DNAenergy(random_dna))
+        #rRR20.append(Ec.RNA_DNAenergy(random_dna))
+        #rTR20.append(Ec.Delta_trans(random_dna))
+
+    #fig2, [ax12, ax22, ax32] = plt.subplots(3)
+
+    #ax12.hist(DD20, label='DG100 Last 10 nt of ITS', alpha=0.7, color='r',
+              #normed=True)
+    #ax12.hist(rDD20, bins=40, alpha=0.3, color='g', normed=True,
+              #label='Random DNA starting with AT length 10')
+    #ax12.set_title('DNA-DNA: ITS and random compared')
+
+    #ax22.hist(RR20, label='DG100 Last 10 nt of ITS', alpha=0.7, color='r',
+              #normed=True)
+    #ax22.hist(rRR20, bins=40, alpha=0.3, color='g', normed=True,
+              #label='Random DNA starting with AT length 10')
+    #ax22.set_title('RNA-DNA: ITS and random compared')
+
+    #ax32.hist(TR20, label='DG100 Last 10 nt of ITS', alpha=0.7, color='r',
+              #normed=True)
+    #ax32.hist(rTR20, bins=40, alpha=0.3, color='g', normed=True,
+              #label='Random DNA starting with AT length 10')
+    #ax32.set_title('Translocation: ITS and random compared')
+
+    #debug()
+
+def s_shaped(ITSs):
+    """
+    Generate sequences to test if DNA-DNA energy has an s-shaped effect
+
+    Looks like your TR should stay around -7.5 (-8), and your DNA should vary
+    from -15 to -23. At around -18 you should see the change. Get at least 3
+    seqs below - 18, and 3 seqs above - 18.
+    -23, -21, -19, -17, -15, -13, would be perfect. I don't know if it's
+    possible though. We should see a model-mismatch starting at around - 18,
+    because no such sequence should have survived, at least not at around -23.
+
+    Can we estimate curves for DNA-DNA and translocation? DNA-DNA being S-shaped
+    and translocation being more linear? Can you try to do that? Hey, that's not
+    really how it looks when you plot them one by one, but that could be because
+    of mutual effects. How can you separate those effects? With PCA? Seems a bit
+    redundant with only two variables. There is a DNA-DNA at -19, recall, with a
+    PY of 7. It has the lowest TR though. That's the kind of stuff you should
+    normalize by. Is that what you get with a linear regression? No ... Well
+    yes; make a linear regression; with DNA-DNA from 0 to 5; 5 to 10; 10 to 15,
+    and the same with TR. You would just see the same again. The interesting
+    thing would be if your model or the linear regression would predict that if
+    you hold TR fixed at -7.5, you'd lose PY after a certain level, but with
+    DNA-DNA fixed at say -15, you can allow for a larger variation in TR.
+
+    However, I think you'll need to show that these sequences give a different
+    value than expected in the model. The model should predict a non-zero value
+    for them, but in all likelihood they will be zeroed. Maybe reduce the value
+    from -8 to -7? Or -7.5. You'll need to write an ad hoc function from model
+    outptut to PY. That's good anyway. You should fit that to something. It's
+    nonlinear because model output has a smaller range than PY. Maybe linear
+    regression here? The relationship is linear after all. Then you can invert
+    them model and go from PY -> X and X -> PY the way you like it. Too bad you
+    don't have a way of speeding up the results.
+
+    Maybe you should dissalow not less than -18 but less than -20? Then maybe
+    you can still see some oddities around there.
+
+    Hey ... I've just had me a look, and for the lowest DNA-DNA, there's also a
+    large variation in TR -> seems to be just as non-linear in this direction.
+    However, there as no selection pressure on this parameter. Annoying.
+
+    Could this have anything to do with the fact that the screening happened in
+    vivo? Is it possible that ... I don't see how that fits together.
+
+    You see that within the dna-dna population (after screening) there is a
+    correlation where dna-dna energy decreases with increasing TR. Is it
+    combinatorially more difficult to screen out tr than dna-dna?
+    """
+
+    # What's the PY of the < -17 DNA-DNA ITSs?
+    # What's the PY of the > -7
+
+    #gg = [s.PY for s in ITSs if Ec.DNA_DNAenergy(s.sequence[:15]) < -17]
+    #print gg
+
+    tap = []
+
+    dforplot = []
+
+    for s in ITSs:
+        tr = Ec.Delta_trans(s.sequence[:15])
+        dd = Ec.DNA_DNAenergy(s.sequence[:15])
+
+        #if tr > -9:
+        if tr < -4:
+        #if dd > -15:
+        #if dd < -15:
+            tap.append((tr, dd, s.PY))
+            #print 'TR:', tr, 'DNA:', dd, 'PY:', s.PY
+
+    for pp in sorted(tap, key=itemgetter(0,1)):
+        dforplot.append(pp[1])
+        print('TR: {0:.1f}, DNA: {1:.1f}. PY: {2:.2f}'.format(*pp))
+
+    plt.ion()
+    plt.plot(dforplot)
+
+    # Make a bunch of random DNA sequences and get them in the -7.8 to -8.2
+    # range for TR; from those, sort them by DNA-DNA energy low to high.
+    # Hopefully you'll get something nice out of it.
+
+    round1 = []
+
+    # RESULT it's easy to generate this kind of sequences 
+    # XXX however, now you've proved that DNA-DNA works like S-shaped, but how
+    # do you show that the effect of TR is more linear? By keeping DNA-DNA fixed
+    # and show that you can vary TR over a larger range with a linear increase?
+    # But by this time, you don't have any left to test your model. 26 -12 = 14.
+    # Maaaaaybe it's enough
+    # A way to show the linear relationship could be to divide the sequences in
+    # two: low and high DNA-DNA and low and high TR
+    # The high and low TR should both show the nonlinearity of DNA-DNA (measured
+    # how?, with a linear model? The low DNA-DNA should give a larger
+    # coefficient to DNA-DNA, while the high-DNA-DNA should give a smaller
+    # coefficient to DNA-DNA. The high and low TR should give a similar
+    # coefficient to both DNA-DNA and TR in both groups. The problem is that
+    # DNA-DNA is so tightly bundled that you are unlikely to see any effect in
+    # the low-group -> They won't be very discernable.
+
+    # Include the same checks as for the other model.
+    #repReg = re.compile('G{5,}|A{5,}|T{5,}|C{5,}')
+    #nucleotides = set(['G', 'A', 'T', 'C'])
+
+    #for seq in ITS_generator(100000, length=15):
+        #if -8.1 < Ec.Delta_trans(seq) < -7.9:
+
+            ## don't let the first three nucs be the same
+            #if (seq[1] == seq[2] == seq[3]):
+                #continue
+
+            ## don't allow repeats of more than 4
+            #if repReg.search(seq):
+                #continue
+
+            #nfreqs = [seq.count(n)/15.0 for n in nucleotides]
+            ## none should be above 60%
+            #if max(nfreqs) > 0.6:
+                #continue
+
+            #round1.append((Ec.DNA_DNAenergy(seq), seq))
+
+    #ham = sorted(round1, key=itemgetter(0))
+
+    # pick 6 from max to min
+
+    # XXX try to make linear regression with statsmodels for the DNA-DNA and KT
+    # XXX result, no significance for DNA-DNA when cutting group in half.
+    # XXX abandon this project? I still propse that DNA-DNA has got this effect.
+    # Maybe you can propose six sequences and 20 normal. 20 should be enough to
+    # see a trend. You must add this routine to your proposaling.
+
+    # for up to 15. Use weighted least squares for heteroscledascial errors.
+    # your model should be a y = ax1 + bx2 + c, whre x1 and x2 is the
+    # exponential of your energies. If that works satisfactorially, repeat the
+    # seame for the low/high dna/dna. Compare the coefficients.
+    #g1 = [s for s in ITSs if Ec.DNA_DNAenergy(s.sequence[:15]) <= -15]
+    #g2 = [s for s in ITSs if Ec.DNA_DNAenergy(s.sequence[:15]) > -15]
+
+    #for group in [g1, g2]:
+
+        #PY = np.array([s.PY for s in group])
+        #DD = np.array([Ec.DNA_DNAenergy(s.sequence[:15]) for s in group])
+        #TR = np.array([Ec.Delta_trans(s.sequence[:15]) for s in group])
+
+        ## This model works to make it linear. You have to fit the coefficients of
+        ## 0.1 and 0.2. Can you obtain the same by taking the ln of PY? 
+
+        ## If that wor
+        ## get data
+
+        #import scikits.statsmodels.api as sm
+
+        #X = sm.add_constant(np.column_stack((DD, TR)))
+        #y = np.log(PY)
+
+        ### run the regression
+        #results = sm.WLS(y, X).fit()
+
+        ### look at the results
+        #results.summary()
+
+        #c1, c2, c3 = results.params
+
+        #print results.summary2
+
+    ##simplemod = c1*DD + c2*TR + c3
+
+    ##plt.ion()
+    ##plt.scatter(simplemod, np.log(PY))
+
+    ### investrigate the seqs you sent to hsu
+    # XXX result: it looks OK. It's not too bad.
+    testseqs = [l.split()[1] for l in open('seqs_for_testing.txt', 'rb')]
+    for t in testseqs:
+        tr = Ec.Delta_trans(t)
+        dd = Ec.DNA_DNAenergy(t)
+        print 'TR: {0:.1f}, DNA: {1:.1f}'.format(tr, dd)
+
 
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
     #genome_wide()
     #new_genome()
-    #for i in range(10):
-        #new_ladder(lizt)
-
+    #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
     # Produce all the figures and tables that are in the paper
     paper_figures(ITSs)
+    # XXX which parameter is most different from the random expected?
+    #selection_pressure(ITSs)
 
     # XXX the new ODE models
     #new_models(ITSs)
 
     # XXX Making figures from all the new models in one go
     #auto_figure_maker_new_models(ITSs)
-    # TODO you're not printing the bootstrapping any more
 
     # XXX Generate candidate sequences! : )
-    #candidate_its(ITSs)
+    #candidate_its(ITSs, DNADNAfilter=True)
+
+    # XXX Generate same-TR, variable DNA-DNA variants to test S-shaped function
+    # of DNA-DNA energy. RESULT you did it with random; now do it within the
+    # candidate_its function. Give Hsu sequences without three Cs in the
+    # beginning (20) and sequences for testing if low DNA alone is detrimental
+    # to abortive initiation nonlinearly.
+    # RESULT it seems that dna-dna is just as sensitive to TR values as the
+    # other way around. The odd thing is that there was no selection on it.
+    # Maybe there was some in vivo selection that I don't understand. Maybe in
+    # vitro it won't matter. This is a though one. Remember, with low TR you can
+    # have high . XXX I've now checked the sequenced I've sent to hsu and they
+    # look OK. I think you should just change that one C to something else and
+    # you're good to go. What to change it to?
+
+    s_shaped(ITSs)
 
     # old one
     #new_designer(lizt)
