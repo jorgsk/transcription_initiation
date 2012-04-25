@@ -5251,13 +5251,13 @@ def predicted_vs_measured(ITSs):
 
     """
 
-    # 1) Get the sequences you sent to Hsu
     # 2) Calculate the PY scores for them.
 
     params = (20, 0, 0.022, 0.24)
     par_ranges = [np.array([p]) for p in params]
 
     PYs = np.array([itr.PY for itr in ITSs])*0.01
+    PYerr = np.array([itr.PY_std for itr in ITSs])*0.01
 
     # Time-grid
     t = np.linspace(0, 1., 100)
@@ -5270,16 +5270,55 @@ def predicted_vs_measured(ITSs):
     retrofit = 0
     initial_bubble = True
 
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, randomize,
-                             retrofit, t, initial_bubble)
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
+                                 randomize, retrofit, t, initial_bubble)
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
 
-    # ladder plot
+    finals = results[15].finals
+
+    # make a linear model
+    slope, intercept, corr, pval, stderr = scipy.stats.linregress(finals, PYs)
+
+    # make a predictive function
+    def predicted_PY(x, slope, intercept):
+
+        return  slope*x + intercept
+
+    minX, maxX = min(finals), max(finals)
+
+    minY, maxY = slope*minX + intercept, slope*maxX + intercept
+
     plt.ion()
 
-    testseqs = [l.split()[1] for l in open('seqs_for_testing.txt', 'rb')]
+    plt.scatter(finals, PYs)
+    plt.errorbar(finals, PYs, yerr=PYerr, fmt=None)
+    plt.plot([minX, maxX], [minY, maxY])
+
+
+    # ladder plot
+
+    # 1) Get the sequences you sent to Hsu
+    seq_file = 'sequence_data/seqs_for_testing.txt'
+    testseqs = [l.split() for l in open(seq_file, 'rb')]
+
+    # 2) Run the testseqs and get the output
+    test_obj = [ITS(seq + 'GAGTT', name) for name, seq in testseqs]
+
+    fake_py = [0 for _ in range(len(test_obj))]
+
+    test_results = scrunch_runner(fake_py, its_range, test_obj, par_ranges, optim,
+                                 randomize, retrofit, t, initial_bubble)
+
+    results, rand_results, retrof_results = test_results
+
+    pred_PY = [predicted_PY(f) for f in results[15].finals]
+
+    print min(pred_PY), max(pred_PY)
+
+    # TODO invent some fake experimental result and plot the predicted vs actual
+    # PYs
 
 def paper_figures(ITSs):
     """
