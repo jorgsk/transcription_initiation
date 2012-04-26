@@ -3410,14 +3410,14 @@ def new_models(ITSs):
     # Parameter ranges you want to test out
     #c1 = np.linspace(1, 50, 50)
     c1 = np.array([20]) # insensitive to variation here
-    #c2 = np.array([0]) # c2 is best evaluated to 0
+    c2 = np.array([0]) # c2 is best evaluated to 0
     #c2 = np.array([0.01]) # c2 is best evaluated to 0
-    c2 = np.linspace(0.001, 0.2, 10)
+    #c2 = np.linspace(0.001, 0.2, 10)
     #c3 = np.linspace(0.001, 0.2, 10)
-    #c3 = np.array([0.022])
-    c3 = np.array([0])
-    c4 = np.linspace(0.1, 0.3, 10)
-    #c4 = np.array([0.1])
+    c3 = np.array([0.022])
+    #c3 = np.array([0])
+    #c4 = np.linspace(0.1, 0.3, 10)
+    c4 = np.array([0.24])
     #c4 = np.array([0])
 
     par_ranges = (c1, c2, c3, c4)
@@ -3428,32 +3428,42 @@ def new_models(ITSs):
     # XXX you should get it to work with 21
     its_range = range(3, 20)
 
-    optim = False   # GRID
+    optim = False # GRID
     #optimize = True   # OPTIMIZER
     # I trust the Grid more than the opt. Stick with it.
 
-    #randomize = 5 # here 0 = False (or randomize 0 times)
-    randomize = 0 # here 0 = False (or randomize 0 times)
+    randomize = 5 # here 0 = False (or randomize 0 times)
+    #randomize = 3 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
     initial_bubble = True
 
     # Fit with 50% of ITS and apply the parameters to the remaining 50%
-    #retrofit = 12
-    retrofit = 0
+    retrofit = 5
+    #retrofit = 3
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
                                  randomize, retrofit, t, initial_bubble)
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
-    debug()
 
     # ladder plot
     plt.ion()
     fig = print_scrunch_ladder(results, rand_results, retrof_results, optim,
                          randomize, par_ranges, initial_bubble)
 
+    # Save the scruch laddder
+    for fig_dir in fig_dirs:
+        for formt in ['pdf', 'eps', 'png']:
+
+            name = 'ITS_rand_distribution_comparison.' + formt
+            odir = os.path.join(fig_dir, formt)
+
+            if not os.path.isdir(odir):
+                os.makedirs(odir)
+
+            fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
     # parameter plot (best and average for each its)
     #parameter_relationship(results, optim, randomize, par_ranges)
 
@@ -3724,11 +3734,17 @@ def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
 
     PYs = PYs*100
 
-    rows = [5, 10, 15, 20]
-    fig, axes = plt.subplots(len(rows), 1, sharey=True)
+    #rows = [5, 10, 15, 20]
+    rows = [15]
+
+    if len(rows) > 1:
+        fig, axes = plt.subplots(len(rows), 1, sharey=True)
+    else:
+        fig, ax = plt.subplots()
+        axes = [ax]
 
     # for each row, pick the results 
-    fmts = ['r', 'g', 'b', 'c']
+    fmts = ['k', 'g', 'b', 'c']
 
     for row_nr, maxnuc in enumerate(rows):
         name = '1_{0}_scatter_comparison'.format(maxnuc)
@@ -3768,8 +3784,8 @@ def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
         scale = (fmax-fmin)*0.2
 
         ax.set_xlim(fmin-scale, fmax+scale)
-        # that doesn't work for values close to zero. You need an absolute
-        # measure.
+
+    return fig
 
 def parameter_relationship(results, optim, randomize, par_ranges):
     """
@@ -5124,6 +5140,238 @@ def variable_corr():
     fix.set_figheight(5)
     fix.set_figwidth(12)
 
+def reduced_model_fixed_ladder(ITSs, testing):
+
+    # random and cross-validation
+    control = 15
+    if testing:
+        control = 1
+
+    # Compare with the PY percentages in this notation
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+
+    # Parameter ranges you want to test out
+    c1 = np.array([20]) # insensitive to variation here
+    c2 = np.array([0])
+    c3 = np.array([0.022])
+    c4 = np.array([0.024])
+
+    par_ranges = (c1, c2, c3, c4)
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    # XXX you should get it to work with 21
+    its_range = range(3, 20)
+
+    optim = False # GRID
+
+    randomize = control # here 0 = False (or randomize 0 times)
+
+    initial_bubble = True
+
+    # Fit with 50% of ITS and apply the parameters to the remaining 50%
+    retrofit = control
+
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
+                                 randomize, retrofit, t, initial_bubble)
+
+    # extract the specific results
+    results, rand_results, retrof_results = all_results
+
+    # ladder plot
+    fig_lad = print_scrunch_ladder(results, rand_results, retrof_results, optim,
+                         randomize, par_ranges, initial_bubble)
+
+    return fig_lad
+
+def full_model_grid_and_scatter(ITSs, testing):
+    """
+    Print full model with grid
+    """
+
+    # grid size
+    grid_size = 15
+    if testing:
+        grid_size = 2
+
+    # random and cross-validation
+    control = 15
+    if testing:
+        control = 1
+
+    # Compare with the PY percentages in this notation
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+
+    # Parameter ranges you want to test out
+    c1 = np.array([20]) # insensitive to variation here
+    c2 = np.linspace(0.001, 0.2, grid_size)
+    c3 = np.linspace(0.001, 0.2, grid_size)
+    c4 = np.linspace(0.1, 0.4, grid_size)
+
+    par_ranges = (c1, c2, c3, c4)
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    # XXX you should get it to work with 21
+    its_range = range(3, 20)
+
+    optim = False # GRID
+
+    randomize = control # here 0 = False (or randomize 0 times)
+
+    initial_bubble = True
+
+    # Fit with 50% of ITS and apply the parameters to the remaining 50%
+    retrofit = control
+
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
+                                 randomize, retrofit, t, initial_bubble)
+
+    # extract the specific results
+    results, rand_results, retrof_results = all_results
+
+    # ladder plot
+    fig_lad = print_scrunch_ladder(results, rand_results, retrof_results, optim,
+                         randomize, par_ranges, initial_bubble)
+
+    fig_sct = print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
+                  initial_bubble, PYs)
+
+    return fig_lad, fig_sct
+
+def predicted_vs_measured(ITSs):
+    """
+    Return the correlation between predicted and measured PYs
+
+    You ran, I think, with these parameters.
+    params = (15, 0, 0.022, 0.24)
+
+    But maybe you should get the PYs with 20? Should be trivial.
+
+    """
+
+    # 2) Calculate the PY scores for them.
+
+    params = (20, 0, 0.022, 0.24)
+    par_ranges = [np.array([p]) for p in params]
+
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+    PYerr = np.array([itr.PY_std for itr in ITSs])*0.01
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    # XXX you should get it to work with 21
+    its_range = range(3, 20)
+
+    optim = False # GRID
+    randomize = 0 # here 0 = False (or randomize 0 times)
+    retrofit = 0
+    initial_bubble = True
+
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
+                                 randomize, retrofit, t, initial_bubble)
+
+    # extract the specific results
+    results, rand_results, retrof_results = all_results
+
+    finals = results[15].finals
+
+    # make a linear model
+    slope, intercept, corr, pval, stderr = scipy.stats.linregress(finals, PYs)
+
+    # make a predictive function
+    def predicted_PY(x, slope, intercept):
+
+        return  slope*x + intercept
+
+    minX, maxX = min(finals), max(finals)
+
+    minY, maxY = slope*minX + intercept, slope*maxX + intercept
+
+    plt.ion()
+
+    plt.scatter(finals, PYs)
+    plt.errorbar(finals, PYs, yerr=PYerr, fmt=None)
+    plt.plot([minX, maxX], [minY, maxY])
+
+
+    # ladder plot
+
+    # 1) Get the sequences you sent to Hsu
+    seq_file = 'sequence_data/seqs_for_testing.txt'
+    testseqs = [l.split() for l in open(seq_file, 'rb')]
+
+    # 2) Run the testseqs and get the output
+    test_obj = [ITS(seq + 'GAGTT', name) for name, seq in testseqs]
+
+    fake_py = [0 for _ in range(len(test_obj))]
+
+    test_results = scrunch_runner(fake_py, its_range, test_obj, par_ranges, optim,
+                                 randomize, retrofit, t, initial_bubble)
+
+    results, rand_results, retrof_results = test_results
+
+    pred_PY = [predicted_PY(f) for f in results[15].finals]
+
+    print min(pred_PY), max(pred_PY)
+
+    # TODO invent some fake experimental result and plot the predicted vs actual
+    # PYs
+
+def paper_figures(ITSs):
+    """
+    How should I produce the figure? Should all of them be in single-figure so
+    that I can manually glue them together? Should you make nice A, B, C, D
+    things for example? Maybe you should leave this until the very end ... but
+    make it possible to make fast changes.
+    """
+    testing = True  # if testing, run everything fast; it's just for aestethics
+    if testing:
+        append = '_testing'
+    else:
+        append = ''
+
+    figs = []
+
+    # Figure 1 -> Full model with grid-evaluation
+    #ladder_name = 'Full_model_grid' + append
+    #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing)
+    #figs.append((fig_ladder, ladder_name))
+
+    ## Figure 2 -> Full model at nt 15, fixed values, scatterplot
+    #scatter_name = 'Full_model_scatter' + append
+    #figs.append((fig_scatter, scatter_name))
+
+    ## Figure 3 -> Reduced model with fixed values
+    #fixed_lad_name = 'Reduced_model_fixedvals' + append
+    #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs)
+    #figs.append((fig_reduced_fixed, fixed_lad_name))
+
+    # Figure 4 -> Scatter of predicted VS actual PY
+    predicted_name = 'Predicted_vs_measured' + append
+    fig_predicted = predicted_vs_measured(ITSs)
+
+    # TODO make a linear model from the RNAP concentration with give coordinates
+    # and given time to the actual PY.
+    # Then predict new sequences with the exact same settings and use the linear
+    # model to obtain the PY ranges. Don't actually predict new sequences, but
+    # use those you sent to Hsu
+
+    # Save the figures
+    #for (fig, name) in figs:
+        #for fig_dir in fig_dirs:
+            #for formt in ['pdf', 'eps', 'png']:
+
+                #odir = os.path.join(fig_dir, formt)
+
+                #if not os.path.isdir(odir):
+                    #os.makedirs(odir)
+
+                #fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+
 def selection_pressure(ITSs):
     """
     The nucleotide distribution in the ITSs is not uniform. What has caused the
@@ -5553,6 +5801,8 @@ def main():
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
+    # Produce all the figures and tables that are in the paper
+    paper_figures(ITSs)
     # XXX which parameter is most different from the random expected?
     # TODO your selections are funneh ... DNADNA is big for N25, but RNADNA is
     # bugger for ITS in general. TN is stronger than expected, which is strange.
