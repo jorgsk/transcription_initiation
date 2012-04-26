@@ -318,25 +318,6 @@ def Purine_RNADNA(repnr=100, ranNr=39, rand='biased', upto=20):
     #return 'Mean (corr, pval): ', cor_mean, pval_mean, ' -- Sigma: ', cor_sigma, pval_sigma
     return 'Mean corr : ', cor_mean, ' -- Sigma: ', cor_sigma
 
-def StripSet(awaynr, lizt, ITSs):
-    """ Remove sets of sequences from the dataset, depending on awaynr """
-    seqset = [[], ['N25/A1'],['N25/A1','N25'],['N25/A1','N25','N25anti'],['N25/A1','N25','N25anti','N25/A1anti']]
-    strip_names = seqset[awaynr]
-    allnames = [row[0] for row in lizt] # Getting the names to get their index
-    popthese = sorted([allnames.index(na) for na in strip_names]) # Getting the index
-    popthese = reversed(popthese) # reverse-sorted iterator for safe removal!
-    # remove from lizt
-    for popz in popthese:
-        del(lizt[popz])
-    # remove from ITSs
-    newITSs = []
-    for dummy in range(len(ITSs)):
-        if ITSs[dummy].name in strip_names:
-            continue
-        else:
-            newITSs.append(ITSs[dummy])
-    return lizt, newITSs
-
 class Result(object):
     """
     Placeholder for results for plotting
@@ -350,7 +331,8 @@ class Result(object):
     the X*20 best. For random, mean and std are what's interesting (the mean and
     std of the best for each random sample)
     """
-    def __init__(self, corr=np.nan, pvals=np.nan, params=np.nan, finals=np.nan, time_series=False):
+    def __init__(self, corr=np.nan, pvals=np.nan, params=np.nan,
+                 finals=np.nan, time_series=False):
 
         self.corr = corr
         self.pvals = pvals
@@ -676,7 +658,8 @@ def ReadAndFixData():
     """ Read Hsu paper-data and Hsu normalized data. """
 
     # labels of Hsu data
-    #_labels = ['Name','Sequence','PY','PYst','RPY','RPYst','RIF','RIFst','APR','APRst','MSAT','R']
+    #_labels = ['Name','Sequence','PY','PYst','RPY','RPYst','RIF','RIFst',
+    #           'APR','APRst','MSAT','R']
 
     # Selecting the dataset you want to use
     #
@@ -710,7 +693,7 @@ def ReadAndFixData():
     for row in lizt:
         ITSs.append(ITS(row[1], row[0], row[2], row[3], row[7]))
 
-    return lizt, ITSs
+    return ITSs
 
 def genome_wide():
     """
@@ -3537,61 +3520,168 @@ def print_rnap_distribution(results, par_ranges, initial_bubble, ITSs):
             ax.set_xticklabels([])
             ax.set_yticklabels([])
 
-def auto_figure_maker_new_models(ITSs):
+def family_of_models(ITSs):
     """
     Simulate a set of pre-defined models, then print figures for all of them.
-    """
 
-    plt.ioff()
+    Return all 6 models. 8 - full and 000.
+    100
+    001
+    010
+
+    110
+    011
+    101
+
+    How are you going to enumerate them
+    DNA-DNA RNA TN
+
+    DNA-DNA+RNA RNA+TN  DNA-DNA+TN
+    """
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Range of its values
+    #its_range = range(3, 20)
     its_range = range(3, 20)
 
     optim = False   # GRID
-    #optim = True   # OPTIMIZER
 
-    randomize = 5 # here 0 = False (or randomize 0 times)
-    #randomize = 0 # here 0 = False (or randomize 0 times)
+    #randomize = 5 # here 0 = False (or randomize 0 times)
+    randomize = 3 # here 0 = False (or randomize 0 times)
 
-    #initial_bubble = False
     initial_bubble = True
 
     # Time-grid; arbitrary units
     t = np.linspace(0, 1., 100)
 
-    # Fit with 50% of ITS and apply the parameters to the 50% remaining
-    retrofit = 5
-    #retrofit = 0
+    #retrofit = 5
+    retrofit = 3
 
-    modelz = get_models(stepsize=15)
+    modelz = get_models(stepsize=5)
 
+    # SKip the following: m4, m5, m9, m10, m11
+    for mname in ['m4', 'm5', 'm9', 'm10', 'm11']:
+        modelz.pop(mname)
+
+    resultz = {}
+    # First get all the results
     for (model_name, m) in modelz.items():
-        (par_ranges, descr) = m[:-1], m[-1]  # extract parameters and description
+        (par_ranges, descr) = m[:-1], m[-1]  # extract info
 
         all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
                                      randomize, retrofit, t, initial_bubble)
 
+        resultz[model_name] = (m, all_results)
+
+    # print the models
+    fig = print_model_family(resultz)
+
+    return fig
+
+def print_model_family(resultz):
+    """
+    If 1 is DD, 2 is RD, and 3 is TR
+
+    100 - m7
+    010 - m6
+    001 - m8
+
+    110 - m3
+    101 - m2
+    011 - m1
+    """
+
+    # Based on model name make a 2x3 grid
+    model_grid = np.array([['m7', 'm6', 'm8'], ['m3', 'm2', 'm1']])
+
+    fig, axes = plt.subplots(2,3, sharex=True, sharey=True)
+
+    # predefine tixk labels
+    xticklabels = [str(integer) for integer in range(3,21)]
+    yticklabels = [str(integer) for integer in np.arange(-0.6, 1.1, 0.1)]
+    yticklabels[6] = '0'
+
+    for (row_nr, col_nr) in itertools.product(range(2), range(3)):
+
+        model_name = model_grid[row_nr, col_nr]
+        minfo, all_results = resultz[model_name]
+        (par_ranges, descr) = minfo[:-1], minfo[-1]  # extract info
         results, rand_results, retrof_results = all_results
 
-        fig = print_scrunch_ladder(results, rand_results, retrof_results, optim,
-                             randomize, par_ranges, initial_bubble, descr)
+        hedr = descr.split('const, ')[1]
 
-        # save the figure (fig_dirs is global ..)
-        for fig_dir in fig_dirs:
-            for formt in ['pdf', 'eps', 'png']:
+        ax = axes[row_nr, col_nr]
 
-                adj = 'crossvalid_{0}_randomnr{1}'.format(retrofit, randomize)
+        ax.set_title(hedr, size=5)
 
-                name = 'Model_{0}_{1}.'.format(model_name, adj) + formt
-                odir = os.path.join(fig_dir, formt)
+        # go over both the real and random results
+        # This loop covers [0][0] and [0][1]
+        for (ddict, name, colr) in [(results, 'real', 'b'),
+                                    (rand_results, 'random', 'g'),
+                                   (retrof_results, 'cross-validated', 'r')]:
 
-                if not os.path.isdir(odir):
-                    os.makedirs(odir)
+            # don't process 'random' or 'retrofit' if not evaluated
+            if False in ddict.values():
+                continue
 
-                fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+            # get its_index and corr-coeff from sorted dict
+            if name == 'real':
+                indx, corr = zip(*[(r[0], r[1].corr_max)
+                                   for r in sorted(ddict.items())])
+
+            elif name == 'random':
+                indx, corr = zip(*[(r[0], r[1].corr_mean)
+                                   for r in sorted(ddict.items())])
+
+                stds = [r[1].corr_std for r in sorted(ddict.items())]
+
+            elif name == 'cross-validated':
+                indx, corr = zip(*[(r[0], r[1].corr_mean)
+                                   for r in sorted(ddict.items())])
+
+                stds = [r[1].corr_std for r in sorted(ddict.items())]
+
+            # make x-axis
+            incrX = range(indx[0], indx[-1]+1)
+
+            # if random, plot with errorbars
+            if name == 'real':
+                ax.plot(incrX, corr, label=name, linewidth=2, color=colr)
+
+            elif name == 'random':
+                ax.errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
+                                 color=colr)
+
+            elif name == 'cross-validated':
+                ax.errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
+                                 color=colr)
+            # xticks
+            ax.set_xticks(range(3,21))
+            ax.set_xticklabels(xticklabels)
+            ax.set_xlim(3,21)
+
+            if row_nr == 1:
+                ax.set_xlabel("Nucleotide from transcription start", size=8)
+
+            for l in ax.get_xticklabels():
+                l.set_fontsize(5)
+
+            # yticks
+            ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                          alpha=0.5)
+
+            ax.set_ylim(-0.6, 1)
+            if col_nr == 0:
+                ax.set_ylabel("Correlation coefficient, $r$", size=8)
+                ax.set_yticks(np.arange(-0.6, 1.1, 0.1))
+                ax.set_yticklabels(yticklabels)
+
+            for l in ax.get_yticklabels():
+                l.set_fontsize(5)
+
+    return fig
 
 
 def get_models(stepsize=5):
@@ -3606,65 +3696,65 @@ def get_models(stepsize=5):
     # c1 = const, zero RNA-DNA, DNA-DNA and Keq variable
     m1 = (np.array([15]),
           np.array([0]),
-          np.linspace(0.001, 0.1, s),
+          np.linspace(0.001, 0.2, s),
           np.linspace(0.05, 0.4, s),
-          'M1: c1 = const, zero RNA-DNA, DNA-DNA and Keq variable')
+          'M1: c1 = const, DNA-DNA and Translocation')
 
     # Model 2 --
-    # c1 = const, RNA-DNA variable, zero DNA-DNA, and Keq variable
+    # c1 = const, RNA-DNA variable, zero DNA-DNA, and Translocation variable
     m2 = (np.array([15]),
           np.linspace(0.001, 0.2, s),
           np.array([0]),
           np.linspace(0.05, 0.4, s),
-         'M2: c1 = const, RNA-DNA variable, zero DNA-DNA, and Keq variable')
+         'M2: c1 = const, RNA-DNA and Translocation')
 
     # Model 3 --
-    # c1 = const, RNA-DNA and DNA-DNA variable, and Keq zero
+    # c1 = const, RNA-DNA and DNA-DNA variable, and Translocation zero
     m3 = (np.array([15]),
           np.linspace(0.001, 0.2, s),
           np.linspace(0.001, 0.2, s),
           np.array([0]),
-         'M3: c1 = const, RNA-DNA and DNA-DNA variable, and Keq zero')
+         'M3: c1 = const, RNA-DNA and DNA-DNA')
 
     # Model 4 --
-    # c1 = const, RNA-DNA, DNA-DNA, and Keq variable
+    # c1 = const, RNA-DNA, DNA-DNA, and Translocation variable
     m4 = (np.array([15]),
           np.linspace(0.001, 0.2, s),
           np.linspace(0.001, 0.2, s),
           np.linspace(0.05, 0.4, s),
-         'M4: c1 = const, RNA-DNA, DNA-DNA, and Keq variable')
+         'M4: c1 = const, RNA-DNA, DNA-DNA, and Translocation')
 
     # Model 5 --
-    # c1 variable, RNA-DNA, DNA-DNA, and Keq constant
+    # c1 variable, RNA-DNA, DNA-DNA, and Translocation constant
     m5 = (np.linspace(2, 20, s),
             np.array([0]),
             np.array([0.02]),
             np.array([0.2]),
-         'M5: c1 variable, RNA-DNA, DNA-DNA, and Keq constant')
+         'M5: c1 variable, RNA-DNA, DNA-DNA, and Translocation constant')
 
     # Model 6 --
-    # c1 = const, RNA-DNA variable, DNA-DNA and Keq zero
+    # c1 = const, RNA-DNA variable, DNA-DNA and Translocation zero
     m6 = (np.array([15]),
-          np.linspace(0.001, 0.2, s)*-1,
+          np.linspace(0.001, 0.2, s),
           np.array([0]),
           np.array([0]),
-        'M6: c1 = const, minus RNA-DNA variable, DNA-DNA and Keq zero')
+        'M6: c1 = const, RNA-DNA')
 
     # Model 7 --
-    # c1 = const, RNA-DNA zero, DNA-DNA variable, and Keq zero
+    # c1 = const, RNA-DNA zero, DNA-DNA variable, and Translocation zero
     m7 = (np.array([15]),
           np.array([0]),
           np.linspace(0.001, 0.2, s),
           np.array([0]),
-         'M7: c1 = const, RNA-DNA zero, DNA-DNA variable, and Keq zero')
+         'M7: c1 = const, DNA-DNA')
 
     # Model 8 --
-    # c1 = const, RNA-DNA zero, DNA-DNA zero, and Keq variable
+    # c1 = const, RNA-DNA zero, DNA-DNA zero, and Translocation variable
     m8 = (np.array([15]),
           np.array([0]),
           np.array([0]),
           np.linspace(0.05, 0.4, s),
-         'M8: c1 = const, RNA-DNA zero, DNA-DNA zero, and Keq variable')
+         'M8: c1 = const, Translocation')
 
     # Model 9 --
     # All constant
@@ -3679,8 +3769,9 @@ def get_models(stepsize=5):
           np.linspace(0.001, 0.2, s)*(-1),
           np.array([0]),
           np.linspace(0.05, 0.4, s),
-         'M10: DNA-DNA zero, reversed RNA-DNA and Keq variable')
+         'M10: DNA-DNA zero, reversed RNA-DNA and Translocation variable')
 
+    # Model 11 Reversed RNA-DNA and reversed DNA-DNA
     m11 = (np.array([15]),
           np.linspace(0.001, 0.2, s)*(-1),
           np.linspace(0.001, 0.2, s)*(-1),
@@ -3836,13 +3927,17 @@ def parameter_relationship(results, optim, randomize, par_ranges):
 
 def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
                          randomize, par_ranges, initial_bubble,
-                         description=False):
+                         description=False, print_params=True):
     """
     Alternative print-scrunch.
     [0][0] is the pearson for the real and the control
     [0][1] is the parameters for the pearson fit
     """
-    fig, axes = plt.subplots(1,2)
+    if print_params:
+        fig, axes = plt.subplots(1,2)
+    else:
+        fig, ax = plt.subplots()
+        axes = np.array([ax])
 
     colors_params = ['r', 'c', 'm', 'k']
 
@@ -3895,6 +3990,10 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
             axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
 
+        # skip if you're not printing parametes
+        if not print_params:
+            continue
+
         # get its_index parameter values (they are index-sorted)
         if name == 'real':
             paramz_best = [r[1].params_best for r in sorted(ddict.items())]
@@ -3943,7 +4042,6 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
             l.set_fontsize(12)
 
     axes[0].set_ylabel("Correlation coefficient, $r$", size=20)
-    axes[1].set_ylabel("Model parameter values", size=20)
 
     axes[0].set_yticks(np.arange(-1, 1.1, 0.1))
     #axes[0].set_yticks(np.arange(0, 1, 0.1))
@@ -3952,9 +4050,11 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     axes[0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
               alpha=0.5)
 
-    #axes[1].set_yticks(np.arange(-0.05, 0.5, 0.05))
-    #axes[1].set_yticklabels(yticklabels_1)
-    #axes[1].set_ylim(-0.05, 0.5)
+    if print_params:
+        axes[1].set_ylabel("Model parameter values", size=20)
+        #axes[1].set_yticks(np.arange(-0.05, 0.5, 0.05))
+        #axes[1].set_yticklabels(yticklabels_1)
+        #axes[1].set_ylim(-0.05, 0.5)
 
     fig.set_figwidth(15)
     fig.set_figheight(10)
@@ -5179,9 +5279,10 @@ def reduced_model_fixed_ladder(ITSs, testing):
     # extract the specific results
     results, rand_results, retrof_results = all_results
 
-    # ladder plot
+    # ladder plot -- not printing parametes
     fig_lad = print_scrunch_ladder(results, rand_results, retrof_results, optim,
-                         randomize, par_ranges, initial_bubble)
+                                   randomize, par_ranges, initial_bubble,
+                                   print_params=False)
 
     return fig_lad
 
@@ -5253,7 +5354,6 @@ def predicted_vs_measured(ITSs):
     """
 
     # 2) Calculate the PY scores for them.
-
     params = (20, 0, 0.022, 0.24)
     par_ranges = [np.array([p]) for p in params]
 
@@ -5284,21 +5384,15 @@ def predicted_vs_measured(ITSs):
 
     # make a predictive function
     def predicted_PY(x, slope, intercept):
-
         return  slope*x + intercept
 
     minX, maxX = min(finals), max(finals)
 
     minY, maxY = slope*minX + intercept, slope*maxX + intercept
 
-    plt.ion()
-
     plt.scatter(finals, PYs)
     plt.errorbar(finals, PYs, yerr=PYerr, fmt=None)
     plt.plot([minX, maxX], [minY, maxY])
-
-
-    # ladder plot
 
     # 1) Get the sequences you sent to Hsu
     seq_file = 'sequence_data/seqs_for_testing.txt'
@@ -5314,12 +5408,22 @@ def predicted_vs_measured(ITSs):
 
     results, rand_results, retrof_results = test_results
 
-    pred_PY = [predicted_PY(f) for f in results[15].finals]
+    pred_PY = [predicted_PY(f, slope, intercept) for f in results[15].finals]
 
     print min(pred_PY), max(pred_PY)
 
     # TODO invent some fake experimental result and plot the predicted vs actual
-    # PYs
+    # PYs. Scale the std with thew val of p
+    fake_experimental = [p + np.random.normal(scale=abs(p)*0.4) for p in pred_PY]
+
+    fig, ax = plt.subplots()
+
+    ax.scatter(pred_PY, fake_experimental)
+
+    ax.set_xlabel('Predicted PY')
+    ax.set_ylabel('Fake experimental results')
+
+    return fig
 
 def paper_figures(ITSs):
     """
@@ -5341,36 +5445,44 @@ def paper_figures(ITSs):
     #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing)
     #figs.append((fig_ladder, ladder_name))
 
-    ## Figure 2 -> Full model at nt 15, fixed values, scatterplot
+    ### Figure 2 -> Full model at nt 15, fixed values, scatterplot
     #scatter_name = 'Full_model_scatter' + append
     #figs.append((fig_scatter, scatter_name))
 
     ## Figure 3 -> Reduced model with fixed values
     #fixed_lad_name = 'Reduced_model_fixedvals' + append
-    #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs)
+    #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing)
     #figs.append((fig_reduced_fixed, fixed_lad_name))
 
-    # Figure 4 -> Scatter of predicted VS actual PY
-    predicted_name = 'Predicted_vs_measured' + append
-    fig_predicted = predicted_vs_measured(ITSs)
+    ## Figure 4 -> Scatter of predicted VS actual PY
+    #predicted_name = 'Predicted_vs_measured' + append
+    #fig_predicted = predicted_vs_measured(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
-    # TODO make a linear model from the RNAP concentration with give coordinates
-    # and given time to the actual PY.
-    # Then predict new sequences with the exact same settings and use the linear
-    # model to obtain the PY ranges. Don't actually predict new sequences, but
-    # use those you sent to Hsu
+    # Figure 5 -> Selection pressures
+    #predicted_name = 'Selection_pressure' + append
+    #fig_predicted = selection_pressure(ITSs)
+    #figs.append((fig_predicted, predicted_name))
+
+    # Figure 6 -> Model family
+    #family_name = 'Model_family' + append
+    #fig_family = family_of_models(ITSs)
+    #figs.append((fig_family, family_name))
 
     # Save the figures
-    #for (fig, name) in figs:
-        #for fig_dir in fig_dirs:
-            #for formt in ['pdf', 'eps', 'png']:
+    for (fig, name) in figs:
+        for fig_dir in fig_dirs:
+            for formt in ['pdf', 'eps', 'png']:
 
-                #odir = os.path.join(fig_dir, formt)
+                odir = os.path.join(fig_dir, formt)
 
-                #if not os.path.isdir(odir):
-                    #os.makedirs(odir)
+                if not os.path.isdir(odir):
+                    os.makedirs(odir)
 
-                #fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+                savename = name + '.' + formt
+
+                fig.savefig(os.path.join(odir, savename), transparent=True,
+                            format=formt)
 
 def selection_pressure(ITSs):
     """
@@ -5384,93 +5496,110 @@ def selection_pressure(ITSs):
     up for it with translocation energies? For the first 15, choose those
     DNA-DNA sequences with less than -17 DNA-DNA and calculate their
     translocation values. Plot this in the translocation histogram.
-    """
 
-    plt.ion()
+    OK, now, what do you want to show? I think all plots are relevant. Compared
+    to random, because this is the potential ITS library. Compared to ITS
+    because this is the 'background bias'. Then make a 3x2 and let the bossed
+    decide
+    """
 
     # Get the DNA-DNA, translocation, and RNA-RNA energies for the first 10
     # nucleotides. Then obtain the distribution from completely random DNA.
     # Do it for the first 10 and then for the second 10
 
     # Mandatory AT start
-    DD10 = [Ec.DNA_DNAenergy(i.sequence[:15]) for i in ITSs]
-    RR10 = [Ec.RNA_DNAenergy(i.sequence[:15]) for i in ITSs]
-    TR10 = [Ec.Delta_trans(i.sequence[:15]) for i in ITSs]
+    DD15 = [Ec.DNA_DNAenergy(i.sequence[:15]) for i in ITSs]
+    RR15 = [Ec.RNA_DNAenergy(i.sequence[:15]) for i in ITSs]
+    TR15 = [Ec.Delta_trans(i.sequence[:15]) for i in ITSs]
 
     # Generate 100000 random DNA of length 10 and calculate the above energies
     # WITH AT START
-    rDD10 = []
-    rRR10 = []
-    rTR10 = []
-    rBoth = []
+    rDD15 = []
+    rRR15 = []
+    rTR15 = []
 
-    eDD10 = []
-    eRR10 = []
-    eTR10 = []
-    eBoth = []
-
-    # TODO try the same but with e coli ITS sequences. You'll want the ones 
-    #XXX get ITS sequences.
+    eDD15 = []
+    eRR15 = []
+    eTR15 = []
 
     #its_native = get_ecoli_ITS(sigma70=True, one_promoter=True, min50UTR=True)
-    its_native = get_ecoli_ITS(sigma70=True, one_promoter=True, min50UTR=True)
+    its_native = get_ecoli_ITS(sigma70=True, one_promoter=False, min50UTR=True)
 
     for its in its_native:
-        eDD10.append(Ec.DNA_DNAenergy(its))
-        eRR10.append(Ec.RNA_DNAenergy(its))
-        eTR10.append(Ec.Delta_trans(its))
+        eDD15.append(Ec.DNA_DNAenergy(its))
+        eRR15.append(Ec.RNA_DNAenergy(its))
+        eTR15.append(Ec.Delta_trans(its))
 
-        eBoth.append(Ec.Delta_trans(its) + Ec.DNA_DNAenergy(its))
-
-    #for random_dna in ITS_generator(10000, length=13):
     for random_dna in ITS_generator(10000, length=15, ATstart=False):
-        rDD10.append(Ec.DNA_DNAenergy(random_dna))
-        rRR10.append(Ec.RNA_DNAenergy(random_dna))
-        rTR10.append(Ec.Delta_trans(random_dna))
+        rDD15.append(Ec.DNA_DNAenergy(random_dna))
+        rRR15.append(Ec.RNA_DNAenergy(random_dna))
+        rTR15.append(Ec.Delta_trans(random_dna))
 
-        rBoth.append(Ec.Delta_trans(random_dna) + Ec.DNA_DNAenergy(random_dna))
+    fig, axes = plt.subplots(nrows=3, ncols=2)
 
-    fig, [ax1, ax2, ax3] = plt.subplots(3)
+    # prepare the energies in a logical way
+    its_e = [DD15, RR15, TR15]
+    rand_e = [rDD15, rRR15, rTR15]
+    ecoli_e = [eDD15, eRR15, eTR15]
 
-    ax1.hist(DD10, label='DG100 First 15 nt of ITS', alpha=0.8, color='r',
-             normed=True, bins=10)
-    #ax1.hist(rDD10, bins=20, alpha=0.3, color='g', normed=True,
-             #label='Random DNA starting with AT length 15')
+    ylabels = ['DNA-DNA', 'RNA-DNA', 'Translocation']
 
-    ax1.hist(eDD10, bins=20, alpha=0.3, color='b', normed=True,
-             label='Native E coli ITS')
-    ax1.set_title('DNA-DNA')
+    for row_nr in range(3):
+        for col_nr in range(2):
 
-    ax2.hist(RR10, label='DG100 First 15 nt of ITS', alpha=0.8, color='r',
-             normed=True, bins=10)
-    #ax2.hist(rRR10, bins=20, alpha=0.3, color='g', normed=True,
-             #label='Random DNA starting with AT length 15')
+            ax = axes[row_nr, col_nr]
 
-    ax2.hist(eRR10, bins=20, alpha=0.3, color='b', normed=True,
-             label='Native E coli ITS')
-    ax2.set_title('RNA-DNA')
+            ax.hist(its_e[row_nr], label='DG100 ITS',
+                    alpha=0.8, color='r', normed=True, bins=10)
 
-    ax3.hist(TR10, label='DG100 First 15 nt of ITS', alpha=0.8, color='r',
-             normed=True, bins=10)
-    #ax3.hist(rTR10, bins=20, alpha=0.3, color='g', normed=True,
-             #label='Random DNA starting with AT length 15')
+            if col_nr == 0:
+                ax.hist(rand_e[row_nr], bins=20, alpha=0.3, color='g',
+                        normed=True)
+                        #normed=True, label='Random DNA')
 
-    ax3.hist(eTR10, bins=20, alpha=0.3, color='b', normed=True,
-             label='Native E coli ITS')
-    ax3.set_title('Translocation')
+            if col_nr == 1:
+                ax.hist(ecoli_e[row_nr], bins=20, alpha=0.3, color='g',
+                        normed=True)
+                        #normed=True, label='Native E coli ITS')
 
-    ax1.legend(loc='upper left')
+            if col_nr == 0:
+                ax.set_ylabel(ylabels[row_nr])
 
-    fig.suptitle('The ITS sequences in the DG100 series are pre-selected for a '
-                 'high-energy DNA-DNA bubble')
+            ax.set_yticklabels([])
 
-    for ax in [ax1, ax2, ax3]:
-        ax.set_ylabel('Normalized counts')
-        ax.set_yticklabels([])
+            if row_nr == 2:
+                ax.set_xlabel('Energy')
 
-    ax3.set_xlabel('Energy')
+            if row_nr == 0 and col_nr == 0:
+                ax.set_title('Random DNA')
+
+            if row_nr == 0 and col_nr == 1:
+                ax.set_title('Native E coli ITS')
+
+            if row_nr == 0 and col_nr == 0:
+                ax.legend(loc = 'upper left')
+
+    # set xticks. Get the max/min for this row; make a linspace of 5
+    # values from the min/max. put that on both rows. 
+    # pass through, ge
+    for row_nr in range(3):
+        c1 = axes[row_nr, 0]
+        c2 = axes[row_nr, 1]
+
+        minr = min(c1.get_xlim()[0], c2.get_xlim()[0])
+        maxr = max(c1.get_xlim()[1], c2.get_xlim()[1])
+
+        xrang = np.linspace(minr, maxr, 5)
+        xvals = [int(r) for r in xrang]
+
+        for ax in [c1, c2]:
+            ax.set_xlim(minr, maxr)
+            ax.set_xticks(xrang)
+            ax.set_xticklabels(xvals)
 
     fig.subplots_adjust(wspace=None, hspace=0.4)
+
+    return fig
 
     # Dow low DNA-DNA have  high translocation? Yes.
 
@@ -5794,8 +5923,7 @@ def get_ecoli_ITS(sigma70=True, one_promoter=True, min50UTR=True, ITS_len=15):
 
 
 def main():
-    lizt, ITSs = ReadAndFixData() # read raw data
-    #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
+    ITSs = ReadAndFixData() # read raw data
     #genome_wide()
     #new_genome()
     #new_ladder(lizt)
@@ -5803,16 +5931,10 @@ def main():
 
     # Produce all the figures and tables that are in the paper
     paper_figures(ITSs)
-    # XXX which parameter is most different from the random expected?
-    # TODO your selections are funneh ... DNADNA is big for N25, but RNADNA is
-    # bugger for ITS in general. TN is stronger than expected, which is strange.
-    selection_pressure(ITSs)
+    #selection_pressure(ITSs)
 
     # XXX the new ODE models
     #new_models(ITSs)
-
-    # XXX Making figures from all the new models in one go
-    #auto_figure_maker_new_models(ITSs)
 
     # XXX Generate candidate sequences! : )
     #candidate_its(ITSs, DNADNAfilter=True)
