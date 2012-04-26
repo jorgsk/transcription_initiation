@@ -221,12 +221,13 @@ def SimpleCorr(seqdata, ran='no', rev='no', maxlen=20):
     return output
 
 def ITS_generator(nrseq, length=18, ATstart=True):
-    """Generate list of nrseq RNA random sequences. Return length+2 length. """
+    """Generate list of nrseq RNA random sequences. Seq with length. """
 
     gatc = list('GATC')
 
     if ATstart:
         beg = 'AT'
+        length = length-2
     else:
         beg = ''
 
@@ -5153,30 +5154,61 @@ def selection_pressure(ITSs):
     rDD10 = []
     rRR10 = []
     rTR10 = []
+    rBoth = []
 
-    for random_dna in ITS_generator(10000, length=13):
+    eDD10 = []
+    eRR10 = []
+    eTR10 = []
+    eBoth = []
+
+    # TODO try the same but with e coli ITS sequences. You'll want the ones 
+    #XXX get ITS sequences.
+
+    #its_native = get_ecoli_ITS(sigma70=True, one_promoter=True, min50UTR=True)
+    its_native = get_ecoli_ITS(sigma70=True, one_promoter=True, min50UTR=True)
+
+    for its in its_native:
+        eDD10.append(Ec.DNA_DNAenergy(its))
+        eRR10.append(Ec.RNA_DNAenergy(its))
+        eTR10.append(Ec.Delta_trans(its))
+
+        eBoth.append(Ec.Delta_trans(its) + Ec.DNA_DNAenergy(its))
+
+    #for random_dna in ITS_generator(10000, length=13):
+    for random_dna in ITS_generator(10000, length=15, ATstart=False):
         rDD10.append(Ec.DNA_DNAenergy(random_dna))
         rRR10.append(Ec.RNA_DNAenergy(random_dna))
         rTR10.append(Ec.Delta_trans(random_dna))
 
+        rBoth.append(Ec.Delta_trans(random_dna) + Ec.DNA_DNAenergy(random_dna))
+
     fig, [ax1, ax2, ax3] = plt.subplots(3)
 
-    ax1.hist(DD10, label='DG100 First 15 nt of ITS', alpha=0.7, color='r',
+    ax1.hist(DD10, label='DG100 First 15 nt of ITS', alpha=0.8, color='r',
              normed=True, bins=10)
-    ax1.hist(rDD10, bins=50, alpha=0.3, color='g', normed=True,
-             label='Random DNA starting with AT length 15')
+    #ax1.hist(rDD10, bins=20, alpha=0.3, color='g', normed=True,
+             #label='Random DNA starting with AT length 15')
+
+    ax1.hist(eDD10, bins=20, alpha=0.3, color='b', normed=True,
+             label='Native E coli ITS')
     ax1.set_title('DNA-DNA')
 
-    ax2.hist(RR10, label='DG100 First 15 nt of ITS', alpha=0.7, color='r',
+    ax2.hist(RR10, label='DG100 First 15 nt of ITS', alpha=0.8, color='r',
              normed=True, bins=10)
-    ax2.hist(rRR10, bins=50, alpha=0.3, color='g', normed=True,
-             label='Random DNA starting with AT length 15')
+    #ax2.hist(rRR10, bins=20, alpha=0.3, color='g', normed=True,
+             #label='Random DNA starting with AT length 15')
+
+    ax2.hist(eRR10, bins=20, alpha=0.3, color='b', normed=True,
+             label='Native E coli ITS')
     ax2.set_title('RNA-DNA')
 
-    ax3.hist(TR10, label='DG100 First 15 nt of ITS', alpha=0.7, color='r',
+    ax3.hist(TR10, label='DG100 First 15 nt of ITS', alpha=0.8, color='r',
              normed=True, bins=10)
-    ax3.hist(rTR10, bins=50, alpha=0.3, color='g', normed=True,
-             label='Random DNA starting with AT length 15')
+    #ax3.hist(rTR10, bins=20, alpha=0.3, color='g', normed=True,
+             #label='Random DNA starting with AT length 15')
+
+    ax3.hist(eTR10, bins=20, alpha=0.3, color='b', normed=True,
+             label='Native E coli ITS')
     ax3.set_title('Translocation')
 
     ax1.legend(loc='upper left')
@@ -5192,46 +5224,43 @@ def selection_pressure(ITSs):
 
     fig.subplots_adjust(wspace=None, hspace=0.4)
 
-    # Dow low DNA-DNA have  high translocation?
+    # Dow low DNA-DNA have  high translocation? Yes.
 
-    # Low DNA-DNA
-    limit = -18
-    lowDD = [i for i in ITSs if Ec.DNA_DNAenergy(i.sequence[:15]) < limit]
+    ## Low DNA-DNA
+    #limit = -18
+    #lowDD = [i for i in ITSs if Ec.DNA_DNAenergy(i.sequence[:15]) < limit]
 
-    mini_trans = [Ec.Delta_trans(i.sequence[:15]) for i in lowDD]
-    print len(mini_trans)
+    #mini_trans = [Ec.Delta_trans(i.sequence[:15]) for i in lowDD]
+    #print len(mini_trans)
 
-    TR10_mean, TR10_std = np.mean(TR10), np.std(TR10)
-    mini_mean, mini_std = np.mean(mini_trans), np.std(mini_trans)
+    #TR10_mean, TR10_std = np.mean(TR10), np.std(TR10)
+    #mini_mean, mini_std = np.mean(mini_trans), np.std(mini_trans)
 
-    fiG, aX = plt.subplots()
+    #fiG, aX = plt.subplots()
 
-    aX.bar([0.5, 1.5], [-TR10_mean, -mini_mean], alpha=0.3, width=0.5)
-    aX.errorbar([0.75, 1.75], [-TR10_mean, -mini_mean], yerr = [TR10_std, mini_std],
-                fmt=None)
+    #aX.bar([0.5, 1.5], [-TR10_mean, -mini_mean], alpha=0.3, width=0.5)
+    #aX.errorbar([0.75, 1.75], [-TR10_mean, -mini_mean], yerr = [TR10_std, mini_std],
+                #fmt=None)
 
-    aX.set_xlim(0, 2.5)
-    aX.set_xticks([0.75, 1.75])
-    aX.set_xticklabels(['All ITS ({0})'.format(len(TR10)),
-                        'ITS with DNA energy < {0} ({1})'.format(limit, 
-                                                                 len(lowDD))])
-    aX.set_ylabel('Translocation energy')
+    #aX.set_xlim(0, 2.5)
+    #aX.set_xticks([0.75, 1.75])
+    #aX.set_xticklabels(['All ITS ({0})'.format(len(TR10)),
+                        #'ITS with DNA energy < {0} ({1})'.format(limit, 
+                                                                 #len(lowDD))])
+    #aX.set_ylabel('Translocation energy')
 
-    # do a welchs test
-    n1 = len(TR10)
-    mean1 = TR10_mean
-    sem1 = TR10_std/np.sqrt(n1)
+    ## do a welchs test
+    #n1 = len(TR10)
+    #mean1 = TR10_mean
+    #sem1 = TR10_std/np.sqrt(n1)
 
-    n2 = len(lowDD)
-    mean2 = mini_mean
-    sem2 = mini_std/np.sqrt(n2)
+    #n2 = len(lowDD)
+    #mean2 = mini_mean
+    #sem2 = mini_std/np.sqrt(n2)
 
-    alpha = 0.05
+    #alpha = 0.05
 
-    welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
-
-    debug()
-
+    #welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha)
 
     # XXX you can do the same with bar-plots. It shows that the low-DNA-DNA
     # variants compensate by having very high translocation values! Wonderful!
@@ -5332,27 +5361,27 @@ def s_shaped(ITSs):
     #gg = [s.PY for s in ITSs if Ec.DNA_DNAenergy(s.sequence[:15]) < -17]
     #print gg
 
-    tap = []
+    #tap = []
 
-    dforplot = []
+    #dforplot = []
 
-    for s in ITSs:
-        tr = Ec.Delta_trans(s.sequence[:15])
-        dd = Ec.DNA_DNAenergy(s.sequence[:15])
+    #for s in ITSs:
+        #tr = Ec.Delta_trans(s.sequence[:15])
+        #dd = Ec.DNA_DNAenergy(s.sequence[:15])
 
-        #if tr > -9:
-        if tr < -4:
-        #if dd > -15:
-        #if dd < -15:
-            tap.append((tr, dd, s.PY))
-            #print 'TR:', tr, 'DNA:', dd, 'PY:', s.PY
+        ##if tr > -9:
+        #if tr < -4:
+        ##if dd > -15:
+        ##if dd < -15:
+            #tap.append((tr, dd, s.PY))
+            ##print 'TR:', tr, 'DNA:', dd, 'PY:', s.PY
 
-    for pp in sorted(tap, key=itemgetter(0,1)):
-        dforplot.append(pp[1])
-        print('TR: {0:.1f}, DNA: {1:.1f}. PY: {2:.2f}'.format(*pp))
+    #for pp in sorted(tap, key=itemgetter(0,1)):
+        #dforplot.append(pp[1])
+        #print('TR: {0:.1f}, DNA: {1:.1f}. PY: {2:.2f}'.format(*pp))
 
-    plt.ion()
-    plt.plot(dforplot)
+    #plt.ion()
+    #plt.plot(dforplot)
 
     # Make a bunch of random DNA sequences and get them in the -7.8 to -8.2
     # range for TR; from those, sort them by DNA-DNA energy low to high.
@@ -5456,6 +5485,66 @@ def s_shaped(ITSs):
         print 'TR: {0:.1f}, DNA: {1:.1f}'.format(tr, dd)
 
 
+def get_ecoli_ITS(sigma70=True, one_promoter=True, min50UTR=True, ITS_len=15):
+    """
+    Return the ITS sequences of E coli.
+
+    if sigma70 -> only get sigma 70 promoters
+
+    if one_promoter -> only get ITS from genes with 1 promoter
+
+    if min50UTR -> only get ITS from genes with a 5utr of minimum 50 nt
+
+    This is currently not yet implemented. You could do it like this: find a
+    list of all the translation initiation sites, and for each of your
+    transcription intiation site, just search each of them for the distance. I
+    think I've done something like that.
+    """
+
+    # e coli sequence
+    ecoli = 'sequence_data/ecoli/ecoli_K12_MG1655'
+    ecoli_seq = ''.join((line.strip() for line in open(ecoli, 'rb')))
+
+    sigprom_dir = 'sequence_data/ecoli/sigma_promoters'
+    sig_paths = glob(sigprom_dir+'/*')
+
+    sig_dict = {}
+    for path in sig_paths:
+        fdir, fname = os.path.split(path)
+        sig_dict[fname[8:15]] = path
+
+
+    # save ITS sequences here
+    seqs = []
+
+    for sigma, sigpath in sig_dict.items():
+
+        # see if restricted to sigma70
+        if sigma != 'Sigma70' and sigma70:
+            continue
+
+        for row_pos, line in enumerate(open(sigpath, 'rb')):
+
+            (pr_id, name, strand, pos, sig_fac, seq, evidence) = line.split('\t')
+            if seq == '':
+                continue
+
+            # get only those with 1 promoter <-> 1 gene
+            if not name.endswith('p') and one_promoter:
+                continue
+
+            # use the position to access the e coli genome
+            pos = int(pos)
+
+            if strand == 'forward':
+                seqs.append(ecoli_seq[pos-1:pos+ITS_len])
+
+            elif strand == 'reverse':
+                seqs.append(reverseComplement(ecoli_seq[pos-ITS_len:pos]))
+
+    return seqs
+
+
 def main():
     lizt, ITSs = ReadAndFixData() # read raw data
     #lizt, ITSs = StripSet(0, lizt, ITSs) # strip promoters (0 for nostrip)
@@ -5465,7 +5554,9 @@ def main():
     #new_scatter(lizt, ITSs)
 
     # XXX which parameter is most different from the random expected?
-    #selection_pressure(ITSs)
+    # TODO your selections are funneh ... DNADNA is big for N25, but RNADNA is
+    # bugger for ITS in general. TN is stronger than expected, which is strange.
+    selection_pressure(ITSs)
 
     # XXX the new ODE models
     #new_models(ITSs)
@@ -5489,7 +5580,7 @@ def main():
     # look OK. I think you should just change that one C to something else and
     # you're good to go. What to change it to?
 
-    s_shaped(ITSs)
+    #s_shaped(ITSs)
 
     # old one
     #new_designer(lizt)
