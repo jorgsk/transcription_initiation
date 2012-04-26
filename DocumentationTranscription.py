@@ -3548,18 +3548,18 @@ def family_of_models(ITSs):
 
     optim = False   # GRID
 
-    #randomize = 5 # here 0 = False (or randomize 0 times)
-    randomize = 3 # here 0 = False (or randomize 0 times)
+    randomize = 5 # here 0 = False (or randomize 0 times)
+    #randomize = 3 # here 0 = False (or randomize 0 times)
 
     initial_bubble = True
 
     # Time-grid; arbitrary units
     t = np.linspace(0, 1., 100)
 
-    #retrofit = 5
-    retrofit = 3
+    retrofit = 5
+    #retrofit = 3
 
-    modelz = get_models(stepsize=5)
+    modelz = get_models(stepsize=6)
 
     # SKip the following: m4, m5, m9, m10, m11
     for mname in ['m4', 'm5', 'm9', 'm10', 'm11']:
@@ -5184,8 +5184,6 @@ def variable_corr():
     correlation. Production friendly kthnx.
     """
 
-    plt.ion()
-
     RD = Ec.NNRD
     DD = Ec.NNDD
     TR = Ec.delta_keq
@@ -5197,7 +5195,6 @@ def variable_corr():
     TR_en = [TR[din] for din in dinucs]
 
     fix, axes = plt.subplots(1,3)
-    #fix, axes = plt.subplots(1,1)
 
     RD_tup = (RD_en, '$\Delta G$ RNA-DNA')
     DD_tup = (DD_en, '$\Delta G$ DNA-DNA')
@@ -5225,27 +5222,29 @@ def variable_corr():
         ax.set_title('Correlation {0:.2f}, p-value {1:.3f}\n'.format(corr, p))
 
         # set a label
-        for label, x, y in zip(dinucs, x_en, y_en):
-            if label not in ['GC', 'TA']:
-                continue
+        #for label, x, y in zip(dinucs, x_en, y_en):
+            #if label not in ['GC', 'TA']:
+                #continue
 
-            ax.annotate(
-                label,
-                xy = (x, y), xytext = (20, 20),
-                textcoords = 'offset points', ha = 'right', va = 'bottom',
-                bbox = dict(boxstyle = 'round,pad=0.5', fc = 'yellow', alpha = 0.3),
-                arrowprops = dict(arrowstyle = '->', connectionstyle = 'arc3,rad=0'))
+            #ax.annotate(
+                #label,
+                #xy = (x, y), xytext = (20, 20),
+                #textcoords = 'offset points', ha = 'right', va = 'bottom',
+                #bbox = dict(boxstyle = 'round,pad=0.5', fc = 'yellow', alpha = 0.3),
+                #arrowprops = dict(arrowstyle = '->', connectionstyle = 'arc3,rad=0'))
 
     fix.subplots_adjust(wspace=0.5)
     fix.set_figheight(5)
     fix.set_figwidth(12)
+
+    return fix
 
 def reduced_model_fixed_ladder(ITSs, testing):
 
     # random and cross-validation
     control = 15
     if testing:
-        control = 1
+        control = 5
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5294,12 +5293,12 @@ def full_model_grid_and_scatter(ITSs, testing):
     # grid size
     grid_size = 15
     if testing:
-        grid_size = 2
+        grid_size = 5
 
     # random and cross-validation
     control = 15
     if testing:
-        control = 1
+        control = 3
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5441,33 +5440,38 @@ def paper_figures(ITSs):
     figs = []
 
     # Figure 1 -> Full model with grid-evaluation
-    #ladder_name = 'Full_model_grid' + append
-    #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing)
-    #figs.append((fig_ladder, ladder_name))
+    ladder_name = 'Full_model_grid' + append
+    fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing)
+    figs.append((fig_ladder, ladder_name))
 
-    ### Figure 2 -> Full model at nt 15, fixed values, scatterplot
-    #scatter_name = 'Full_model_scatter' + append
-    #figs.append((fig_scatter, scatter_name))
+    ## Figure 2 -> Full model at nt 15, fixed values, scatterplot
+    scatter_name = 'Full_model_scatter' + append
+    figs.append((fig_scatter, scatter_name))
 
-    ## Figure 3 -> Reduced model with fixed values
-    #fixed_lad_name = 'Reduced_model_fixedvals' + append
-    #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing)
-    #figs.append((fig_reduced_fixed, fixed_lad_name))
+    # Figure 3 -> Reduced model with fixed values
+    fixed_lad_name = 'Reduced_model_fixedvals' + append
+    fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing)
+    figs.append((fig_reduced_fixed, fixed_lad_name))
 
-    ## Figure 4 -> Scatter of predicted VS actual PY
-    #predicted_name = 'Predicted_vs_measured' + append
-    #fig_predicted = predicted_vs_measured(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    # Figure 4 -> Scatter of predicted VS actual PY
+    predicted_name = 'Predicted_vs_measured' + append
+    fig_predicted = predicted_vs_measured(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     # Figure 5 -> Selection pressures
-    #predicted_name = 'Selection_pressure' + append
-    #fig_predicted = selection_pressure(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    predicted_name = 'Selection_pressure' + append
+    fig_predicted = selection_pressure(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     # Figure 6 -> Model family
-    #family_name = 'Model_family' + append
-    #fig_family = family_of_models(ITSs)
-    #figs.append((fig_family, family_name))
+    family_name = 'Model_family' + append
+    fig_family = family_of_models(ITSs)
+    figs.append((fig_family, family_name))
+
+    # Figure 7 -> Correlation between DNA variables
+    variable_name = 'Variable_correlation' + append
+    fig_variable = variable_corr()
+    figs.append((fig_variable, variable_name))
 
     # Save the figures
     for (fig, name) in figs:
@@ -5929,8 +5933,9 @@ def main():
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
-    # Produce all the figures and tables that are in the paper
+    #Produce all the figures and tables that are in the paper
     paper_figures(ITSs)
+
     #selection_pressure(ITSs)
 
     # XXX the new ODE models
