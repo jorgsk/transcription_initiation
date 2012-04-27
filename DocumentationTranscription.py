@@ -3559,7 +3559,7 @@ def family_of_models(ITSs):
     retrofit = 5
     #retrofit = 3
 
-    modelz = get_models(stepsize=6)
+    modelz = get_models(stepsize=8)
 
     # SKip the following: m4, m5, m9, m10, m11
     for mname in ['m4', 'm5', 'm9', 'm10', 'm11']:
@@ -5253,7 +5253,7 @@ def reduced_model_fixed_ladder(ITSs, testing):
     c1 = np.array([20]) # insensitive to variation here
     c2 = np.array([0])
     c3 = np.array([0.022])
-    c4 = np.array([0.024])
+    c4 = np.array([0.24])
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -5293,12 +5293,12 @@ def full_model_grid_and_scatter(ITSs, testing):
     # grid size
     grid_size = 15
     if testing:
-        grid_size = 5
+        grid_size = 8
 
     # random and cross-validation
     control = 15
     if testing:
-        control = 3
+        control = 5
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5431,7 +5431,8 @@ def paper_figures(ITSs):
     things for example? Maybe you should leave this until the very end ... but
     make it possible to make fast changes.
     """
-    testing = True  # if testing, run everything fast; it's just for aestethics
+    #testing = True  # if testing, run everything fast; it's just for aestethics
+    testing = False
     if testing:
         append = '_testing'
     else:
