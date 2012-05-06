@@ -387,12 +387,13 @@ class Result(object):
 
 class ITS(object):
     """ Storing the ITSs in a class for better handling. """
-    def __init__(self, sequence, name='noname', PY=-1, PY_std=-1, msat=-1):
+    def __init__(self, sequence, name='noname', PY=-1, PY_std=-1, apr=-1, msat=-1):
         # Set the initial important data.
         self.name = name
         self.sequence = sequence
         self.PY = PY
         self.PY_std = PY_std
+        self.APR = apr
         self.msat = int(msat)
         self.rna_dna1_15 = Ec.RNA_DNAenergy(self.sequence[:15])
         self.rna_dna1_20 = Ec.RNA_DNAenergy(self.sequence)
@@ -691,7 +692,8 @@ def ReadAndFixData():
     # Storing Name, sequence, and PY.
     ITSs = []
     for row in lizt:
-        ITSs.append(ITS(row[1], row[0], row[2], row[3], row[7]))
+
+        ITSs.append(ITS(row[1], row[0], row[2], row[3], row[6], row[7]))
 
     return ITSs
 
@@ -2979,6 +2981,10 @@ def seq_generator(variable_nr, batch_size, DNADNAfilter, beg=False,
                 if (sequence[1] == sequence[2] == sequence[3]):
                     continue
 
+                # Don't let the 2,3,4 pair be identical either
+                if (sequence[2] == sequence[3] == sequence[4]):
+                    continue
+
             # if not beg, you should just add the pre_seq
             else:
                 # second round -> add the 'rest'
@@ -3389,6 +3395,8 @@ def new_models(ITSs):
     """
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
+    # Try with the APR instead RESULT worse with APR than with PY
+    #PYs = np.array([itr.APR for itr in ITSs])*0.01
 
     # Parameter ranges you want to test out
     #c1 = np.linspace(1, 50, 50)
@@ -3396,11 +3404,11 @@ def new_models(ITSs):
     c2 = np.array([0]) # c2 is best evaluated to 0
     #c2 = np.array([0.01]) # c2 is best evaluated to 0
     #c2 = np.linspace(0.001, 0.2, 10)
-    #c3 = np.linspace(0.001, 0.2, 10)
-    c3 = np.array([0.022])
+    c3 = np.linspace(0.001, 0.2, 10)
+    #c3 = np.array([0.022])
     #c3 = np.array([0])
-    #c4 = np.linspace(0.1, 0.3, 10)
-    c4 = np.array([0.24])
+    c4 = np.linspace(0.1, 0.3, 10)
+    #c4 = np.array([0.24])
     #c4 = np.array([0])
 
     par_ranges = (c1, c2, c3, c4)
@@ -3415,15 +3423,15 @@ def new_models(ITSs):
     #optimize = True   # OPTIMIZER
     # I trust the Grid more than the opt. Stick with it.
 
-    randomize = 5 # here 0 = False (or randomize 0 times)
-    #randomize = 3 # here 0 = False (or randomize 0 times)
+    #randomize = 5 # here 0 = False (or randomize 0 times)
+    randomize = 0 # here 0 = False (or randomize 0 times)
 
     #initial_bubble = False
     initial_bubble = True
 
     # Fit with 50% of ITS and apply the parameters to the remaining 50%
-    retrofit = 5
-    #retrofit = 3
+    #retrofit = 5
+    retrofit = 0
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
                                  randomize, retrofit, t, initial_bubble)
@@ -3433,20 +3441,20 @@ def new_models(ITSs):
 
     # ladder plot
     plt.ion()
-    fig = print_scrunch_ladder(results, rand_results, retrof_results, optim,
-                         randomize, par_ranges, initial_bubble)
+    fig, ax = print_scrunch_ladder(results, rand_results, retrof_results, optim,
+                                   randomize, par_ranges, initial_bubble)
 
     # Save the scruch laddder
-    for fig_dir in fig_dirs:
-        for formt in ['pdf', 'eps', 'png']:
+    #for fig_dir in fig_dirs:
+        #for formt in ['pdf', 'eps', 'png']:
 
-            name = 'ITS_rand_distribution_comparison.' + formt
-            odir = os.path.join(fig_dir, formt)
+            #name = 'ITS_rand_distribution_comparison.' + formt
+            #odir = os.path.join(fig_dir, formt)
 
-            if not os.path.isdir(odir):
-                os.makedirs(odir)
+            #if not os.path.isdir(odir):
+                #os.makedirs(odir)
 
-            fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+            #fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
     # parameter plot (best and average for each its)
     #parameter_relationship(results, optim, randomize, par_ranges)
 
@@ -3922,12 +3930,85 @@ def parameter_relationship(results, optim, randomize, par_ranges):
     #ax.set_xlim(3,21)
     ax.set_xlabel("Nucleotide from transcription start", size=20)
 
-    debug()
+
+def controversy_ladder(resulter):
+    """
+    Get the following results:
+
+    #'negative_RNA_full'
+    'negative_RNA_Tn'
+    #'positive_RNA_full'
+    'positive_RNA_Tn'
+
+    And plot them next to each other.
+
+    """
+    # Blue color for The negative RNA and blue for the full
+    # The first plot is for the full model and the second is for the reduced
+    # model. Actually, only the reduced model is going to give a good result.
+
+    # you want to compare the two models
+    #fig, axes = plt.subplots(1,2)
+    fig, ax = plt.subplots()
+
+    for name, result in resulter.items():
+
+        indx, corr = zip(*[(r[0], r[1].corr_max)
+                           for r in sorted(result.items())])
+
+        if 'negative' in name:
+            lab = 'Model with negative RNA-DNA sign'
+            col = 'b'
+        else:
+            lab = 'Normal model'
+            col = 'g'
+
+        # make x-axis
+        incrX = range(indx[0], indx[-1]+1)
+
+        ax.plot(incrX, corr, label=lab, linewidth=2, color=col)
+
+    xticklabels = [str(integer) for integer in range(3,21)]
+    yticklabels = [str(integer) for integer in np.arange(0, 1.1, 0.1)]
+
+    # prepare for having more axes
+    axes = np.array([ax])
+
+    for ax in axes.flatten():
+        # legend
+        ax.legend(loc='upper left')
+
+        # xticks
+        ax.set_xticks(range(3,21))
+        ax.set_xticklabels(xticklabels)
+        ax.set_xlim(3,21)
+        ax.set_xlabel("Nucleotide from transcription start", size=20)
+
+        # awkward way of setting the tick font sizes
+        for l in ax.get_xticklabels():
+            l.set_fontsize(12)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(12)
+
+    axes[0].set_ylabel("Correlation coefficient, $r$", size=20)
+
+    axes[0].set_yticks(np.arange(0, 1.1, 0.1))
+    #axes[0].set_yticks(np.arange(0, 1, 0.1))
+    axes[0].set_yticklabels(yticklabels)
+    # you need a grid to see your awsome 0.8 + correlation coefficient
+    axes[0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+              alpha=0.5)
+
+    fig.set_figwidth(15)
+    fig.set_figheight(15)
+
+    return fig
 
 
 def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
                          randomize, par_ranges, initial_bubble,
-                         description=False, print_params=True):
+                         description=False, print_params=True, in_axes=False,
+                         ax_nr=0):
     """
     Alternative print-scrunch.
     [0][0] is the pearson for the real and the control
@@ -3938,6 +4019,9 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     else:
         fig, ax = plt.subplots()
         axes = np.array([ax])
+
+    if in_axes:
+        axes = in_axes
 
     colors_params = ['r', 'c', 'm', 'k']
 
@@ -3980,14 +4064,14 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
         # if random, plot with errorbars
         if name == 'real':
-            axes[0].plot(incrX, corr, label=name, linewidth=2, color=colr)
+            axes[ax_nr].plot(incrX, corr, label=name, linewidth=2, color=colr)
 
         elif name == 'random':
-            axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
+            axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
 
         elif name == 'cross-validated':
-            axes[0].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
+            axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
 
         # skip if you're not printing parametes
@@ -4006,15 +4090,16 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
                 # print the best parameters
                 best_par_vals = [d[parameter] for d in paramz_best]
-                axes[1].plot(incrX, best_par_vals, label=parameter, linewidth=2,
-                             color=par2col[parameter])
+                axes[ax_nr+1].plot(incrX, best_par_vals, label=parameter,
+                                   linewidth=2, color=par2col[parameter])
                 # mean
                 mean_par_vals = [d[parameter] for d in paramz_mean]
+
                 # std
                 # print the mean and std of the top 20 parameters
                 std_par_vals = [d[parameter] for d in paramz_std]
-                axes[1].errorbar(incrX, mean_par_vals, yerr=std_par_vals,
-                             color=par2col[parameter], linestyle='--')
+                axes[ax_nr+1].errorbar(incrX, mean_par_vals, yerr=std_par_vals,
+                                       color=par2col[parameter], linestyle='--')
 
 
     xticklabels = [str(integer) for integer in range(3,21)]
@@ -4082,7 +4167,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
                                                                randomize, descr)
     fig.suptitle(hedr)
 
-    return fig
+    return fig, axes
 
 
 def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, randize, retrofit, t,
@@ -4896,7 +4981,7 @@ def candidate_its(ITSs, DNADNAfilter=True):
 
     sample_nr = 26
 
-    # batch size (multiproess in batches)
+    # batch size (multiprocess in batches)
     batch_size = 300
 
     its_len = 15 # the ultimate goal
@@ -4905,6 +4990,9 @@ def candidate_its(ITSs, DNADNAfilter=True):
     candidates = get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
                                       params, its_len, DNADNAfilter)
 
+    # save some of the values for the candidates so you can print it to file for
+    # scrutiny
+    for_saving = {}
     # 4) Check these sequences against your 'naive' model. It should hold up
     # there as well.
     ITS_ens, ITS_pys = zip(*naive_energies(ITSs, new_set=False))
@@ -4916,6 +5004,10 @@ def candidate_its(ITSs, DNADNAfilter=True):
         set_Enrange = naive_energies(ITSs, new_set=seqs)
 
         print spearmanr(set_Enrange, predPys)
+
+        r, pval = spearmanr(set_Enrange, predPys)
+
+        for_saving[set_nr] = ["spearmar: {0:.2f}".format(r)]
 
     # Print the G, A, T, C distributions
     for set_nr, entries in candidates.items():
@@ -4935,7 +5027,11 @@ def candidate_its(ITSs, DNADNAfilter=True):
         Cp = Cs*100/float(tot)
 
         print set_nr
-        print 'A: {0}. G: {1}. T: {2}. C: {3}'.format(Ap, Gp, Tp, Cp)
+        pres = 'A: {0:.2f}. G: {1:.2f}. T: {2:.2f}. C: {3:.2f}'.\
+                format(Ap, Gp, Tp, Cp)
+        print pres
+
+        for_saving[set_nr].append(pres)
 
     # print the same distribution for the native ITS up to 15
     print('')
@@ -4971,13 +5067,21 @@ def candidate_its(ITSs, DNADNAfilter=True):
 
     DNA_its = [Ec.DNA_DNAenergy(s.sequence[:15]) for s in ITSs]
 
+    save_result(ITSs, for_saving, dna_dna, candidates, params, its_len)
+
     fig, ax = plt.subplots()
 
     ax.hist(DNA_its, normed=True, alpha=0.7, color = 'r')
 
     for (new_set, col) in zip(dna_dna.values(), ['b', 'g', 'k', 'c', 'yellow']):
 
-        ax.hist(new_set, normed=True, alpha=0.3, color=col)
+        ax.hist(new_set, normed=True, alpha=0.4, color=col)
+
+    # TODO save each set with some info: the predicted PY range, the nucleotide
+    # distribution, and the correlation with the naive model.
+
+
+    # Print the predicted PY
 
     # RESULT You get a correlation coefficient between 0.81 and 0.88 for the
     # 'naive' and the 'diff' models full set, 15 nt. I'm not so sure about how
@@ -5000,9 +5104,42 @@ def candidate_its(ITSs, DNADNAfilter=True):
     # These sequences are not followign the normal distirbution. That's the
     # selection pressure. But is there more than that?
 
-    # 5) Profit? Send the seqs to Hsu ...
+def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
+    """
+    Save this output kthnx.
+    1 spearmanr nucleotide_distribution
+    SEQ PY DNA-DNA
+    """
+    outfile = open('output/predicted_seqs', 'wb')
 
-    # 6) Start writing the paper,
+    for set_nr, concs_seqs in candidates.items():
+
+        # TODO RUN THIS AGAIN
+        concs, seqs = zip(*concs_seqs)
+
+        sp_nuc = for_saving[set_nr]
+        spearm = sp_nuc[0]
+        nuc_freq = sp_nuc[1]
+
+        # dna-en
+        DNAens = dna_dna[set_nr]
+        mean_en = format(np.mean(DNAens), '.2f')
+        std_en = format(np.std(DNAens), '.2f')
+
+        # set header
+        hedr = ' '.join([str(set_nr), spearm, mean_en, std_en, nuc_freq])
+        outfile.write(hedr + '\n')
+
+        # predicted PY
+        predPYs = RNAP_2_PY(ITSs, concs, params=params, its_len=its_len)
+
+        for (seq, predPY, dnaen) in zip(seqs, predPYs, DNAens):
+
+            line = '\t'.join([seq, format(predPY, '.2f'), format(dnaen, '.2f')])
+
+            outfile.write(line + '\n')
+
+    outfile.close()
 
 def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
                          params, its_len, DNADNAfilter):
@@ -5010,6 +5147,7 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
     Select candidates in a 2-step process. In the first step, solve up until
     pruning_stop and select 1% of the candidates in each group. Then resume,
     generating all possible combinations between pruning_stop and 15.
+
     """
 
     # In the first round, calculate until pruning_stop + 2 (AT)
@@ -5048,14 +5186,15 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
     y0 = [1] + [0 for i in range(state_nr-1)]
     arguments = (params, state_nr, y0, t)
 
-    second_pool = multiprocessing.Pool(4)
+    #second_pool = multiprocessing.Pool(4)
+    second_pool = multiprocessing.Pool(2)
     beg=False # don't add an AT second time around
 
     second_results = multicore_scrunch_wrap(beg, variable_nr, batch_size,
-                                           arguments, second_pool,
+                                           arguments, second_pool, DNADNAfilter,
                                            start_seqs=first_seqs)
 
-    set_nr = 5 # get 5 final outputs to choose from
+    set_nr = 20 # get 8 final outputs to choose from
     return get_py_ranges(second_results, sample_nr, set_nr)
 
 def multicore_scrunch_wrap(beg, variable_nr, batch_size, arguments,
@@ -5279,9 +5418,10 @@ def reduced_model_fixed_ladder(ITSs, testing):
     results, rand_results, retrof_results = all_results
 
     # ladder plot -- not printing parametes
-    fig_lad = print_scrunch_ladder(results, rand_results, retrof_results, optim,
-                                   randomize, par_ranges, initial_bubble,
-                                   print_params=False)
+    fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
+                                           retrof_results, optim, randomize,
+                                           par_ranges, initial_bubble,
+                                           print_params=False)
 
     return fig_lad
 
@@ -5333,13 +5473,56 @@ def full_model_grid_and_scatter(ITSs, testing):
     results, rand_results, retrof_results = all_results
 
     # ladder plot
-    fig_lad = print_scrunch_ladder(results, rand_results, retrof_results, optim,
-                         randomize, par_ranges, initial_bubble)
+    fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
+                                           retrof_results, optim, randomize,
+                                           par_ranges, initial_bubble)
 
     fig_sct = print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
                   initial_bubble, PYs)
 
     return fig_lad, fig_sct
+
+def RNAP_2_PY(ITSs, concentrations, params=(20, 0, 0.022, 0.24), its_len=15):
+    """
+    Return PY values instead of concentrations.
+
+    NB! Make sure your concentrations were made using the same parameters and
+    the same ITS length as are used to calculate the model here.
+    """
+
+    par_ranges = [np.array([p]) for p in params]
+
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    # XXX you should get it to work with 21
+    its_range = range(3, 20)
+
+    optim = False # GRID
+    randomize = 0 # here 0 = False (or randomize 0 times)
+    retrofit = 0
+    initial_bubble = True
+
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
+                                 randomize, retrofit, t, initial_bubble)
+
+    # extract the specific results
+    results, rand_results, retrof_results = all_results
+
+    finals = results[its_len].finals
+
+    # make a linear model
+    slope, intercept, corr, pval, stderr = scipy.stats.linregress(finals, PYs)
+
+    # make a predictive function
+    def predicted_PY(x, slope, intercept):
+        return  slope*x + intercept
+
+
+    # return the predicted PY values
+    return [predicted_PY(x, slope, intercept) for x in concentrations]
 
 def predicted_vs_measured(ITSs):
     """
@@ -5431,6 +5614,7 @@ def paper_figures(ITSs):
     things for example? Maybe you should leave this until the very end ... but
     make it possible to make fast changes.
     """
+
     testing = True  # if testing, run everything fast; it's just for aestethics
     if testing:
         append = '_testing'
@@ -5439,39 +5623,44 @@ def paper_figures(ITSs):
 
     figs = []
 
-    # Figure 1 -> Full model with grid-evaluation
-    ladder_name = 'Full_model_grid' + append
-    fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing)
-    figs.append((fig_ladder, ladder_name))
+    ## Figure 1 -> Full model with grid-evaluation
+    #ladder_name = 'Full_model_grid' + append
+    #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing)
+    #figs.append((fig_ladder, ladder_name))
 
-    ## Figure 2 -> Full model at nt 15, fixed values, scatterplot
-    scatter_name = 'Full_model_scatter' + append
-    figs.append((fig_scatter, scatter_name))
+    ### Figure 2 -> Full model at nt 15, fixed values, scatterplot
+    #scatter_name = 'Full_model_scatter' + append
+    #figs.append((fig_scatter, scatter_name))
 
-    # Figure 3 -> Reduced model with fixed values
-    fixed_lad_name = 'Reduced_model_fixedvals' + append
-    fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing)
-    figs.append((fig_reduced_fixed, fixed_lad_name))
+    ## Figure 3 -> Reduced model with fixed values
+    #fixed_lad_name = 'Reduced_model_fixedvals' + append
+    #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing)
+    #figs.append((fig_reduced_fixed, fixed_lad_name))
 
-    # Figure 4 -> Scatter of predicted VS actual PY
-    predicted_name = 'Predicted_vs_measured' + append
-    fig_predicted = predicted_vs_measured(ITSs)
-    figs.append((fig_predicted, predicted_name))
+    ## Figure 4 -> Scatter of predicted VS actual PY
+    #predicted_name = 'Predicted_vs_measured' + append
+    #fig_predicted = predicted_vs_measured(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
-    # Figure 5 -> Selection pressures
-    predicted_name = 'Selection_pressure' + append
-    fig_predicted = selection_pressure(ITSs)
-    figs.append((fig_predicted, predicted_name))
+    ## Figure 5 -> Selection pressures
+    #predicted_name = 'Selection_pressure' + append
+    #fig_predicted = selection_pressure(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
-    # Figure 6 -> Model family
-    family_name = 'Model_family' + append
-    fig_family = family_of_models(ITSs)
-    figs.append((fig_family, family_name))
+    ## Figure 6 -> Model family
+    #family_name = 'Model_family' + append
+    #fig_family = family_of_models(ITSs)
+    #figs.append((fig_family, family_name))
 
-    # Figure 7 -> Correlation between DNA variables
-    variable_name = 'Variable_correlation' + append
-    fig_variable = variable_corr()
-    figs.append((fig_variable, variable_name))
+    ## Figure 7 -> Correlation between DNA variables
+    #variable_name = 'Variable_correlation' + append
+    #fig_variable = variable_corr()
+    #figs.append((fig_variable, variable_name))
+
+    # Figure 7 -> The RNA-DNA controversy made flesh
+    positive_name = 'Positive_RNADNA' + append
+    fig_controversy = positive_RNADNA(ITSs, testing)
+    figs.append((fig_controversy, positive_name))
 
     # Save the figures
     for (fig, name) in figs:
@@ -5487,6 +5676,87 @@ def paper_figures(ITSs):
 
                 fig.savefig(os.path.join(odir, savename), transparent=True,
                             format=formt)
+
+def positive_RNADNA(ITSs, testing):
+    """
+    Make a plot of the optimization process for the RNA-DNA and Keq and and
+    DNADNA RNADNA and Keq, where the sign has been reversed for RNA-DNA for both
+    models.
+
+    Should you compare it directly with the optimal for DNA-DNA only at +15? You
+    can overlay them and the reviewers can judge for themselves.
+
+    If you overlay them you have to use a different technique. Taking values
+    from one axis and moving them to another. Or you have to make a new plotting
+    function that plots them on top of each other. Don't optimize, just make it
+    dirty.
+
+    The new plot function should take the two result objects and plot them on
+    the same axis.
+    """
+
+    # no cross validation needed
+    control = 0
+
+    # Compare with the PY percentages in this notation
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    # Parameter ranges you want to test out
+    c1 = np.array([20])
+    c2 = np.array([0.022])
+    c3 = np.array([0.022])
+    c4 = np.array([0.24])
+
+    # XXX you should get it to work with 21
+    its_range = range(3, 20)
+
+    optim = False # GRID
+
+    randomize = control # here 0 = False (or randomize 0 times)
+
+    initial_bubble = True
+
+    # Fit with 50% of ITS and apply the parameters to the remaining 50%
+    retrofit = control
+
+    # Construct the two alternative models and the two normal models
+    #range1 = (c1, c2*-1, c3, c4)
+    #name1 = 'negative_RNA_full'
+
+    range2 = (c1, c2*-1, np.array([0]), c4)
+    name2 = 'negative_RNA_Tn'
+
+    #range3 = (c1, c2, c3, c4)
+    #name3 = 'positive_RNA_full'
+
+    range4 = (c1, np.array([0]), c3, c4)
+    name4 = 'positive_RNA_Tn'
+
+    #collection = [(range1, name1), (range2, name2),
+                  #(range3, name3), (range4, name4)]
+
+    collection = [(range2, name2), (range4, name4)]
+
+    # collect the results
+    resulter = {}
+
+    for (par_ranges, name) in collection:
+
+        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
+                                     randomize, retrofit, t, initial_bubble)
+
+        # extract the specific results
+        results, rand_results, retrof_results = all_results
+
+        # store result with name
+        resulter[name] = results
+
+    fig = controversy_ladder(resulter)
+
+    return fig
 
 def selection_pressure(ITSs):
     """
@@ -5928,6 +6198,10 @@ def get_ecoli_ITS(sigma70=True, one_promoter=True, min50UTR=True, ITS_len=15):
 
 def main():
     ITSs = ReadAndFixData() # read raw data
+
+    #print np.median([i.msat for i in ITSs])
+    #debug()
+
     #genome_wide()
     #new_genome()
     #new_ladder(lizt)
@@ -5942,7 +6216,7 @@ def main():
     #new_models(ITSs)
 
     # XXX Generate candidate sequences! : )
-    #candidate_its(ITSs, DNADNAfilter=True)
+    #candidate_its(ITSs, DNADNAfilter=False)
 
     # XXX Generate same-TR, variable DNA-DNA variants to test S-shaped function
     # of DNA-DNA energy. RESULT you did it with random; now do it within the
