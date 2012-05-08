@@ -14,6 +14,7 @@ import scipy.stats
 from scipy import optimize
 from scipy.stats import spearmanr, pearsonr
 import scipy.interpolate
+from scipy.interpolate import InterpolatedUnivariateSpline as interpolate
 import operator
 from matplotlib import rc
 import itertools
@@ -4066,14 +4067,15 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         if name == 'real':
             axes[ax_nr].plot(incrX, corr, label=name, linewidth=2, color=colr)
 
-            # interpolate pvalues (x, must increase) with correlation (y) and obtain the
-            # correlation for p = 0.05 to plot as a black
+            # interpolate pvalues (x, must increase) with correlation (y) and
+            # obtain the correlation for p = 0.05 to plot as a black
             if p_line:
-                pv = reversed(list(pvals))
-                co = reversed(list(corr))
-                f = scipy.interpolate.interp1d(list(pv), list(co))
-                ax.axhline(y=f(0.05), ls='--', color='r', label='p = 0.05 threshold',
-                           linewidth=2)
+                # hack to get pvals and corr coeffs sorted
+                hum = list(sorted(zip(pvals, corr)))
+                pv, co = zip(*hum)
+                f = interpolate(pv, co, k=1)
+                axes[ax_nr].axhline(y=f(0.05), ls='--', color='r',
+                            label='p = 0.05 threshold', linewidth=2)
 
         elif name == 'random':
             axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
@@ -4508,9 +4510,9 @@ def grid_scrunch(arguments, ranges):
 
     t1 = time.time()
 
-    # make a pool of workers for multicore action
-    my_pool = multiprocessing.Pool(4)
-    #my_pool = multiprocessing.Pool(2)
+    #make a pool of workers for multicore action
+    #my_pool = multiprocessing.Pool(4)
+    my_pool = multiprocessing.Pool(2)
     results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
     my_pool.close()
     my_pool.join()
@@ -4563,11 +4565,12 @@ def _multi_func(paras, arguments):
     PYs = arguments[-2]
 
     for par in paras:
-        finals, time_series = cost_function_scruncher(par, *arguments, run_once=True)
+        finals, time_series = cost_function_scruncher(par, *arguments,
+                                                      run_once=True)
 
         # XXX this one is easy to forget ... you don't want answers where the
         # final values are too small
-        if sum(finals) < 0.00001:
+        if sum(finals) < 0.000001:
             continue
 
         # correlation
@@ -4623,7 +4626,84 @@ def mini_scrunch(seqs, params, state_nr, y0, t):
 
     return py_like
 
+def calculate_k1_difference(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a,
+                            b, c, d):
+    """
+    The reaction rate array for this ITS. By the arrhenius equation, you should
+    actually use the energy DIFFERENCE, not the actual energy itself. Take this
+    presently into account plz.
+
+    Also, add to +22 to get both DNA and RNA. Seems there is 1 free nucleotide
+    between RNADNA and dnd bubble. I can't find any proof of that however. It
+    might be there in the structural studies. Maybe you just have to cite the
+    others.
+
+    Recall that the energies are in dinucleotide form. Thus ATG -> [0.4, 0.2]
+
+    ATG(G) <- the last G is because the DNA-DNA is one step further than the
+    active site
+    DNADNA = [a, b, c] [AT, TG, GG]
+    RNADNA = [d, e]    [AT, TG]
+    KEQ    = [f]       [AT]
+
+    the energy contribution is
+
+    DNADNA[:2] - DNADNA[:1]
+    RNADNA[:1] - RNADNA[0]
+    KEQ = KEQ[0]
+
+    When you are at ITS_len = 3, then you should calculate the rate 2->3.
+
+    The first ITS_len is +3. That means the active sit is at +3. That means that
+    the DNA-DNA bubble is open until +4. So to get here, the transition for the
+    bubble was from +3 to +4. I must take the en[:4] - en[:3]
+
+    It means that the RNA-DNA hybrid extends to +3. So the difference is from
+    en[:3] - en[:2]
+
+    """
+
+    # initialize empty rates. -2 because you start going from +2 to +3.
+    k1 = np.zeros(its_len-2)
+
+    proceed = True  # don't proceed for bad exponenitals and run_once = True
+
+    for i in range(1, its_len-1):
+        if i == 1:
+            KEQ = keq[0]
+        else:
+            KEQ = keq[i-1] - keq[i-2]
+
+        DNA_DNA = sum(dna_dna[:i+1]) - sum(dna_dna[:i])
+
+        if i < 9:
+            RNA_DNA = sum(rna_dna[:i]) - sum(rna_dna[:i-1])
+        else:
+            RNA_DNA = sum(rna_dna[i-9:i]) - sum(rna_dna[i-9:i-1])
+
+        expo = (-b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
+
+        # if expo is above 0, the exponential will be greater than 1, and
+        # XXX why? have you given this a lot of thought?
+        # this will in general not work
+        #if run_once and expo > 0:
+            #proceed = False
+            #break
+
+        # there should be way of introducing this constraint to the
+        # optimizer. Yes, but you have to change optimizers and it's not
+        # straightforward.
+
+        rate = a*np.exp(expo)
+
+        k1[i-2] = rate
+
+    return k1, proceed
+
 def calculate_k1(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
+    """
+    The reaction rate array for this ITS
+    """
 
     # initialize empty rates
     k1 = np.zeros(its_len-2)
@@ -4676,6 +4756,8 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
 
     # The energy of the initiation bubble
     # energy at 0 improves the correlation after +13 or so
+    # But if it's energy difference driving this, the initial stuff doesnt
+    # matter
     if initial_bubble:
         minus11_en = -9.95 # 'ATAATAGATTCAT'
     else:
@@ -4686,10 +4768,11 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         # must shift by minus 1 ('GATTA' example: GA, AT, TT, TA -> len 5, but 4
         # relevant dinucleotides)
 
-        # to dictionary with the rna dna keq parameters in them
-        dna_dna = its_dict['dna_dna_di'][:its_len-1]
+        # get the energy parameters up to a certain length. -1 because of python
+        # 0 based counting.
+        dna_dna = its_dict['dna_dna_di'][:its_len]
         rna_dna = its_dict['rna_dna_di'][:its_len-1]
-        keq = its_dict['keq_di'][:its_len-1]
+        keq = its_dict['keq_di'][:its_len-2]
 
         # For run_once and if all 4 parameters are used
         if len(start_values) == 4:
@@ -4700,8 +4783,12 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         elif len(start_values) < 4:
             (a, b, c, d) = get_mixed_params(truth_table, start_values, const_par)
 
-        k1, proceed = calculate_k1(minus11_en, RT, its_len, keq, dna_dna,
-                                   rna_dna, a, b, c, d)
+        #k1, proceed = calculate_k1(minus11_en, RT, its_len, keq, dna_dna,
+                                   #rna_dna, a, b, c, d)
+
+        # New rate equation in town
+        k1, proceed = calculate_k1_difference(minus11_en, RT, its_len, keq,
+                                              dna_dna, rna_dna, a, b, c, d)
 
         # you must abort if proceed is false and run_once is true
         if run_once and not proceed:
@@ -4809,8 +4896,6 @@ def equlib_matrix(rate, state_nr):
 
     Then you get d(Xf_1)/dt = k1[Xf_0]
 
-    The value of k1 is calculate outside
-
     Example:
 
     seq = 'GATTA'
@@ -4825,6 +4910,7 @@ def equlib_matrix(rate, state_nr):
     X2 -> X3 , k2
 
     X = [X0, X1, X2, X3]
+
     A = [[-k0,   0 , 0,  0],
          [k0 , -k1 , 0,  0],
          [0  ,  k1, -k2, 0],
@@ -5441,21 +5527,26 @@ def full_model_grid_and_scatter(ITSs, testing, p_line):
     # grid size
     grid_size = 15
     if testing:
-        grid_size = 5
+        grid_size = 7
 
     # random and cross-validation
     control = 15
     if testing:
-        control = 2
+        #control = 2
+        control = 0
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Parameter ranges you want to test out
     c1 = np.array([20]) # insensitive to variation here
-    c2 = np.linspace(0.001, 0.2, grid_size)
-    c3 = np.linspace(0.001, 0.2, grid_size)
-    c4 = np.linspace(0.1, 0.4, grid_size)
+    #c2 = np.linspace(0.01, 0.9, grid_size)*-1
+    c2 = np.array([0]) # 
+    #c3 = np.array([0]) # 
+    #c3 = np.array([0.3]) # 
+    c3 = np.linspace(0.1, 0.4, grid_size)
+    c4 = np.linspace(0.4, 1.1, grid_size)
+    #c4 = np.array([0.8]) # 
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -5636,31 +5727,28 @@ def paper_figures(ITSs):
     p_line = True
 
     ## Figure 1 -> Full model with grid-evaluation
-    #ladder_name = 'Full_model_grid' + append
-    #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing, p_line)
-    #figs.append((fig_ladder, ladder_name))
+    ladder_name = 'Full_model_grid' + append
+    fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing, p_line)
+    figs.append((fig_ladder, ladder_name))
 
     #### Figure 2 -> Full model at nt 15, fixed values, scatterplot
     #scatter_name = 'Full_model_scatter' + append
     #figs.append((fig_scatter, scatter_name))
 
     ## Figure 3 -> Reduced model with fixed values
-    fixed_lad_name = 'Reduced_model_fixedvals' + append
-    fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing)
-    figs.append((fig_reduced_fixed, fixed_lad_name))
     #fixed_lad_name = 'Reduced_model_fixedvals' + append
     #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing, p_line)
     #figs.append((fig_reduced_fixed, fixed_lad_name))
 
     ## Figure 4 -> Scatter of predicted VS actual PY
-    predicted_name = 'Predicted_vs_measured' + append
-    fig_predicted = predicted_vs_measured(ITSs)
-    figs.append((fig_predicted, predicted_name))
+    #predicted_name = 'Predicted_vs_measured' + append
+    #fig_predicted = predicted_vs_measured(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
     ## Figure 5 -> Selection pressures
-    predicted_name = 'Selection_pressure' + append
-    fig_predicted = selection_pressure(ITSs)
-    figs.append((fig_predicted, predicted_name))
+    #predicted_name = 'Selection_pressure' + append
+    #fig_predicted = selection_pressure(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
     ## Figure 6 -> Model family
     #family_name = 'Model_family' + append
@@ -5668,14 +5756,14 @@ def paper_figures(ITSs):
     #figs.append((fig_family, family_name))
 
     ## Figure 7 -> Correlation between DNA variables
-    variable_name = 'Variable_correlation' + append
-    fig_variable = variable_corr()
-    figs.append((fig_variable, variable_name))
+    #variable_name = 'Variable_correlation' + append
+    #fig_variable = variable_corr()
+    #figs.append((fig_variable, variable_name))
 
     # Figure 7 -> The RNA-DNA controversy made flesh
-    positive_name = 'Positive_RNADNA' + append
-    fig_controversy = positive_RNADNA(ITSs, testing)
-    figs.append((fig_controversy, positive_name))
+    #positive_name = 'Positive_RNADNA' + append
+    #fig_controversy = positive_RNADNA(ITSs, testing)
+    #figs.append((fig_controversy, positive_name))
 
     # Save the figures
     for (fig, name) in figs:
@@ -6224,6 +6312,13 @@ def main():
 
     #Produce all the figures and tables that are in the paper
     paper_figures(ITSs)
+
+    # XXX A paper with a proper model shows that I should calculate not the
+    # total energy in each step, but the change in energy. Try that for a while
+    # won't Ya. Seems that this is correct. k1 = exp(DGf) where DGf is delta G
+    # free energy of formation! Will things change now? I don't think so. The
+    # parameters will surely change. Maybe you can fit the sequences you have
+    # already submitted into there.
 
     #selection_pressure(ITSs)
 
