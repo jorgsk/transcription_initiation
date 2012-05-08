@@ -5634,19 +5634,19 @@ def paper_figures(ITSs):
     #figs.append((fig_scatter, scatter_name))
 
     ## Figure 3 -> Reduced model with fixed values
-    #fixed_lad_name = 'Reduced_model_fixedvals' + append
-    #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing)
-    #figs.append((fig_reduced_fixed, fixed_lad_name))
+    fixed_lad_name = 'Reduced_model_fixedvals' + append
+    fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing)
+    figs.append((fig_reduced_fixed, fixed_lad_name))
 
     ## Figure 4 -> Scatter of predicted VS actual PY
-    #predicted_name = 'Predicted_vs_measured' + append
-    #fig_predicted = predicted_vs_measured(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    predicted_name = 'Predicted_vs_measured' + append
+    fig_predicted = predicted_vs_measured(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     ## Figure 5 -> Selection pressures
-    #predicted_name = 'Selection_pressure' + append
-    #fig_predicted = selection_pressure(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    predicted_name = 'Selection_pressure' + append
+    fig_predicted = selection_pressure(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     ## Figure 6 -> Model family
     #family_name = 'Model_family' + append
@@ -5654,9 +5654,9 @@ def paper_figures(ITSs):
     #figs.append((fig_family, family_name))
 
     ## Figure 7 -> Correlation between DNA variables
-    #variable_name = 'Variable_correlation' + append
-    #fig_variable = variable_corr()
-    #figs.append((fig_variable, variable_name))
+    variable_name = 'Variable_correlation' + append
+    fig_variable = variable_corr()
+    figs.append((fig_variable, variable_name))
 
     # Figure 7 -> The RNA-DNA controversy made flesh
     positive_name = 'Positive_RNADNA' + append
