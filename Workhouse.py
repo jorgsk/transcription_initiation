@@ -45,6 +45,7 @@ def StringOrFloat(incoming):
             except:
                 outgoing.append(element)
         return outgoing
+
     raise ValueError('Input must be string/float/int or list/array of these. ')
 
 def NumberFormatter(indata, sign):

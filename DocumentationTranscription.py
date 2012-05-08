@@ -4006,7 +4006,7 @@ def controversy_ladder(resulter):
 
 
 def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
-                         randomize, par_ranges, initial_bubble,
+                         randomize, par_ranges, initial_bubble, p_line,
                          description=False, print_params=True, in_axes=False,
                          ax_nr=0):
     """
@@ -4036,7 +4036,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     # This loop covers [0][0] and [0][1]
     for (ddict, name, colr) in [(results, 'real', 'b'),
                                 (rand_results, 'random', 'g'),
-                               (retrof_results, 'cross-validated', 'r')]:
+                               (retrof_results, 'cross-validated', 'k')]:
 
         # don't process 'random' or 'retrofit' if not evaluated
         if False in ddict.values():
@@ -4044,7 +4044,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
         # get its_index and corr-coeff from sorted dict
         if name == 'real':
-            indx, corr = zip(*[(r[0], r[1].corr_max)
+            indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_max)
                                for r in sorted(ddict.items())])
 
         elif name == 'random':
@@ -4066,6 +4066,15 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         if name == 'real':
             axes[ax_nr].plot(incrX, corr, label=name, linewidth=2, color=colr)
 
+            # interpolate pvalues (x, must increase) with correlation (y) and obtain the
+            # correlation for p = 0.05 to plot as a black
+            if p_line:
+                pv = reversed(list(pvals))
+                co = reversed(list(corr))
+                f = scipy.interpolate.interp1d(list(pv), list(co))
+                ax.axhline(y=f(0.05), ls='--', color='r', label='p = 0.05 threshold',
+                           linewidth=2)
+
         elif name == 'random':
             axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
@@ -4073,6 +4082,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         elif name == 'cross-validated':
             axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
+
 
         # skip if you're not printing parametes
         if not print_params:
@@ -4491,7 +4501,6 @@ def grid_scrunch(arguments, ranges):
     # all possible compbinations
     params = [p for p in itertools.product(*ranges)]
 
-    #divide the params into 4
     window = int(np.floor(len(params)/4.0))
     divide = [params[i*window:(i+1)*window] for i in range(3)]
     last = params[3*window:] # make sure you get all in the last one
@@ -5378,12 +5387,12 @@ def variable_corr():
 
     return fix
 
-def reduced_model_fixed_ladder(ITSs, testing):
+def reduced_model_fixed_ladder(ITSs, testing, p_line):
 
     # random and cross-validation
     control = 15
     if testing:
-        control = 5
+        control = 2
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5420,12 +5429,11 @@ def reduced_model_fixed_ladder(ITSs, testing):
     # ladder plot -- not printing parametes
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, optim, randomize,
-                                           par_ranges, initial_bubble,
+                                           par_ranges, initial_bubble, p_line,
                                            print_params=False)
-
     return fig_lad
 
-def full_model_grid_and_scatter(ITSs, testing):
+def full_model_grid_and_scatter(ITSs, testing, p_line):
     """
     Print full model with grid
     """
@@ -5433,12 +5441,12 @@ def full_model_grid_and_scatter(ITSs, testing):
     # grid size
     grid_size = 15
     if testing:
-        grid_size = 8
+        grid_size = 5
 
     # random and cross-validation
     control = 15
     if testing:
-        control = 5
+        control = 2
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5475,7 +5483,7 @@ def full_model_grid_and_scatter(ITSs, testing):
     # ladder plot
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, optim, randomize,
-                                           par_ranges, initial_bubble)
+                                           par_ranges, initial_bubble, p_line)
 
     fig_sct = print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
                   initial_bubble, PYs)
@@ -5614,8 +5622,8 @@ def paper_figures(ITSs):
     things for example? Maybe you should leave this until the very end ... but
     make it possible to make fast changes.
     """
-    #testing = True  # if testing, run everything fast; it's just for aestethics
-    testing = False
+    testing = True  # if testing, run everything fast; it's just for aestethics
+    #testing = False
 
     if testing:
         append = '_testing'
@@ -5624,12 +5632,15 @@ def paper_figures(ITSs):
 
     figs = []
 
+    # add a pvalue-line to the ladder plots
+    p_line = True
+
     ## Figure 1 -> Full model with grid-evaluation
     #ladder_name = 'Full_model_grid' + append
-    #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing)
+    #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing, p_line)
     #figs.append((fig_ladder, ladder_name))
 
-    ### Figure 2 -> Full model at nt 15, fixed values, scatterplot
+    #### Figure 2 -> Full model at nt 15, fixed values, scatterplot
     #scatter_name = 'Full_model_scatter' + append
     #figs.append((fig_scatter, scatter_name))
 
@@ -5637,6 +5648,9 @@ def paper_figures(ITSs):
     fixed_lad_name = 'Reduced_model_fixedvals' + append
     fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing)
     figs.append((fig_reduced_fixed, fixed_lad_name))
+    #fixed_lad_name = 'Reduced_model_fixedvals' + append
+    #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing, p_line)
+    #figs.append((fig_reduced_fixed, fixed_lad_name))
 
     ## Figure 4 -> Scatter of predicted VS actual PY
     predicted_name = 'Predicted_vs_measured' + append
