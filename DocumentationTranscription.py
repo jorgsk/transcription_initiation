@@ -391,20 +391,20 @@ class ITS(object):
     def __init__(self, sequence, name='noname', PY=-1, PY_std=-1, apr=-1, msat=-1):
         # Set the initial important data.
         self.name = name
-        self.sequence = sequence
+        #self.sequence = sequence
+        self.sequence = sequence + 'TAAATATGGC'
         self.PY = PY
         self.PY_std = PY_std
         self.APR = apr
         self.msat = int(msat)
-        self.rna_dna1_15 = Ec.RNA_DNAenergy(self.sequence[:15])
-        self.rna_dna1_20 = Ec.RNA_DNAenergy(self.sequence)
 
         # Redlisted sequences 
         self.redlist = []
         self.redlisted = False
 
-        __indiv = list(sequence)
-        __dinucs = [__indiv[c] + __indiv[c+1] for c in range(20-1)]
+        __seqlen = len(self.sequence)
+        __indiv = list(self.sequence)
+        __dinucs = [__indiv[c] + __indiv[c+1] for c in range(__seqlen-1)]
 
         # Make di-nucleotide vectors for all the energy parameters
         self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
@@ -3594,6 +3594,12 @@ def alternative_models(ITSs, p_line):
     """
     Since the rna-dna hybrid has a significant correlation on its own, make a
     small family of alternative models to test how it fares.
+
+    Show for example optimization with the RNA-DNA AND the DNA-DNA as
+    destabilizing. Actually, you can show this one next to the one where you
+    compare the RNA-DNA and DNA-DNA with zeros.
+
+    Then you can say, we wanted to compare the alternative model in two ways.
     """
 
     # Compare with the PY percentages in this notation
@@ -3770,12 +3776,12 @@ def get_models(stepsize=5):
     s = stepsize
 
     K = 20
-    dd_best = 0.25
-    eq_best = 0.72
+    dd_best = 0.2
+    eq_best = 0.6
 
-    rd_min, rd_max = 0.01, 0.5
-    dd_min, dd_max = 0.01, 0.5
-    eq_min, eq_max = 0.4, 1.2
+    rd_min, rd_max = 0.01, 1.4
+    dd_min, dd_max = 0.01, 1.4
+    eq_min, eq_max = 0.1, 1.4
 
     # Model 1 --
     # c1 = const, zero RNA-DNA, DNA-DNA and Keq variable
@@ -3911,7 +3917,7 @@ def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
     PYs = PYs*100
 
     #rows = [5, 10, 15, 20]
-    rows = [15]
+    rows = [14]
 
     if len(rows) > 1:
         fig, axes = plt.subplots(len(rows), 1, sharey=True)
@@ -4008,7 +4014,7 @@ def parameter_relationship(results, optim, randomize, par_ranges):
     ax.set_xlabel("Nucleotide from transcription start", size=20)
 
 
-def controversy_ladder(resulter):
+def controversy_ladder(resulter, p_line):
     """
     Get the following results:
 
@@ -4028,9 +4034,12 @@ def controversy_ladder(resulter):
     #fig, axes = plt.subplots(1,2)
     fig, ax = plt.subplots()
 
+    # take the average of the two p-lines generated
+    p_lines = []
+
     for name, result in resulter.items():
 
-        indx, corr = zip(*[(r[0], r[1].corr_max)
+        indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_max)
                            for r in sorted(result.items())])
 
         if 'negative' in name:
@@ -4043,7 +4052,29 @@ def controversy_ladder(resulter):
         # make x-axis
         incrX = range(indx[0], indx[-1]+1)
 
+        # check for nan in corr (make it 0)
+        nanz = np.isnan(corr)
+        if True in nanz:
+            newcorr = []
+            for inx, truthvalue in enumerate(nanz):
+                if truthvalue == True:
+                    newcorr.append(0)
+                else:
+                    newcorr.append(corr[inx])
+
+            corr = newcorr
+
         ax.plot(incrX, corr, label=lab, linewidth=2, color=col)
+
+        # store the pline values
+        pv, co = zip(*sorted(zip(pvals, corr)))
+        f = interpolate(pv, co, k=1)
+        p_lines.append(f(0.05))
+
+    # plot p_line as the mean of the two pline correlation values
+    if p_line:
+        ax.axhline(y=np.mean(p_lines), ls='--', color='r',
+                    label='p = 0.05 threshold', linewidth=2)
 
     xticklabels = [str(integer) for integer in range(3,21)]
     yticklabels = [str(integer) for integer in np.arange(0, 1.1, 0.1)]
@@ -4083,7 +4114,7 @@ def controversy_ladder(resulter):
 
 
 def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
-                         randomize, par_ranges, initial_bubble, p_line,
+                         randomize, par_ranges, initial_bubble, p_line, its_max,
                          description=False, print_params=True, in_axes=False,
                          ax_nr=0):
     """
@@ -4159,10 +4190,6 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
             # obtain the correlation for p = 0.05 to plot as a black
             if p_line:
                 # hack to get pvals and corr coeffs sorted
-                # problem: if nan in any values, the interplater goes
-                # bashmooms. fix it at the source. if I do that, I will plot the
-                # zero instead of a NaN. Right now, it plots nothing, which is
-                # good. Or is it?
                 pv, co = zip(*sorted(zip(pvals, corr)))
                 f = interpolate(pv, co, k=1)
                 axes[ax_nr].axhline(y=f(0.05), ls='--', color='r',
@@ -4175,7 +4202,6 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         elif name == 'cross-validated':
             axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
                              color=colr)
-
 
         # skip if you're not printing parametes
         if not print_params:
@@ -4205,7 +4231,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
                                        color=par2col[parameter], linestyle='--')
 
 
-    xticklabels = [str(integer) for integer in range(3,21)]
+    xticklabels = [str(integer) for integer in range(3, its_max)]
     yticklabels = [str(integer) for integer in np.arange(-0.4, 1.1, 0.1)]
     #yticklabels = [str(integer) for integer in np.arange(0, 1, 0.1)]
     #yticklabels_1 = [str(integer) for integer in np.arange(-0.05, 0.5, 0.05)]
@@ -4218,9 +4244,9 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         ax.legend(loc='lower left')
 
         # xticks
-        ax.set_xticks(range(3,21))
+        ax.set_xticks(range(3,its_max))
         ax.set_xticklabels(xticklabels)
-        ax.set_xlim(3,21)
+        ax.set_xlim(3,its_max)
         ax.set_xlabel("Nucleotide from transcription start", size=20)
 
         # awkward way of setting the tick font sizes
@@ -4913,13 +4939,14 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
             #early = dot(scipy.linalg.expm2(A*time*0.1), y0)
             #mid = dot(scipy.linalg.expm2(A*time/2.0), y0)
             # disable the timeseries step and you speed up
+            # if you later need timeseries, just make it optinoal.
             early = [0]
             mid = [0]
 
             #steps = len(soln)
 
             #time_series.append([soln[steps*0.1], soln[int(steps/2)], soln[-1]])
-            time_series.append([early, mid, solution])
+            time_series.append([early, mid, [0]])
 
     if run_once:
 
@@ -5625,10 +5652,10 @@ def variable_corr():
 def reduced_model_fixed_ladder(ITSs, testing, p_line):
 
     # random and cross-validation
-    control = 15
+    control = 10
     if testing:
-        control = 3
-        #control = 0
+        #control = 3
+        control = 0
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5636,18 +5663,18 @@ def reduced_model_fixed_ladder(ITSs, testing, p_line):
     # Parameter ranges you want to test out
     c1 = np.array([20]) # insensitive to variation here
     c2 = np.array([0])
-    #c2 = np.array([0.25])*-1
-    c3 = np.array([0.25])
+    #c2 = np.array([0.2])*-1
+    c3 = np.array([0.2])
     #c3 = np.array([0])
-    c4 = np.array([0.72])
+    c4 = np.array([0.6])
 
     par_ranges = (c1, c2, c3, c4)
 
     # Time-grid
     t = np.linspace(0, 1., 100)
 
-    # XXX you should get it to work with 21
-    its_range = range(3, 20)
+    its_max = 26
+    its_range = range(3, its_max)
 
     optim = False # GRID
 
@@ -5668,7 +5695,7 @@ def reduced_model_fixed_ladder(ITSs, testing, p_line):
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, optim, randomize,
                                            par_ranges, initial_bubble, p_line,
-                                           print_params=False)
+                                           its_max, print_params=False)
     return fig_lad
 
 def full_model_grid_and_scatter(ITSs, testing, p_line):
@@ -5682,9 +5709,9 @@ def full_model_grid_and_scatter(ITSs, testing, p_line):
         grid_size = 6
 
     # random and cross-validation
-    control = 15
+    control = 10
     if testing:
-        #control = 3
+        #control = 5
         control = 0
 
     # Compare with the PY percentages in this notation
@@ -5692,18 +5719,21 @@ def full_model_grid_and_scatter(ITSs, testing, p_line):
 
     # Parameter ranges you want to test out
     c1 = np.array([20]) # insensitive to variation here
-    #c2 = np.linspace(0.01, 0.5, grid_size)
-    c2 = np.array([0])
-    c3 = np.linspace(0.01, 0.5, grid_size)
-    c4 = np.linspace(0.4, 1.1, grid_size)
+    c2 = np.linspace(0.01, 1.4, grid_size)
+    c3 = np.linspace(0.01, 1.4, grid_size)
+    c4 = np.linspace(0.1, 1.4, grid_size)
 
     par_ranges = (c1, c2, c3, c4)
 
     # Time-grid
     t = np.linspace(0, 1., 100)
 
-    # XXX you should get it to work with 21
-    its_range = range(3, 20)
+    # TODO idea: add 5 more nucleotides. Show that it doesnt change after the
+    # variation is over!
+
+    its_max = 25
+
+    its_range = range(3, its_max)
 
     optim = False # GRID
 
@@ -5723,7 +5753,8 @@ def full_model_grid_and_scatter(ITSs, testing, p_line):
     # ladder plot
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, optim, randomize,
-                                           par_ranges, initial_bubble, p_line)
+                                           par_ranges, initial_bubble, p_line,
+                                           its_max)
 
     fig_sct = print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
                   initial_bubble, PYs)
@@ -5784,7 +5815,7 @@ def predicted_vs_measured(ITSs):
     """
 
     # 2) Calculate the PY scores for them.
-    params = (20, 0, 0.25, 0.72)
+    params = (20, 0, 0.2, 0.6)
     par_ranges = [np.array([p]) for p in params]
 
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5862,8 +5893,8 @@ def paper_figures(ITSs):
     things for example? Maybe you should leave this until the very end ... but
     make it possible to make fast changes.
     """
-    testing = True  # if testing, run everything fast; it's just for aestethics
-    #testing = False
+    #testing = True  # if testing, run everything fast; it's just for aestethics
+    testing = False
 
     if testing:
         append = '_testing'
@@ -5881,28 +5912,28 @@ def paper_figures(ITSs):
     figs.append((fig_ladder, ladder_name))
 
     ### Figure 2 -> Full model at nt 15, fixed values, scatterplot
-    #scatter_name = 'Full_model_scatter' + append
-    #figs.append((fig_scatter, scatter_name))
+    scatter_name = 'Full_model_scatter' + append
+    figs.append((fig_scatter, scatter_name))
 
-    # Figure 3 -> Reduced model with fixed values
-    #fixed_lad_name = 'Reduced_model_fixedvals' + append
-    #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing, p_line)
-    #figs.append((fig_reduced_fixed, fixed_lad_name))
+    ## Figure 3 -> Reduced model with fixed values
+    fixed_lad_name = 'Reduced_model_fixedvals' + append
+    fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing, p_line)
+    figs.append((fig_reduced_fixed, fixed_lad_name))
 
     ## Figure 4 -> Scatter of predicted VS actual PY
-    #predicted_name = 'Predicted_vs_measured' + append
-    #fig_predicted = predicted_vs_measured(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    predicted_name = 'Predicted_vs_measured' + append
+    fig_predicted = predicted_vs_measured(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     ## Figure 5 -> Selection pressures
-    #predicted_name = 'Selection_pressure' + append
-    #fig_predicted = selection_pressure(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    predicted_name = 'Selection_pressure' + append
+    fig_predicted = selection_pressure(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     ## Figure 6 -> Model family
-    #family_name = 'Model_family' + append
-    #fig_family = family_of_models(ITSs, p_line)
-    #figs.append((fig_family, family_name))
+    family_name = 'Model_family' + append
+    fig_family = family_of_models(ITSs, p_line)
+    figs.append((fig_family, family_name))
 
     ### Figure 7 -> Test alternative model with RNA-DNA destabilizing
     #alternative_name = 'Alternative_models' + append
@@ -5910,14 +5941,14 @@ def paper_figures(ITSs):
     #figs.append((fig_alternative, alternative_name))
 
     ## Figure 8 -> Correlation between DNA variables
-    #variable_name = 'Variable_correlation' + append
-    #fig_variable = variable_corr()
-    #figs.append((fig_variable, variable_name))
+    variable_name = 'Variable_correlation' + append
+    fig_variable = variable_corr()
+    figs.append((fig_variable, variable_name))
 
     # Figure 9 -> The RNA-DNA controversy made flesh
-    #positive_name = 'Positive_RNADNA' + append
-    #fig_controversy = positive_RNADNA(ITSs, testing)
-    #figs.append((fig_controversy, positive_name))
+    positive_name = 'Positive_RNADNA' + append
+    fig_controversy = positive_RNADNA(ITSs, testing, p_line)
+    figs.append((fig_controversy, positive_name))
 
     # Save the figures
     for (fig, name) in figs:
@@ -5934,7 +5965,7 @@ def paper_figures(ITSs):
                 fig.savefig(os.path.join(odir, savename), transparent=True,
                             format=formt)
 
-def positive_RNADNA(ITSs, testing):
+def positive_RNADNA(ITSs, testing, p_line):
     """
     Make a plot of the optimization process for the RNA-DNA and Keq and and
     DNADNA RNADNA and Keq, where the sign has been reversed for RNA-DNA for both
@@ -5963,9 +5994,9 @@ def positive_RNADNA(ITSs, testing):
 
     # Parameter ranges you want to test out
     c1 = np.array([20])
-    c2 = np.array([0.022])
-    c3 = np.array([0.022])
-    c4 = np.array([0.24])
+    c2 = np.array([0.2])
+    c3 = np.array([0.2])
+    c4 = np.array([0.6])
 
     # XXX you should get it to work with 21
     its_range = range(3, 20)
@@ -6011,7 +6042,7 @@ def positive_RNADNA(ITSs, testing):
         # store result with name
         resulter[name] = results
 
-    fig = controversy_ladder(resulter)
+    fig = controversy_ladder(resulter, p_line)
 
     return fig
 
