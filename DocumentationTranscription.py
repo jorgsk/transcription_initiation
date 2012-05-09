@@ -3529,9 +3529,11 @@ def print_rnap_distribution(results, par_ranges, initial_bubble, ITSs):
             ax.set_xticklabels([])
             ax.set_yticklabels([])
 
-def family_of_models(ITSs):
+def family_of_models(ITSs, p_line):
     """
     Simulate a set of pre-defined models, then print figures for all of them.
+    The models are the family of all possible variations of variables in the
+    original model.
 
     Return all 6 models. 8 - full and 000.
     100
@@ -3552,13 +3554,12 @@ def family_of_models(ITSs):
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Range of its values
-    #its_range = range(3, 20)
     its_range = range(3, 20)
 
     optim = False   # GRID
 
-    randomize = 5 # here 0 = False (or randomize 0 times)
-    #randomize = 3 # here 0 = False (or randomize 0 times)
+    #randomize = 5 # here 0 = False (or randomize 0 times)
+    randomize = 3 # here 0 = False (or randomize 0 times)
 
     initial_bubble = True
 
@@ -3566,9 +3567,9 @@ def family_of_models(ITSs):
     t = np.linspace(0, 1., 100)
 
     retrofit = 5
-    #retrofit = 3
+    #retrofit = 2
 
-    modelz = get_models(stepsize=8)
+    modelz = get_models(stepsize=6)
 
     # SKip the following: m4, m5, m9, m10, m11
     for mname in ['m4', 'm5', 'm9', 'm10', 'm11']:
@@ -3585,12 +3586,60 @@ def family_of_models(ITSs):
         resultz[model_name] = (m, all_results)
 
     # print the models
-    fig = print_model_family(resultz)
+    fig = print_model_family(resultz, p_line)
 
     return fig
 
-def print_model_family(resultz):
+def alternative_models(ITSs, p_line):
     """
+    Since the rna-dna hybrid has a significant correlation on its own, make a
+    small family of alternative models to test how it fares.
+    """
+
+    # Compare with the PY percentages in this notation
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+
+    # Range of its values
+    its_range = range(3, 20)
+
+    optim = False   # GRID
+
+    #randomize = 5 # here 0 = False (or randomize 0 times)
+    randomize = 3 # here 0 = False (or randomize 0 times)
+
+    initial_bubble = True
+
+    # Time-grid; arbitrary units
+    t = np.linspace(0, 1., 100)
+
+    retrofit = 5
+    #retrofit = 2
+
+    modelz = get_models(stepsize=6)
+
+    # SKip the following: m4, m5, m9, m10, m11
+    for mname in ['m4', 'm5', 'm9', 'm10', 'm11']:
+        modelz.pop(mname)
+
+    resultz = {}
+    # First get all the results
+    for (model_name, m) in modelz.items():
+        (par_ranges, descr) = m[:-1], m[-1]  # extract info
+
+        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,
+                                     randomize, retrofit, t, initial_bubble)
+
+        resultz[model_name] = (m, all_results)
+
+    # print the models
+    fig = print_model_family(resultz, p_line)
+
+    return fig
+
+def print_model_family(resultz, p_line):
+    """
+    Layout
+
     If 1 is DD, 2 is RD, and 3 is TR
 
     100 - m7
@@ -3637,7 +3686,7 @@ def print_model_family(resultz):
 
             # get its_index and corr-coeff from sorted dict
             if name == 'real':
-                indx, corr = zip(*[(r[0], r[1].corr_max)
+                indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_max)
                                    for r in sorted(ddict.items())])
 
             elif name == 'random':
@@ -3655,9 +3704,28 @@ def print_model_family(resultz):
             # make x-axis
             incrX = range(indx[0], indx[-1]+1)
 
+            # check for nan in corr (make it 0)
+            nanz = np.isnan(corr)
+            if True in nanz:
+                newcorr = []
+                for inx, truthvalue in enumerate(nanz):
+                    if truthvalue == True:
+                        newcorr.append(0)
+                    else:
+                        newcorr.append(corr[inx])
+
+                corr = newcorr
+
             # if random, plot with errorbars
             if name == 'real':
                 ax.plot(incrX, corr, label=name, linewidth=2, color=colr)
+
+                if p_line:
+                    # sort pv for interplate function
+                    pv, co = zip(*sorted(zip(pvals, corr)))
+                    f = interpolate(pv, co, k=1)
+                    ax.axhline(y=f(0.05), ls='--', color='r',
+                                label='p = 0.05 threshold', linewidth=2)
 
             elif name == 'random':
                 ax.errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
@@ -3681,10 +3749,10 @@ def print_model_family(resultz):
             ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                           alpha=0.5)
 
-            ax.set_ylim(-0.6, 1)
+            ax.set_ylim(-0.8, 1)
             if col_nr == 0:
                 ax.set_ylabel("Correlation coefficient, $r$", size=8)
-                ax.set_yticks(np.arange(-0.6, 1.1, 0.1))
+                ax.set_yticks(np.arange(-0.8, 1.1, 0.1))
                 ax.set_yticklabels(yticklabels)
 
             for l in ax.get_yticklabels():
@@ -3701,90 +3769,98 @@ def get_models(stepsize=5):
     """
     s = stepsize
 
+    K = 20
+    dd_best = 0.25
+    eq_best = 0.72
+
+    rd_min, rd_max = 0.01, 0.5
+    dd_min, dd_max = 0.01, 0.5
+    eq_min, eq_max = 0.4, 1.2
+
     # Model 1 --
     # c1 = const, zero RNA-DNA, DNA-DNA and Keq variable
-    m1 = (np.array([15]),
+    m1 = (np.array([K]),
           np.array([0]),
-          np.linspace(0.001, 0.2, s),
-          np.linspace(0.05, 0.4, s),
+          np.linspace(dd_min, dd_max, s),
+          np.linspace(eq_min, eq_max, s),
           'M1: c1 = const, DNA-DNA and Translocation')
 
     # Model 2 --
     # c1 = const, RNA-DNA variable, zero DNA-DNA, and Translocation variable
-    m2 = (np.array([15]),
-          np.linspace(0.001, 0.2, s),
+    m2 = (np.array([K]),
+          np.linspace(rd_min, rd_max, s),
           np.array([0]),
-          np.linspace(0.05, 0.4, s),
+          np.linspace(eq_min, eq_max, s),
          'M2: c1 = const, RNA-DNA and Translocation')
 
     # Model 3 --
     # c1 = const, RNA-DNA and DNA-DNA variable, and Translocation zero
-    m3 = (np.array([15]),
-          np.linspace(0.001, 0.2, s),
-          np.linspace(0.001, 0.2, s),
+    m3 = (np.array([K]),
+          np.linspace(rd_min, rd_max, s),
+          np.linspace(dd_min, dd_max, s),
           np.array([0]),
          'M3: c1 = const, RNA-DNA and DNA-DNA')
 
     # Model 4 --
     # c1 = const, RNA-DNA, DNA-DNA, and Translocation variable
-    m4 = (np.array([15]),
-          np.linspace(0.001, 0.2, s),
-          np.linspace(0.001, 0.2, s),
-          np.linspace(0.05, 0.4, s),
+    m4 = (np.array([K]),
+          np.linspace(rd_min, rd_max, s),
+          np.linspace(dd_min, dd_max, s),
+          np.linspace(eq_min, eq_max, s),
          'M4: c1 = const, RNA-DNA, DNA-DNA, and Translocation')
 
     # Model 5 --
     # c1 variable, RNA-DNA, DNA-DNA, and Translocation constant
-    m5 = (np.linspace(2, 20, s),
+    m5 = (np.linspace(2, K, s),
             np.array([0]),
-            np.array([0.02]),
-            np.array([0.2]),
+            np.array([dd_best]),
+            np.array([eq_best]),
          'M5: c1 variable, RNA-DNA, DNA-DNA, and Translocation constant')
 
     # Model 6 --
     # c1 = const, RNA-DNA variable, DNA-DNA and Translocation zero
-    m6 = (np.array([15]),
-          np.linspace(0.001, 0.2, s),
+    m6 = (np.array([K]),
+          np.linspace(rd_min, rd_max, s),
           np.array([0]),
           np.array([0]),
         'M6: c1 = const, RNA-DNA')
 
     # Model 7 --
     # c1 = const, RNA-DNA zero, DNA-DNA variable, and Translocation zero
-    m7 = (np.array([15]),
+    m7 = (np.array([K]),
           np.array([0]),
-          np.linspace(0.001, 0.2, s),
+          np.linspace(dd_min, dd_max, s),
           np.array([0]),
          'M7: c1 = const, DNA-DNA')
 
     # Model 8 --
     # c1 = const, RNA-DNA zero, DNA-DNA zero, and Translocation variable
-    m8 = (np.array([15]),
+    m8 = (np.array([K]),
           np.array([0]),
           np.array([0]),
-          np.linspace(0.05, 0.4, s),
+          np.linspace(eq_min, eq_max, s),
          'M8: c1 = const, Translocation')
 
     # Model 9 --
     # All constant
-    m9 = (np.array([15]),
+    m9 = (np.array([K]),
           np.array([0]),
-          np.array([0.02]),
-          np.array([0.2]),
+          np.array([dd_best]),
+          np.array([eq_best]),
          'M9: All constant but RNA-DNA zero')
 
     # Model 10 Reversed RNA-DNA
-    m10 = (np.array([15]),
-          np.linspace(0.001, 0.2, s)*(-1),
+    m10 = (np.array([K]),
+          np.linspace(rd_min, rd_max, s)*(-1),
           np.array([0]),
-          np.linspace(0.05, 0.4, s),
+          np.linspace(eq_min, eq_max, s),
          'M10: DNA-DNA zero, reversed RNA-DNA and Translocation variable')
 
     # Model 11 Reversed RNA-DNA and reversed DNA-DNA
-    m11 = (np.array([15]),
-          np.linspace(0.001, 0.2, s)*(-1),
-          np.linspace(0.001, 0.2, s)*(-1),
-          np.linspace(0.05, 0.4, s),
+    m11 = (np.array([K]),
+          np.linspace(rd_min, rd_max, s)*(-1),
+          np.linspace(dd_min, dd_max, s)*(-1),
+          np.linspace(eq_min, eq_max, s),
          'M11: Reversed RNA-DNA sign AND reversed DNA-DNA sign, all variable')
 
     models = {'m1': m1,
@@ -4063,6 +4139,18 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         # make x-axis
         incrX = range(indx[0], indx[-1]+1)
 
+        # check for nan in corr (make it 0)
+        nanz = np.isnan(corr)
+        if True in nanz:
+            newcorr = []
+            for inx, truthvalue in enumerate(nanz):
+                if truthvalue == True:
+                    newcorr.append(0)
+                else:
+                    newcorr.append(corr[inx])
+
+            corr = newcorr
+
         # if random, plot with errorbars
         if name == 'real':
             axes[ax_nr].plot(incrX, corr, label=name, linewidth=2, color=colr)
@@ -4071,8 +4159,11 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
             # obtain the correlation for p = 0.05 to plot as a black
             if p_line:
                 # hack to get pvals and corr coeffs sorted
-                hum = list(sorted(zip(pvals, corr)))
-                pv, co = zip(*hum)
+                # problem: if nan in any values, the interplater goes
+                # bashmooms. fix it at the source. if I do that, I will plot the
+                # zero instead of a NaN. Right now, it plots nothing, which is
+                # good. Or is it?
+                pv, co = zip(*sorted(zip(pvals, corr)))
                 f = interpolate(pv, co, k=1)
                 axes[ax_nr].axhline(y=f(0.05), ls='--', color='r',
                             label='p = 0.05 threshold', linewidth=2)
@@ -4115,12 +4206,12 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
 
     xticklabels = [str(integer) for integer in range(3,21)]
-    yticklabels = [str(integer) for integer in np.arange(-1, 1.1, 0.1)]
+    yticklabels = [str(integer) for integer in np.arange(-0.4, 1.1, 0.1)]
     #yticklabels = [str(integer) for integer in np.arange(0, 1, 0.1)]
     #yticklabels_1 = [str(integer) for integer in np.arange(-0.05, 0.5, 0.05)]
 
-    # make the almost-zero into a zero if going from -1 to 1
-    yticklabels[10] = '0'
+    # make the almost-zero into a zero if passing through 0
+    yticklabels[4] = '0'
 
     for ax in axes.flatten():
         # legend
@@ -4140,7 +4231,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
     axes[0].set_ylabel("Correlation coefficient, $r$", size=20)
 
-    axes[0].set_yticks(np.arange(-1, 1.1, 0.1))
+    axes[0].set_yticks(np.arange(-0.4, 1.1, 0.1))
     #axes[0].set_yticks(np.arange(0, 1, 0.1))
     axes[0].set_yticklabels(yticklabels)
     # you need a grid to see your awsome 0.8 + correlation coefficient
@@ -4511,20 +4602,23 @@ def grid_scrunch(arguments, ranges):
     t1 = time.time()
 
     #make a pool of workers for multicore action
-    #my_pool = multiprocessing.Pool(4)
-    my_pool = multiprocessing.Pool(2)
-    results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
-    my_pool.close()
-    my_pool.join()
-    # flatten the output
-    all_results = sum([r.get() for r in results], [])
+    # this is only efficient if you have a range longer than 10 or so
+    rmax = sum([len(r) for r in ranges])
+    if rmax > 6:
+        my_pool = multiprocessing.Pool(4)
+        #my_pool = multiprocessing.Pool(2)
+        results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
+        my_pool.close()
+        my_pool.join()
+        # flatten the output
+        all_results = sum([r.get() for r in results], [])
+    else:
+        #the non-parallell version for debugging and no multi-range calculations
+        all_results = sum([_multi_func(*(pa, arguments)) for pa in divide], [])
 
     # All_results is a list of tuples on the following form:
     # ((finals, time_series, par, rp, pp))
     # Sort them on the pearson correlation pvalue, 'pp'
-
-     #the non-parallell version for debugging purposes
-    #all_results = sum([_multi_func(*(pa, arguments)) for pa in divide], [])
 
     # Filter and pick the 20 with smalles pval
     all_sorted = sorted(all_results, key=itemgetter(4))
@@ -4797,13 +4891,35 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
 
             A = equlib_matrix(k1, state_nr)
             # pass the jacobian matrix to ease calculation
-            soln, info = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,),
-                                                full_output=True, Dfun=jacob_second)
-            finals.append(soln[-1][-1])
+            #soln, info = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,),
+                                                #full_output=True, Dfun=jacob_second)
 
-            steps = len(soln)
+            #if A.size > 40:
+                #debug()
 
-            time_series.append([soln[steps*0.1], soln[int(steps/2)], soln[-1]])
+            # time in which to integrate over
+            time = 1
+
+            # using the x(t) = e^{A*t}*y(0) solution 
+            solution = dot(scipy.linalg.expm(A*time), y0)
+
+            # TODO compare exact solution to numerical and if necessary increase
+            # the accuracy of the calculation.
+
+            #finals.append(soln[-1][-1])
+            finals.append(solution[-1])
+
+            # append at, mid, and end
+            #early = dot(scipy.linalg.expm2(A*time*0.1), y0)
+            #mid = dot(scipy.linalg.expm2(A*time/2.0), y0)
+            # disable the timeseries step and you speed up
+            early = [0]
+            mid = [0]
+
+            #steps = len(soln)
+
+            #time_series.append([soln[steps*0.1], soln[int(steps/2)], soln[-1]])
+            time_series.append([early, mid, solution])
 
     if run_once:
 
@@ -4818,6 +4934,39 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         result = np.array(finals)
 
         return objective - result
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#0.753906965256 1.15753912926
+#1.57984209061  1.22348213196
+#2.12787508965  1.31332707405
+#2.33202695847  1.39173698425
+#2.48822999001  1.46623897552
+#2.71692585945  1.55383396149
+#2.83940410614  1.62609601021
+#2.99955701828  1.74220299721
+#3.19246292114  1.82454991341
+#3.46146702766  2.03547883034
+#3.4764559269   2.30336284637
+#3.66819119453  2.18707108498
+#3.82449889183  2.31453990936
+#3.98695206642  2.43456697464
+#4.23973894119  2.58376407623
+
 
 def get_mixed_params(truth_table, start_values, const_par):
     """
@@ -5478,7 +5627,8 @@ def reduced_model_fixed_ladder(ITSs, testing, p_line):
     # random and cross-validation
     control = 15
     if testing:
-        control = 2
+        control = 3
+        #control = 0
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5486,8 +5636,10 @@ def reduced_model_fixed_ladder(ITSs, testing, p_line):
     # Parameter ranges you want to test out
     c1 = np.array([20]) # insensitive to variation here
     c2 = np.array([0])
-    c3 = np.array([0.022])
-    c4 = np.array([0.24])
+    #c2 = np.array([0.25])*-1
+    c3 = np.array([0.25])
+    #c3 = np.array([0])
+    c4 = np.array([0.72])
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -5527,12 +5679,12 @@ def full_model_grid_and_scatter(ITSs, testing, p_line):
     # grid size
     grid_size = 15
     if testing:
-        grid_size = 7
+        grid_size = 6
 
     # random and cross-validation
     control = 15
     if testing:
-        #control = 2
+        #control = 3
         control = 0
 
     # Compare with the PY percentages in this notation
@@ -5540,13 +5692,10 @@ def full_model_grid_and_scatter(ITSs, testing, p_line):
 
     # Parameter ranges you want to test out
     c1 = np.array([20]) # insensitive to variation here
-    #c2 = np.linspace(0.01, 0.9, grid_size)*-1
-    c2 = np.array([0]) # 
-    #c3 = np.array([0]) # 
-    #c3 = np.array([0.3]) # 
-    c3 = np.linspace(0.1, 0.4, grid_size)
+    #c2 = np.linspace(0.01, 0.5, grid_size)
+    c2 = np.array([0])
+    c3 = np.linspace(0.01, 0.5, grid_size)
     c4 = np.linspace(0.4, 1.1, grid_size)
-    #c4 = np.array([0.8]) # 
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -5635,7 +5784,7 @@ def predicted_vs_measured(ITSs):
     """
 
     # 2) Calculate the PY scores for them.
-    params = (20, 0, 0.022, 0.24)
+    params = (20, 0, 0.25, 0.72)
     par_ranges = [np.array([p]) for p in params]
 
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5726,16 +5875,16 @@ def paper_figures(ITSs):
     # add a pvalue-line to the ladder plots
     p_line = True
 
-    ## Figure 1 -> Full model with grid-evaluation
+    ### Figure 1 -> Full model with grid-evaluation
     ladder_name = 'Full_model_grid' + append
     fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing, p_line)
     figs.append((fig_ladder, ladder_name))
 
-    #### Figure 2 -> Full model at nt 15, fixed values, scatterplot
+    ### Figure 2 -> Full model at nt 15, fixed values, scatterplot
     #scatter_name = 'Full_model_scatter' + append
     #figs.append((fig_scatter, scatter_name))
 
-    ## Figure 3 -> Reduced model with fixed values
+    # Figure 3 -> Reduced model with fixed values
     #fixed_lad_name = 'Reduced_model_fixedvals' + append
     #fig_reduced_fixed = reduced_model_fixed_ladder(ITSs, testing, p_line)
     #figs.append((fig_reduced_fixed, fixed_lad_name))
@@ -5752,15 +5901,20 @@ def paper_figures(ITSs):
 
     ## Figure 6 -> Model family
     #family_name = 'Model_family' + append
-    #fig_family = family_of_models(ITSs)
+    #fig_family = family_of_models(ITSs, p_line)
     #figs.append((fig_family, family_name))
 
-    ## Figure 7 -> Correlation between DNA variables
+    ### Figure 7 -> Test alternative model with RNA-DNA destabilizing
+    #alternative_name = 'Alternative_models' + append
+    #fig_alternative = alternative_models(ITSs, p_line)
+    #figs.append((fig_alternative, alternative_name))
+
+    ## Figure 8 -> Correlation between DNA variables
     #variable_name = 'Variable_correlation' + append
     #fig_variable = variable_corr()
     #figs.append((fig_variable, variable_name))
 
-    # Figure 7 -> The RNA-DNA controversy made flesh
+    # Figure 9 -> The RNA-DNA controversy made flesh
     #positive_name = 'Positive_RNADNA' + append
     #fig_controversy = positive_RNADNA(ITSs, testing)
     #figs.append((fig_controversy, positive_name))
@@ -6298,6 +6452,15 @@ def get_ecoli_ITS(sigma70=True, one_promoter=True, min50UTR=True, ITS_len=15):
 
     return seqs
 
+def exact_solution(ITSs):
+    """
+    The simple system you are solving has an exact solution. If you get the
+    exact solution, you won't have to spend so much time calculating and get
+    compare all models at the same time for many more paramter ranges.
+
+    You can either do the eigenvalue solution or you can calculate the
+    exponential of the A matrix.
+    """
 
 def main():
     ITSs = ReadAndFixData() # read raw data
@@ -6309,6 +6472,8 @@ def main():
     #new_genome()
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
+
+    #exact_solution(ITSs)
 
     #Produce all the figures and tables that are in the paper
     paper_figures(ITSs)
