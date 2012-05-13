@@ -3405,11 +3405,12 @@ def new_models(ITSs):
     c2 = np.array([0]) # c2 is best evaluated to 0
     #c2 = np.array([0.01]) # c2 is best evaluated to 0
     #c2 = np.linspace(0.001, 0.2, 10)
-    c3 = np.linspace(0.001, 0.2, 10)
+    c3 = np.linspace(0.01, 0.9, 7)
+    #c3 = np.array([0.22])
     #c3 = np.array([0.022])
     #c3 = np.array([0])
-    c4 = np.linspace(0.1, 0.3, 10)
-    #c4 = np.array([0.24])
+    c4 = np.linspace(0.3, 0.9, 7)
+    #c4 = np.array([0.6])
     #c4 = np.array([0])
 
     par_ranges = (c1, c2, c3, c4)
@@ -3436,6 +3437,11 @@ def new_models(ITSs):
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
+
+    print('')
+    print('$$')
+    for val in sorted(results[15].finals):
+        print val
 
     # ladder plot
     plt.ion()
@@ -4692,6 +4698,7 @@ def grid_scrunch(arguments, ranges):
     #make a pool of workers for multicore action
     # this is only efficient if you have a range longer than 10 or so
     rmax = sum([len(r) for r in ranges])
+    #rmax = 5 #XXX remove me later kthnx. just for debugging.
     if rmax > 6:
         my_pool = multiprocessing.Pool(4)
         #my_pool = multiprocessing.Pool(2)
@@ -4777,7 +4784,7 @@ def get_variables(seq):
 
     return rna_dna, dna_dna, keq_delta
 
-def mini_scrunch(seqs, params, state_nr, y0, t):
+def mini_scrunch(seqs, params, state_nr, y0, t, multi_range):
     """
     A new wrapper around scipy.integrate.odeint. The previous one was too
     focused on optimization and you don't need that here.
@@ -4786,7 +4793,8 @@ def mini_scrunch(seqs, params, state_nr, y0, t):
     """
 
     RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
-    minus11_en = -9.95 # 'ATAATAGATTCAT'
+    #minus11_en = -9.95 # 'ATAATAGATTCAT'
+    minus11_en = 0 # 'ATAATAGATTCAT'
 
     py_like = []
 
@@ -4797,14 +4805,31 @@ def mini_scrunch(seqs, params, state_nr, y0, t):
 
         (a, b, c, d) = params
         its_len = state_nr + 1
-        k1, proceed = calculate_k1(minus11_en, RT, its_len, keq_delta, dna_dna,
-                                   rna_dna, a, b, c, d)
-
+        k1, proceed = calculate_k1_difference(minus11_en, RT, its_len,
+                                              keq_delta, dna_dna, rna_dna, a, b,
+                                              c, d)
         A = equlib_matrix(k1, state_nr)
-        # pass the jacobian matrix to ease calculation
-        soln, info = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,),
-                                            full_output=True, Dfun=jacob_second)
-        py_like.append((soln[-1][-1], seq))
+
+        # time in which to integrate over
+        tim = 1
+
+        # if there are 'nan' in A-matrix, return nan
+        if True in np.isnan(A):
+            soln = [np.nan]
+        else:
+            # using the x(t) = e^{A*t}*y(0) solution 
+            soln = dot(scipy.linalg.expm(A*tim), y0)
+
+        # if not multi-range, only report the its_len concentration
+        if not multi_range:
+            py_like.append((soln[-1], seq))
+
+        # the first state is for pos +2. The 12th state 
+        # [0] -> +2. so + 12 is [10]
+        # else, report the concentration at each of the pos in multi conc
+        else:
+            multi_conc = dict((pos, soln[pos-2]) for pos in multi_range)
+            py_like.append((soln[-1], seq, multi_conc))
 
     return py_like
 
@@ -4882,43 +4907,6 @@ def calculate_k1_difference(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a,
 
     return k1, proceed
 
-def calculate_k1(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
-    """
-    The reaction rate array for this ITS
-    """
-
-    # initialize empty rates
-    k1 = np.zeros(its_len-2)
-
-    proceed = True  # don't proceed for bad exponenitals and run_once = True
-
-    for i in range(1, its_len-1):
-        KEQ = keq[i-1]
-        DNA_DNA = minus11_en + sum(dna_dna[:i])
-        if i < 9:
-            RNA_DNA = sum(rna_dna[:i])
-        else:
-            RNA_DNA = sum(rna_dna[i-9:i])
-
-        expo = (-b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
-
-        # if expo is above 0, the exponential will be greater than 1, and
-        # XXX why? have you given this a lot of thought?
-        # this will in general not work
-        #if run_once and expo > 0:
-            #proceed = False
-            #break
-
-        # there should be way of introducing this constraint to the
-        # optimizer. Yes, but you have to change optimizers and it's not
-        # straightforward.
-
-        rate = a*np.exp(expo)
-
-        k1[i-2] = rate
-
-    return k1, proceed
-
 def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
                             initial_bubble, run_once=False, const_par=False,
                             truth_table=False):
@@ -4945,6 +4933,7 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
     else:
         minus11_en = 0 # 'ATAATAGATTCAT' after nt 15, it seems that having initial
 
+    print_count = 1
     for its_dict in ITSs:
 
         # must shift by minus 1 ('GATTA' example: GA, AT, TT, TA -> len 5, but 4
@@ -4965,9 +4954,6 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         elif len(start_values) < 4:
             (a, b, c, d) = get_mixed_params(truth_table, start_values, const_par)
 
-        #k1, proceed = calculate_k1(minus11_en, RT, its_len, keq, dna_dna,
-                                   #rna_dna, a, b, c, d)
-
         # New rate equation in town. Dont use the mins11 energy.
         k1, proceed = calculate_k1_difference(minus11_en, RT, its_len, keq,
                                               dna_dna, rna_dna, a, b, c, d)
@@ -4977,23 +4963,33 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
             finals.append(0)
         else:
 
-            A = equlib_matrix(k1, state_nr)
+            #A = equlib_matrix(k1, state_nr)
+            abortive_rate = 2
+            A = equlib_matrix_experimental(k1, state_nr, abortive_rate)
             # pass the jacobian matrix to ease calculation
-            #soln, info = scipy.integrate.odeint(rnap_solver, y0, t, args = (A,),
-                                                #full_output=True, Dfun=jacob_second)
-
             # time in which to integrate over
-            time = 1
+            tim = 1
 
             # if there are 'nan' in A-matrix, return nan
             if True in np.isnan(A):
                 solution = [np.nan]
             else:
                 # using the x(t) = e^{A*t}*y(0) solution 
-                solution = dot(scipy.linalg.expm(A*time), y0)
+                solution = dot(scipy.linalg.expm(A*tim,q=1), y0)
+                #if len(solution) >12:
+                    #debug()
 
-            #finals.append(soln[-1][-1])
             finals.append(solution[-1])
+            # XXX you have a 30 fold variation in reaction rates. Should you
+            # again try to correlate this with the AP values?
+            #if print_count:
+                ##print k1
+                #for k, s in zip(k1, solution):
+                    #print k, s
+                #print '$$$\n'
+                #print_count -= 1
+
+                #debug()
 
             # append at, mid, and end
             #early = dot(scipy.linalg.expm2(A*time*0.1), y0)
@@ -5124,6 +5120,67 @@ def jacob_second(t, y, A):
     """
 
     return A
+
+def equlib_matrix_experimental(rate, state_nr, abortive_rate):
+    """
+    Try to incorporate an abortive effect back to state 0.
+
+    Assume equlibrium for the reaction:
+    X_f_0 <=> X_e_0 -> X_f_1
+
+    Then you get d(Xf_1)/dt = k1[Xf_0]
+
+    Example:
+
+    seq = 'GATTA'
+
+    X0 = A,
+    X1 = T,
+    X2 = T,
+    X3 = A
+
+    X0 -> X1 , k0
+    X1 -> X2 , k1, X1 -> X0, K
+    X2 -> X3 , k2, X2 -> X0, K
+
+    X3 is assumed to be the final resting place
+
+    X = [X0, X1, X2, X3]
+
+    A = [[-k0,   K    ,   K    , 0],
+         [k0 , -(k1+K),   0    , 0],
+         [0  ,  k1    , -(k2+K), 0],
+         [0  ,  0     ,  k2    , 0]]
+
+    """
+    # initialize with the first row
+    rows = [  [-rate[0]] + [0 for i in range(state_nr-1)] ]
+
+    for r_nr in range(state_nr-2):
+        row = []
+
+        for col_nr in range(state_nr):
+
+            if col_nr == r_nr:
+                row.append(rate[r_nr])
+
+            elif col_nr == r_nr+1:
+                row.append(-rate[r_nr+1] - abortive_rate)
+
+            else:
+                row.append(0)
+
+        rows.append(row)
+
+    #last row, special case: no backward rate
+    rows.append([0 for i in range(state_nr-2)] + [ rate[-1], 0 ])
+
+    # let state 0 get some feedback from the abortive states!
+    for col_pos in range(len(rows[0])-1):
+        if col_pos > 0 :
+            rows[0][col_pos] += abortive_rate
+
+    return np.array(rows)
 
 def equlib_matrix(rate, state_nr):
     """
@@ -5285,6 +5342,20 @@ def parameter_matrix(rates, states, variables):
 
     return np.array(rows)
 
+def finals2py(finals, PYs):
+    """
+    Take the final output concentrations and return PY values
+    """
+    # make a linear model from concentrations to PYs
+    slope, intercept, corr, pval, stderr = scipy.stats.linregress(finals,
+                                                                  PYs)
+    # make a predictive linear function
+    def predicted_PY(x, slope, intercept):
+        return  slope*x + intercept
+
+    return [predicted_PY(f) for f in finals]
+
+
 def candidate_its(ITSs, DNADNAfilter=True):
     """
     Based on your models you must now suggest new sequences.
@@ -5295,18 +5366,42 @@ def candidate_its(ITSs, DNADNAfilter=True):
     possible variants for the first 8;  well, 10 took like 15 minutes. that's
     not too bad. Will be 7 on work computer.
     """
-    plt.ion()
 
-    #XXX OK you've got the optimalz. Now party! Gen'rate seqs.
-    params = (15, 0, 0.022, 0.24)
-    # XXX these are the optimals for the rna-dna model ...
-    #params = (15, -0.022, 0, 0.24)
-    # Interstingly, they are the mirrors of the dna-dna model ...!
+    plt.ion()
+    par = get_global_params()
+
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+
+    # Range of its values
+    max_its = 21
+    its_range = range(3, max_its)
+
+    grid_size = 15
+    optim = False   # GRID
+
+    # Time-grid; arbitrary units
+    t = np.linspace(0, 1., 100)
+
+    # initial grid
+    c1 = np.array([par['K']]) # insensitive to variation here
+    c2 = np.array([0]) # rna-dna to zero
+    c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
+    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+
+    par_ranges = (c1, c2, c3, c4)
+
+    # use the optimal parameters froom the optimization
+    # get average from +11 to +15
+    av_range = range(11,16)
+    #av_range = range(10,13)
+    opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t,
+                                 opt_nucs = av_range)
 
     beg = 'AT'
     N25 = 'ATAAATTTGAGAGAGGAGTT'
 
     pruning_stop = 10 # stop after this many variations; trim the dataset; continue
+    #pruning_stop = 7
     # 5 => 0.4, 6 => 1.9, 7 =>8.9, 8 => 32.8, 9 => 128
     # At work: 7 => 1.95,  8 => 7.2, 9 => 30.1
 
@@ -5316,21 +5411,17 @@ def candidate_its(ITSs, DNADNAfilter=True):
     batch_size = 300
 
     its_len = 15 # the ultimate goal
+    #its_len = 12
 
     # get a dict of some candidate sets
     candidates = get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
-                                      params, its_len, DNADNAfilter)
+                                      opt_par, its_len, av_range, DNADNAfilter)
 
-    # save some of the values for the candidates so you can print it to file for
-    # scrutiny
     for_saving = {}
-    # 4) Check these sequences against your 'naive' model. It should hold up
-    # there as well.
-    ITS_ens, ITS_pys = zip(*naive_energies(ITSs, new_set=False))
-
+    #Get how well its doing with the naive model
     for set_nr, candidate_set in candidates.items():
 
-        predPys, seqs = zip(*candidate_set)
+        predPys, seqs, ost = zip(*candidate_set)
 
         set_Enrange = naive_energies(ITSs, new_set=seqs)
 
@@ -5340,7 +5431,7 @@ def candidate_its(ITSs, DNADNAfilter=True):
 
         for_saving[set_nr] = ["spearmar: {0:.2f}".format(r)]
 
-    # Print the G, A, T, C distributions
+    # Print the G, A, T, C distribution from the 5 best.
     for set_nr, entries in candidates.items():
         seqs = [e[1] for e in entries]
 
@@ -5390,7 +5481,7 @@ def candidate_its(ITSs, DNADNAfilter=True):
     for set_nr, candidate_set in candidates.items():
 
         ens = []
-        predPys, seqs = zip(*candidate_set)
+        predPys, seqs, ost = zip(*candidate_set)
         for cand_seq in seqs:
             ens.append(Ec.DNA_DNAenergy(cand_seq[:15]))
 
@@ -5398,7 +5489,7 @@ def candidate_its(ITSs, DNADNAfilter=True):
 
     DNA_its = [Ec.DNA_DNAenergy(s.sequence[:15]) for s in ITSs]
 
-    save_result(ITSs, for_saving, dna_dna, candidates, params, its_len)
+    save_result(ITSs, for_saving, dna_dna, candidates, opt_par, its_len)
 
     fig, ax = plt.subplots()
 
@@ -5410,9 +5501,6 @@ def candidate_its(ITSs, DNADNAfilter=True):
 
     # TODO save each set with some info: the predicted PY range, the nucleotide
     # distribution, and the correlation with the naive model.
-
-
-    # Print the predicted PY
 
     # RESULT You get a correlation coefficient between 0.81 and 0.88 for the
     # 'naive' and the 'diff' models full set, 15 nt. I'm not so sure about how
@@ -5446,7 +5534,7 @@ def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
     for set_nr, concs_seqs in candidates.items():
 
         # TODO RUN THIS AGAIN
-        concs, seqs = zip(*concs_seqs)
+        concs, seqs, oist = zip(*concs_seqs)
 
         sp_nuc = for_saving[set_nr]
         spearm = sp_nuc[0]
@@ -5473,7 +5561,7 @@ def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
     outfile.close()
 
 def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
-                         params, its_len, DNADNAfilter):
+                         params, its_len, av_range, DNADNAfilter):
     """
     Select candidates in a 2-step process. In the first step, solve up until
     pruning_stop and select 1% of the candidates in each group. Then resume,
@@ -5499,8 +5587,8 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
 
     # get a dict of several candidate sets
     set_nr = 0 # this parameter doesn't matter here
-    set_subsize = 100 # get 100 sequences from each of the 25 lumpings 
-    first_outp = get_py_ranges(first_results, sample_nr, set_nr, set_subsize)
+    #set_subsize = 100 # get 100 sequences from each of the 25 lumpings 
+    first_outp = get_py_ranges(first_results, sample_nr, set_nr, set_subsize=100)
 
     #Extract only the sequences from the first batch
     first_seqs = [f[1] for f in first_outp]
@@ -5517,20 +5605,27 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
     y0 = [1] + [0 for i in range(state_nr-1)]
     arguments = (params, state_nr, y0, t)
 
-    #second_pool = multiprocessing.Pool(4)
-    second_pool = multiprocessing.Pool(2)
+    second_pool = multiprocessing.Pool(4)
+    #second_pool = multiprocessing.Pool(2)
     beg=False # don't add an AT second time around
 
     second_results = multicore_scrunch_wrap(beg, variable_nr, batch_size,
                                            arguments, second_pool, DNADNAfilter,
-                                           start_seqs=first_seqs)
+                                           start_seqs=first_seqs,
+                                            multi_range=av_range)
 
-    set_nr = 20 # get 8 final outputs to choose from
-    return get_py_ranges(second_results, sample_nr, set_nr)
+    set_nr = 10 # get 50 final outputs to choose from
+    return get_py_ranges(second_results, sample_nr, set_nr, av_range=av_range)
 
 def multicore_scrunch_wrap(beg, variable_nr, batch_size, arguments,
-                           my_pool, DNADNAfilter, start_seqs=False):
+                           my_pool, DNADNAfilter, start_seqs=False,
+                           multi_range=False):
     """
+    Return concs[+15], seqs, concs[multi_range]
+
+    or if multi-range is False
+
+    concs[+15], seqs
     """
 
     results = []
@@ -5539,16 +5634,12 @@ def multicore_scrunch_wrap(beg, variable_nr, batch_size, arguments,
                                starts=start_seqs):
 
         # if you have start_seqs, send them in
-        args = (batch,) + arguments # join the arguments
+        args = (batch,) + arguments + (multi_range,) # join the arguments
 
-
-        #if start_seqs:
-            ## non-multi version
-            #result = mini_scrunch(*args)
-            #debug()
+        # non-multi version
+        #result = mini_scrunch(*args)
 
         result = my_pool.apply_async(mini_scrunch, args)
-
 
         results.append(result)
 
@@ -5562,35 +5653,46 @@ def multicore_scrunch_wrap(beg, variable_nr, batch_size, arguments,
 
     return results
 
-def get_py_ranges(all_results, sample_nr, set_nr, set_subsize=False):
+def get_py_ranges(all_results, sample_nr, set_nr, av_range=False,
+                  set_subsize=False):
     """
     Given the set of sequences, output a set of sample_nr compartments where
-    sequences are sorted linearly according to their PYs
-    """
-    pys, seqs = zip(*all_results)
+    sequences are sorted linearly according to their concentrations.
 
-    minPy, maxPy = min(pys), max(pys)
+    """
+    if av_range:
+        cons, seqs, multi_cons = zip(*all_results)
+    else:
+        cons, seqs = zip(*all_results)
+
+    minConc, maxConc = min(cons), max(cons)
 
     # Gen the py-range from smallest to largest
-    pyRange = np.linspace(maxPy, minPy, sample_nr+1)[::-1]
+    conRange = np.linspace(maxConc, minConc, sample_nr+1)[::-1]
 
     # Create limits for the bounding boxes
     boundaries = []
-    for inx, val in enumerate(pyRange[:-1]):
-        boundaries.append((val, pyRange[inx+1]))
+    for bound_inx, val in enumerate(conRange[:-1]):
+        boundaries.append((val, conRange[bound_inx+1]))
 
     # Save seqs into bounding boxes according to the 'boundaries'
     savers = [[] for i in range(sample_nr)]
 
     pos = 0 # counter for which bounding box you are in
-    for (pyval, seq) in sorted(all_results):
+    for entry in sorted(all_results):
+
+        if len(entry) == 3:
+            conval, seq, multi_con = entry
+
+        if len(entry) == 2:
+            conval, seq = entry
 
         # change pos when you reach a boundary
-        if pyval > boundaries[pos][1] and pos != len(savers)-1:
+        if conval > boundaries[pos][1] and pos != len(savers)-1:
             pos += 1
 
-        if boundaries[pos][0] <= pyval <= boundaries[pos][1]:
-            savers[pos].append((pyval, seq))
+        if boundaries[pos][0] <= conval <= boundaries[pos][1]:
+            savers[pos].append(entry)
 
     # If this is the first step before pruning, just return a set with
     # set_subsize sequences from each boundary
@@ -5598,7 +5700,6 @@ def get_py_ranges(all_results, sample_nr, set_nr, set_subsize=False):
         return randomly_selected_seqs(savers, set_subsize)
 
     else:
-
         # choose a final set where no nucleotide has more than 60% presence and
         # (every nucleotide is present at least once)
         final_sets = {}
@@ -5734,6 +5835,7 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
     c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
+    c2 = np.array([0]) # insensitive to variation here
     c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
     c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
 
@@ -5746,8 +5848,10 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
     par_ranges = opt_par
 
     # second round, randomize cross validate like crazy
-    randomize = 10
-    retrofit = 10
+    #randomize = 10
+    #retrofit = 10
+    randomize = 3
+    retrofit = 3
 
     # initial run to get optimal parameters
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
@@ -5764,7 +5868,8 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
                                            print_params=False)
     return fig_lad
 
-def get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t):
+def get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t,
+                       opt_nucs='max'):
 
     # don't do randomization or cross validation now
     randomize = 0
@@ -5777,17 +5882,36 @@ def get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t):
     # extract the specific results
     results, rand_results, retrof_results = all_results
 
-    corr_and_param = [(res.corr_max, res.params_best) for res in results.values()]
 
-    # sort and get the value with highest correlation coefficient
-    op = list(sorted(corr_and_param))[-1][-1]
+    # if max, juset get parameter values for the optimal run
+    if opt_nucs == 'max':
+        corr_and_param = [(res.corr_max, res.params_best) for
+                          res in results.values()]
+        # sort and get the value with highest correlation coefficient
+        op = list(sorted(corr_and_param))[-1][-1]
 
-    # finally get the optimal parameters in order. put them in an np array for
-    # proper downstream handeling.
-    optimal_params = (np.array([op['c1']]),
-                      np.array([op['c2']]),
-                      np.array([op['c3']]),
-                      np.array([op['c4']]))
+        # finally get the optimal parameters in order. put them in an np array for
+        # proper downstream handeling.
+        optimal_params = (np.array([op['c1']]),
+                          np.array([op['c2']]),
+                          np.array([op['c3']]),
+                          np.array([op['c4']]))
+
+    # if not, get the average optimal parameters for the range you have
+    # specified
+    else:
+        # the the parameters for the specified pos
+        parr_list = [results[pos].params_best for pos in opt_nucs]
+        # get the average parameters
+        c1 = np.mean([r['c1'] for r in parr_list])
+        c2 = np.mean([r['c2'] for r in parr_list])
+        c3 = np.mean([r['c3'] for r in parr_list])
+        c4 = np.mean([r['c4'] for r in parr_list])
+
+        optimal_params = (np.array([c1]),
+                          np.array([c2]),
+                          np.array([c3]),
+                          np.array([c4]))
 
     return optimal_params
 
@@ -5900,8 +6024,7 @@ def predicted_vs_measured(ITSs):
     # Time-grid
     t = np.linspace(0, 1., 100)
 
-    # XXX you should get it to work with 21
-    its_range = range(3, 20)
+    its_range = range(3, 21)
 
     optim = False # GRID
     randomize = 0 # here 0 = False (or randomize 0 times)
@@ -5948,7 +6071,9 @@ def predicted_vs_measured(ITSs):
 
     print min(pred_PY), max(pred_PY)
 
-    # TODO invent some fake experimental result and plot the predicted vs actual
+    debug()
+
+    # invent some fake experimental result and plot the predicted vs actual
     # PYs. Scale the std with thew val of p
     fake_experimental = [p + np.random.normal(scale=abs(p)*0.4) for p in pred_PY]
 
@@ -5960,6 +6085,23 @@ def predicted_vs_measured(ITSs):
     ax.set_ylabel('Fake experimental results')
 
     return fig
+
+def get_global_params():
+    global_params = {'K': 20,
+                     'dd_best': 0.2, # approximately
+                     'rd_best': 0.2, # approximately
+                     'eq_best': 0.6, # approximately
+                     'alt_rdMin': -0.01,
+                     'alt_rdMax': -1.4,
+                     'dd_min': 0.01,
+                     'dd_max': 1.4,
+                     'rd_min': 0.001, # this one goes pretty much to zero
+                     'rd_max': 1.4,
+                     'eq_min': 0.1,
+                     'eq_max': 1.4}
+
+    return global_params
+
 
 def paper_figures(ITSs):
     """
@@ -5984,18 +6126,7 @@ def paper_figures(ITSs):
     p_line = True
 
     # global parameters
-    global_params = {'K': 20,
-                     'dd_best': 0.2, # approximately
-                     'rd_best': 0.2, # approximately
-                     'eq_best': 0.6, # approximately
-                     'alt_rdMin': -0.01,
-                     'alt_rdMax': -1.4,
-                     'dd_min': 0.01,
-                     'dd_max': 1.4,
-                     'rd_min': 0.001, # this one goes pretty much to zero
-                     'rd_max': 1.4,
-                     'eq_min': 0.1,
-                     'eq_max': 1.4}
+    global_params = get_global_params()
 
     ### Figure 1 -> Full model with grid-evaluation
     #ladder_name = 'Full_model_grid' + append
@@ -6008,10 +6139,10 @@ def paper_figures(ITSs):
     #figs.append((fig_scatter, scatter_name))
 
     #### Figure 3 -> Optimal model model
-    #fixed_lad_name = 'Optimal_model' + append
-    #fig_reduced_fixed = optimal_model_fixed_ladder(ITSs, testing, p_line,
-                                                   #global_params)
-    #figs.append((fig_reduced_fixed, fixed_lad_name))
+    fixed_lad_name = 'Optimal_model' + append
+    fig_reduced_fixed = optimal_model_fixed_ladder(ITSs, testing, p_line,
+                                                   global_params)
+    figs.append((fig_reduced_fixed, fixed_lad_name))
 
     ### Figure 4 -> Scatter of predicted VS actual PY
     #predicted_name = 'Predicted_vs_measured' + append
@@ -6631,15 +6762,76 @@ def get_ecoli_ITS(sigma70=True, one_promoter=True, min50UTR=True, ITS_len=15):
 
     return seqs
 
-def exact_solution(ITSs):
+def DG400_verifier(ITSs):
     """
-    The simple system you are solving has an exact solution. If you get the
-    exact solution, you won't have to spend so much time calculating and get
-    compare all models at the same time for many more paramter ranges.
+    Read the predicted set and run through the model. Note deviations from
+    linearity and PY values. If not too different, keep'em.
+    """
 
-    You can either do the eigenvalue solution or you can calculate the
-    exponential of the A matrix.
-    """
+    # 2) Calculate the PY scores for the origianl PY to get a linear score
+    params = (20, 0, 0.3, 0.8)
+    par_ranges = [np.array([p]) for p in params]
+
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+    PYerr = np.array([itr.PY_std for itr in ITSs])*0.01
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    its_range = range(3, 21)
+
+    optim = False # GRID
+    randomize = 0 # here 0 = False (or randomize 0 times)
+    retrofit = 0
+
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+                                 randize=randomize, retrofit=retrofit)
+
+    # extract the specific results
+    results, rand_results, retrof_results = all_results
+
+    finals = results[15].finals
+
+    # make a linear model
+    slope, intercept, corr, pval, stderr = scipy.stats.linregress(finals, PYs)
+
+    # make a predictive function
+    def predicted_PY(x, slope, intercept):
+        return  slope*x + intercept
+
+    minX, maxX = min(finals), max(finals)
+
+    minY, maxY = slope*minX + intercept, slope*maxX + intercept
+
+    plt.scatter(finals, PYs)
+    plt.errorbar(finals, PYs, yerr=PYerr, fmt=None)
+    plt.plot([minX, maxX], [minY, maxY])
+
+    # 1) Get the sequences you sent to Hsu
+    seq_file = 'sequence_data/seqs_for_testing.txt'
+    testseqs = [l.split() for l in open(seq_file, 'rb')]
+
+    # 2) Run the testseqs and get the output
+    test_obj = [ITS(seq + 'GAGTT', name) for name, seq in testseqs]
+
+    fake_py = [0 for _ in range(len(test_obj))]
+
+    test_results = scrunch_runner(fake_py, its_range, test_obj, par_ranges,
+                                  optim, t, randize=randomize, retrofit=retrofit)
+
+    results, rand_results, retrof_results = test_results
+
+    pred_PY = [predicted_PY(f, slope, intercept) for f in results[14].finals]
+
+    min_pred, max_pred = min(pred_PY), max(pred_PY)
+
+    lin_range = np.linspace(min_pred, max_pred, num=len(pred_PY))
+
+    print('\nCorrelation: r:{0:.3f}, p:{1:.3f} '.format(*pearsonr(lin_range,
+                                                                pred_PY)))
+    print('\nHAI\n')
+    for py in pred_PY:
+        print py
 
 def main():
     ITSs = ReadAndFixData() # read raw data
@@ -6652,14 +6844,6 @@ def main():
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
-    #exact_solution(ITSs)
-
-    #Produce all the figures and tables that are in the paper
-
-    #XXX the family of models looks odd. I think the ticks are set wrong,
-    #because the RNA-DNA translocation model achieves almost 1. It's like off
-    #with two ticks. Also the p-values are strange -- too high or too low.
-    # Another oddity is the model with RNA-DNA and DNA-DNA.
     paper_figures(ITSs)
 
     #selection_pressure(ITSs)
@@ -6669,6 +6853,21 @@ def main():
 
     # XXX Generate candidate sequences! : )
     #candidate_its(ITSs, DNADNAfilter=False)
+
+    # XXX Check the DG400 series with the new model
+    # You did this before; how did you do it?
+    #DG400_verifier(ITSs)
+    # RESULT your old seqs are not so robust. I want you to get models sets
+    # Score with the correlation on +12, +12, +13, +14, +15
+    # again. Then I want you to test all 20 of them on the 5 second-highest
+    # parameter values combinations. and choose the ones that give the best
+    # across all four. How should you rank that? The min and max values are one
+    # rank. Another rank is the linearity of the values. Get the pearson
+    # correlation with linspace from min to max. First do a test-run with your
+    # alread-generated values and then just apply that to the full-out version.
+    # Question: what should be my default parameters? Max is at 14, but that's
+    # out of touch with the rest of the values. I think you should go for the
+    # average from +11 to + 15.
 
     # XXX Generate same-TR, variable DNA-DNA variants to test S-shaped function
     # of DNA-DNA energy. RESULT you did it with random; now do it within the
@@ -6744,25 +6943,6 @@ def main():
     # weakly and negatively negatively.
 
     # RESULTS energy[:msat]/msat gives .8 correlation
-
-    # for scatter-plot: include error bars for both PY and measurements :) They
-    # are bound to form a nice shape.
-
-    # maybe it's time for another visit at the AB values? Is there high abortive
-    # probability just at certain dinucleotides which correspond to those whose
-    # translocation is short?
-
-    # Q: what would be interesting to test? Can we induce abortion at certain
-    # sites? What happens with a 'physical' model where rna-dna counts for 8 bp
-    # and translocation only for 1?
-
-    # Can you do smart experiments? Reproducing the original result will be
-    # piece of cake since the sequences are practically randomized already.
-
-    # What I can think of: "barriers" at different sits. But to do this you
-    # should have studied the original 'barriers' too. For example, study all
-    # sites with more than 50% probability of aborting. First you should plot
-    # them.
 
 
 class Sequence(object):
