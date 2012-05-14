@@ -367,7 +367,8 @@ class Result(object):
             params = {'c1':[np.nan],
                       'c2':[np.nan],
                       'c3':[np.nan],
-                      'c4':[np.nan]}
+                      'c4':[np.nan],
+                      'c5':[np.nan]}
 
         self.params_mean = dict((k, np.mean(v)) for k,v in params.items())
         self.params_std = dict((k, np.std(v)) for k,v in params.items())
@@ -3403,27 +3404,22 @@ def new_models(ITSs):
     #c1 = np.linspace(1, 50, 50)
     c1 = np.array([20]) # insensitive to variation here
     c2 = np.array([0]) # c2 is best evaluated to 0
-    #c2 = np.array([0.01]) # c2 is best evaluated to 0
     #c2 = np.linspace(0.001, 0.2, 10)
     c3 = np.linspace(0.01, 0.9, 7)
-    #c3 = np.array([0.22])
-    #c3 = np.array([0.022])
     #c3 = np.array([0])
     c4 = np.linspace(0.3, 0.9, 7)
-    #c4 = np.array([0.6])
     #c4 = np.array([0])
+    c5 = np.linspace(1,20,5)
 
-    par_ranges = (c1, c2, c3, c4)
+    par_ranges = (c1, c2, c3, c4, c5)
 
     # Time-grid
     t = np.linspace(0, 1., 100)
 
-    # XXX you should get it to work with 21
-    its_range = range(3, 20)
+    its_max = 21
+    its_range = range(3, its_max)
 
     optim = False # GRID
-    #optimize = True   # OPTIMIZER
-    # I trust the Grid more than the opt. Stick with it.
 
     #randomize = 5 # here 0 = False (or randomize 0 times)
     randomize = 0 # here 0 = False (or randomize 0 times)
@@ -3445,9 +3441,14 @@ def new_models(ITSs):
 
     # ladder plot
     plt.ion()
-    fig, ax = print_scrunch_ladder(results, rand_results, retrof_results, optim,
-                                   randomize, par_ranges)
 
+    ylim = -0.1
+    p_line = True
+    fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
+                                           retrof_results, optim, randomize,
+                                           par_ranges, p_line, its_max, ylim,
+                                           print_params=True)
+    plt.show()
     # Save the scruch laddder
     #for fig_dir in fig_dirs:
         #for formt in ['pdf', 'eps', 'png']:
@@ -4209,9 +4210,9 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     if in_axes:
         axes = in_axes
 
-    colors_params = ['r', 'c', 'm', 'k']
+    colors_params = ['r', 'c', 'm', 'k', 'g']
 
-    all_params = ('c1', 'c2', 'c3', 'c4')
+    all_params = ('c1', 'c2', 'c3', 'c4', 'c5')
     # only plot parameters that are variable 
     plot_params = [p for p, r in zip(all_params, par_ranges) if len(r) > 1]
 
@@ -4581,7 +4582,11 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
                 continue
 
             # update the ranges to the optimal for the fitting
-            par_order = ('c1', 'c2', 'c3', 'c4')
+            if len(ranges) == 5:
+                par_order = ('c1', 'c2', 'c3', 'c4', 'c5')
+            else:
+                par_order = ('c1', 'c2', 'c3', 'c4')
+
             fit_ranges = [np.array([fit_result.params_best[p]])
                           for p in par_order]
 
@@ -4946,7 +4951,9 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         keq = its_dict['keq_di'][:its_len-2]
 
         # For run_once and if all 4 parameters are used
-        if len(start_values) == 4:
+        if len(start_values) == 5:
+            (a, b, c, d, e) = start_values
+        elif len(start_values) == 4:
             (a, b, c, d) = start_values
 
         # If optimization and not all 4 are used, a, b, c, d will be a mix
@@ -4963,10 +4970,13 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
             finals.append(0)
         else:
 
-            #A = equlib_matrix(k1, state_nr)
-            abortive_rate = 2
-            A = equlib_matrix_experimental(k1, state_nr, abortive_rate)
-            # pass the jacobian matrix to ease calculation
+            # extra free variable: the abortive rate
+            if len(start_values) == 5:
+                abortive_rate = e
+                A = equlib_matrix_experimental(k1, state_nr, abortive_rate)
+            else:
+                A = equlib_matrix(k1, state_nr)
+
             # time in which to integrate over
             tim = 1
 
@@ -4976,7 +4986,7 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
             else:
                 # using the x(t) = e^{A*t}*y(0) solution 
                 solution = dot(scipy.linalg.expm(A*tim,q=1), y0)
-                #if len(solution) >12:
+                #if len(solution) >15:
                     #debug()
 
             finals.append(solution[-1])
@@ -5850,10 +5860,11 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
     # second round, randomize cross validate like crazy
     #randomize = 10
     #retrofit = 10
-    randomize = 3
-    retrofit = 3
+    randomize = 0
+    retrofit = 0
 
-    # initial run to get optimal parameters
+    #run with optimal parameters
+    debug()
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
                                  randize=randomize, retrofit=retrofit)
 
@@ -6844,12 +6855,14 @@ def main():
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
-    paper_figures(ITSs)
+    #paper_figures(ITSs)
 
     #selection_pressure(ITSs)
 
     # XXX the new ODE models
-    #new_models(ITSs)
+    new_models(ITSs)
+    # XXX model with abortive does not improve results, but run on a larger grid
+    # to confirm.
 
     # XXX Generate candidate sequences! : )
     #candidate_its(ITSs, DNADNAfilter=False)
