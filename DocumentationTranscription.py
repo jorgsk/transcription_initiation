@@ -5533,6 +5533,15 @@ def candidate_its(ITSs, DNADNAfilter=True):
     # These sequences are not followign the normal distirbution. That's the
     # selection pressure. But is there more than that?
 
+def print_already_ordered_samples(outfile, ordered_samples):
+    """
+    DG401-DG406 have been ordered. Where do they fit into the grander scheme of
+    things?
+
+    You will have to re-simulate these sequences and then run conc2py on them.
+    Then you can fit them into some of the templates you have already produced.
+    """
+
 def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
     """
     Save this output kthnx.
@@ -5541,9 +5550,13 @@ def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
     """
     outfile = open('output/predicted_seqs', 'wb')
 
+    # First, print the predicted PY of the sequences you have already evaluated.
+
+    ordered_samples = 'output_seqs/seqs_for_testing.txt'
+    print_already_ordered_samples(outfile, ordered_samples)
+
     for set_nr, concs_seqs in candidates.items():
 
-        # TODO RUN THIS AGAIN
         concs, seqs, oist = zip(*concs_seqs)
 
         sp_nuc = for_saving[set_nr]
@@ -6009,7 +6022,6 @@ def RNAP_2_PY(ITSs, concentrations, params=(20, 0, 0.022, 0.24), its_len=15):
     # make a predictive function
     def predicted_PY(x, slope, intercept):
         return  slope*x + intercept
-
 
     # return the predicted PY values
     return [predicted_PY(x, slope, intercept) for x in concentrations]
