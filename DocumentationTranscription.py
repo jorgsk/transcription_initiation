@@ -3405,11 +3405,11 @@ def new_models(ITSs):
     c1 = np.array([20]) # insensitive to variation here
     c2 = np.array([0]) # c2 is best evaluated to 0
     #c2 = np.linspace(0.001, 0.2, 10)
-    c3 = np.linspace(0.01, 0.9, 7)
+    c3 = np.linspace(0.01, 1.4, 9)
     #c3 = np.array([0])
-    c4 = np.linspace(0.3, 0.9, 7)
+    c4 = np.linspace(0.3, 1.4, 9)
     #c4 = np.array([0])
-    c5 = np.linspace(1,20,5)
+    c5 = np.linspace(1, 40, 7)
 
     par_ranges = (c1, c2, c3, c4, c5)
 
@@ -4193,7 +4193,7 @@ def controversy_ladder(resulter, p_line):
 
 
 def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
-                         randomize, par_ranges, p_line, its_max, ymin,
+                         randomize, par_ranges, p_line, its_max, ymin, ymax,
                          description=False, print_params=True, in_axes=False,
                          ax_nr=0):
     """
@@ -4280,8 +4280,8 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         # get its_index parameter values (they are index-sorted)
         if name == 'real':
             paramz_best = [r[1].params_best for r in sorted(ddict.items())]
-            paramz_mean = [r[1].params_mean for r in sorted(ddict.items())]
-            paramz_std = [r[1].params_std for r in sorted(ddict.items())]
+            #paramz_mean = [r[1].params_mean for r in sorted(ddict.items())]
+            #paramz_std = [r[1].params_std for r in sorted(ddict.items())]
 
             # each parameter should be plotted with its best (solid) and mean
             # (striped) values (mean should have std)
@@ -4292,13 +4292,13 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
                 axes[ax_nr+1].plot(incrX, best_par_vals, label=parameter,
                                    linewidth=2, color=par2col[parameter])
                 # mean
-                mean_par_vals = [d[parameter] for d in paramz_mean]
+                #mean_par_vals = [d[parameter] for d in paramz_mean]
 
-                # std
+                # std XXX maybe it's best not to use the error bars
                 # print the mean and std of the top 20 parameters
-                std_par_vals = [d[parameter] for d in paramz_std]
-                axes[ax_nr+1].errorbar(incrX, mean_par_vals, yerr=std_par_vals,
-                                       color=par2col[parameter], linestyle='--')
+                #std_par_vals = [d[parameter] for d in paramz_std]
+                #axes[ax_nr+1].errorbar(incrX, mean_par_vals, yerr=std_par_vals,
+                                       #color=par2col[parameter], linestyle='--')
 
     xticklabels = [str(integer) for integer in range(3, its_max)]
     #Make sure ymin has only one value behind the comma
@@ -4328,6 +4328,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     axes[0].set_yticks(np.arange(ymin, 1.1, 0.1))
     #axes[0].set_yticks(np.arange(0, 1, 0.1))
     axes[0].set_yticklabels(yticklabels)
+    axes[0].set_ylim(ymin, ymax)
     # you need a grid to see your awsome 0.8 + correlation coefficient
     axes[0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
               alpha=0.5)
@@ -4705,8 +4706,7 @@ def grid_scrunch(arguments, ranges):
     rmax = sum([len(r) for r in ranges])
     #rmax = 5 #XXX remove me later kthnx. just for debugging.
     if rmax > 6:
-        my_pool = multiprocessing.Pool(4)
-        #my_pool = multiprocessing.Pool(2)
+        my_pool = multiprocessing.Pool()
         results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
         my_pool.close()
         my_pool.join()
@@ -4972,7 +4972,7 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
 
             # extra free variable: the abortive rate
             if len(start_values) == 5:
-                abortive_rate = e
+                abortive_rate = e/float(min(9, its_len))
                 A = equlib_matrix_experimental(k1, state_nr, abortive_rate)
             else:
                 A = equlib_matrix(k1, state_nr)
@@ -5533,14 +5533,50 @@ def candidate_its(ITSs, DNADNAfilter=True):
     # These sequences are not followign the normal distirbution. That's the
     # selection pressure. But is there more than that?
 
-def print_already_ordered_samples(outfile, ordered_samples):
+def print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_len):
     """
     DG401-DG406 have been ordered. Where do they fit into the grander scheme of
     things?
 
     You will have to re-simulate these sequences and then run conc2py on them.
     Then you can fit them into some of the templates you have already produced.
+
+    So .. you will rerun them with exactly the same input as was used to
+    generate the optimal sequences. Then you will get their concentrations. Then
+    you will simulate the original ITS. The concentration of the original ITS
+    will give you something to compare with. You make a function from original
+    ITS to PY and then apply this to your new sequences.
     """
+
+    # make an ITS list of the ITS already ordered
+    ordered_ITS = [ITS(l.split()[1], name=l.split()[0]) for l in
+                   open(ordered_samples, 'rb')]
+
+    # fake PY values; doesn't matter here
+    PYs = np.array([1 for _ in range(len(ordered_ITS))])*0.01
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    its_range = range(3, 21)
+
+    optim = False # GRID
+
+    all_results = scrunch_runner(PYs, its_range, ordered_ITS, params, optim, t)
+
+    final_conc = all_results[0][its_len].finals
+
+    orderd_predPY = RNAP_2_PY(ITSs, final_conc, params=params, its_len=its_len)
+
+    # you must return the information in a dict so you can pick out those ITS
+    # that have actually been ordered.
+
+    ordred_seqs = ['DG401', 'DG402', 'DG403', 'DG404', 'DG405', 'DG406']
+
+    # write 
+    for (os, predPY) in zip(ordred_seqs, orderd_predPY):
+        outfile.write('\t'.join([os, str(predPY)]) + '\n')
+
 
 def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
     """
@@ -5551,9 +5587,9 @@ def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
     outfile = open('output/predicted_seqs', 'wb')
 
     # First, print the predicted PY of the sequences you have already evaluated.
-
+    # this way you can see how they fit into the greater scheme of things
     ordered_samples = 'output_seqs/seqs_for_testing.txt'
-    print_already_ordered_samples(outfile, ordered_samples)
+    print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_len)
 
     for set_nr, concs_seqs in candidates.items():
 
@@ -5577,7 +5613,7 @@ def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
 
         for (seq, predPY, dnaen) in zip(seqs, predPYs, DNAens):
 
-            line = '\t'.join([seq, format(predPY, '.2f'), format(dnaen, '.2f')])
+            line = '\t'.join([seq, format(predPY, '.4f'), format(dnaen, '.2f')])
 
             outfile.write(line + '\n')
 
@@ -5602,7 +5638,7 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
     arguments = (params, state_nr, y0, t)
 
     # Make a workers' pool
-    first_pool = multiprocessing.Pool(4)
+    first_pool = multiprocessing.Pool()
 
     # get first results
     first_results = multicore_scrunch_wrap(beg, variable_nr, batch_size,
@@ -5628,8 +5664,7 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
     y0 = [1] + [0 for i in range(state_nr-1)]
     arguments = (params, state_nr, y0, t)
 
-    second_pool = multiprocessing.Pool(4)
-    #second_pool = multiprocessing.Pool(2)
+    second_pool = multiprocessing.Pool()
     beg=False # don't add an AT second time around
 
     second_results = multicore_scrunch_wrap(beg, variable_nr, batch_size,
@@ -5637,7 +5672,8 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
                                            start_seqs=first_seqs,
                                             multi_range=av_range)
 
-    set_nr = 10 # get 50 final outputs to choose from
+    set_nr = 20 # get 50 final outputs to choose from
+
     return get_py_ranges(second_results, sample_nr, set_nr, av_range=av_range)
 
 def multicore_scrunch_wrap(beg, variable_nr, batch_size, arguments,
@@ -5946,8 +5982,10 @@ def full_model_grid_and_scatter(ITSs, testing, p_line, par):
 
     # grid size
     grid_size = 15
+    rands = 10 # for cross-validating and random sequences
     if testing:
-        grid_size = 10
+        rands = 2
+        grid_size = 3
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5964,22 +6002,27 @@ def full_model_grid_and_scatter(ITSs, testing, p_line, par):
     t = np.linspace(0, 1., 100)
 
     its_max = 21
+    if testing:
+        its_max = 16
 
     its_range = range(3, its_max)
 
     optim = False # GRID
 
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t)
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+                                 randize=rands, retrofit=rands)
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
 
     # ladder plot
-    ymin = -0.1 # correlation is always high
-    randomize = 0 # you didn't randomize
+    ymin = 0 # correlation is always high
+    ymax = 0.9 # correlation is always high
+    randomize = rands # you didn't randomize
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, optim, randomize,
-                                           par_ranges, p_line, its_max, ymin)
+                                           par_ranges, p_line, its_max, ymin,
+                                           ymax)
 
     fig_sct = print_scrunch_scatter(results, rand_results, optim, randomize,
                                     par_ranges, PYs)
@@ -6001,8 +6044,7 @@ def RNAP_2_PY(ITSs, concentrations, params=(20, 0, 0.022, 0.24), its_len=15):
     # Time-grid
     t = np.linspace(0, 1., 100)
 
-    # XXX you should get it to work with 21
-    its_range = range(3, 20)
+    its_range = range(3, 21)
 
     optim = False # GRID
     randomize = 0 # here 0 = False (or randomize 0 times)
@@ -6151,21 +6193,25 @@ def paper_figures(ITSs):
     # global parameters
     global_params = get_global_params()
 
-    ### Figure 1 -> Full model with grid-evaluation
+    ### Figure 1 and 2 -> Full model with grid-evaluation
     #ladder_name = 'Full_model_grid' + append
+    #scatter_name = 'Full_model_scatter' + append
     #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing, p_line,
                                                           #global_params)
     #figs.append((fig_ladder, ladder_name))
-
-    #### Figure 2 -> Full model at nt 15, fixed values, scatterplot
-    #scatter_name = 'Full_model_scatter' + append
     #figs.append((fig_scatter, scatter_name))
 
+    ### Figure 2.5 -> Full model without grid but with cross correlation and
+    ladder_nog_name = 'Full_model_no_grid' + append
+    fig_nog_ladder, fig_nog_scatter = full_model_grid_and_scatter(ITSs, testing, p_line,
+                                                          global_params)
+    figs.append((fig_nog_ladder, ladder_nog_name))
+
     #### Figure 3 -> Optimal model model
-    fixed_lad_name = 'Optimal_model' + append
-    fig_reduced_fixed = optimal_model_fixed_ladder(ITSs, testing, p_line,
-                                                   global_params)
-    figs.append((fig_reduced_fixed, fixed_lad_name))
+    #fixed_lad_name = 'Optimal_model' + append
+    #fig_reduced_fixed = optimal_model_fixed_ladder(ITSs, testing, p_line,
+                                                   #global_params)
+    #figs.append((fig_reduced_fixed, fixed_lad_name))
 
     ### Figure 4 -> Scatter of predicted VS actual PY
     #predicted_name = 'Predicted_vs_measured' + append
@@ -6198,9 +6244,9 @@ def paper_figures(ITSs):
     #figs.append((fig_controversy, positive_name))
 
     ### Figure 10 -> The RNA-DNA controversy, full model comparison
-    full_positive_name = 'full_Positive_RNADNA' + append
-    fig_full_controversy = full_positive_RNADNA(ITSs, testing, p_line, global_params)
-    figs.append((fig_full_controversy, full_positive_name))
+    #full_positive_name = 'full_Positive_RNADNA' + append
+    #fig_full_controversy = full_positive_RNADNA(ITSs, testing, p_line, global_params)
+    #figs.append((fig_full_controversy, full_positive_name))
 
     # Save the figures
     for (fig, name) in figs:
@@ -6856,6 +6902,30 @@ def DG400_verifier(ITSs):
     for py in pred_PY:
         print py
 
+def write_test(ITSs):
+    """
+    Just test your method for re-testing the test0rs ;)
+    """
+
+    outfile = open('cheeseblog.txt', 'wb')
+
+    ordered_samples = 'output_seqs/seqs_for_testing.txt'
+
+    params = ()
+    c1 = np.array([20]) # insensitive to variation here
+    c2 = np.array([0])
+    c3 = np.array([0.3])
+    c4 = np.array([0.6])
+
+    params = (c1, c2, c3, c4)
+
+    its_len = 15
+
+    # calculate the predicted PY and write to file
+    print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_len)
+    # close file
+    outfile.close()
+
 def main():
     ITSs = ReadAndFixData() # read raw data
 
@@ -6867,17 +6937,20 @@ def main():
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
-    #paper_figures(ITSs)
+    paper_figures(ITSs)
 
     #selection_pressure(ITSs)
 
     # XXX the new ODE models
-    new_models(ITSs)
+    #new_models(ITSs)
     # XXX model with abortive does not improve results, but run on a larger grid
     # to confirm.
 
     # XXX Generate candidate sequences! : )
     #candidate_its(ITSs, DNADNAfilter=False)
+
+    # test method for writing already ordered sequences
+    #write_test(ITSs)
 
     # XXX Check the DG400 series with the new model
     # You did this before; how did you do it?
