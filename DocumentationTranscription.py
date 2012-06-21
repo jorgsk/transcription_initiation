@@ -4077,11 +4077,6 @@ def controversy_ladder(resulter, p_line):
     """
     Get the following results:
 
-    #'negative_RNA_full'
-    'negative_RNA_Tn'
-    #'positive_RNA_full'
-    'positive_RNA_Tn'
-
     And plot them on top of each other. And then the parameters on the right.
     """
 
@@ -4194,6 +4189,141 @@ def controversy_ladder(resulter, p_line):
 
     return fig
 
+def print_scrunch_ladder_compare(results, rand_results, retrof_results, optimize,
+                         randomize, par_ranges, p_line, its_max, ymin, ymax,
+                         testing, description=False, print_params=True,
+                         in_axes=False, ax_nr=0):
+    """
+    Alternative print-scrunch.
+    [0][0] is the pearson for the real and the control
+    [0][1] is the parameters for the pearson fit
+
+    You get in both the two and the three-parameter models
+
+    In A plot the two and three models on top of each other. In B plot the
+    parameter estimation of the three model.
+    """
+    fig, axes = plt.subplots(1,2)
+
+    colors_params = ['r', 'c', 'm', 'k', 'g']
+
+    all_params = ('c1', 'c2', 'c3', 'c4', 'c5')
+
+    # only plot parameters that are variable 
+    plot_params = [p for p, r in zip(all_params, par_ranges) if len(r) > 1]
+
+    # assign colors to parameters
+    par2col = dict(zip(all_params, colors_params))
+
+    # go over both the real and random results
+    # This loop covers [0][0] and [0][1]
+    col_corr = ['b', 'g']
+    for (name, result_dict) in results.items():
+
+        # get its_index and corr-coeff from sorted dict
+        indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_max)
+                           for r in sorted(result_dict.items())])
+
+        # make x-axis
+        incrX = range(indx[0], indx[-1]+1)
+
+        # check for nan in corr (make it 0)
+        corr, pvals = remove_nan(corr, pvals)
+
+        axes[0].plot(incrX, corr, label=name, linewidth=2, color=col_corr.pop())
+
+        # interpolate pvalues (x, must increase) with correlation (y) and
+        # obtain the correlation for p = 0.05 to plot as a black
+        if p_line and name == 'three_param_model':
+            # hack to get pvals and corr coeffs sorted
+            pv, co = zip(*sorted(zip(pvals, corr)))
+            f = interpolate(pv, co, k=1)
+            axes[0].axhline(y=f(0.05), ls='--', color='r',
+                        label='p = 0.05 threshold', linewidth=2)
+
+        # get its_index parameter values (they are index-sorted)
+        if name == 'three_param_model':
+            paramz_best = [r[1].params_best for r in sorted(result_dict.items())]
+
+            # each parameter should be plotted with its best (solid) and mean
+            # (striped) values (mean should have std)
+            for parameter in plot_params:
+
+                # print the best parameters
+                best_par_vals = [d[parameter] for d in paramz_best]
+                axes[1].plot(incrX, best_par_vals, label=parameter,
+                                   linewidth=2, color=par2col[parameter])
+                # mean
+                #mean_par_vals = [d[parameter] for d in paramz_mean]
+
+
+    xticklabels = [str(integer) for integer in range(3, its_max)]
+    #Make sure ymin has only one value behind the comma
+    ymin = float(format(ymin, '.1f'))
+    yticklabels = [format(i ,'.1f') for i in np.arange(ymin, 1.1, 0.1)]
+    #yticklabels = [str(integer) for integer in np.arange(0, 1, 0.1)]
+    #yticklabels_1 = [str(integer) for integer in np.arange(-0.05, 0.5, 0.05)]
+
+    for ax in axes.flatten():
+        # legend
+        ax.legend(loc='lower left')
+
+        # xticks
+        ax.set_xticks(range(3,its_max))
+        ax.set_xticklabels(xticklabels)
+        ax.set_xlim(3,its_max)
+        ax.set_xlabel("Nucleotide from transcription start", size=23)
+
+        # awkward way of setting the tick font sizes
+        for l in ax.get_xticklabels():
+            l.set_fontsize(15)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(15)
+
+    axes[0].set_ylabel("Correlation coefficient, $r$", size=23)
+
+    axes[0].set_yticks(np.arange(ymin, 1.1, 0.1))
+    #axes[0].set_yticks(np.arange(0, 1, 0.1))
+    axes[0].set_yticklabels(yticklabels)
+    axes[0].set_ylim(ymin, ymax)
+    # you need a grid to see your awsome 0.8 + correlation coefficient
+    axes[0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+              alpha=0.5)
+
+    axes[1].set_ylabel("Model parameter values", size=23)
+    #axes[1].set_yticks(np.arange(-0.05, 0.5, 0.05))
+    #axes[1].set_yticklabels(yticklabels_1)
+    #axes[1].set_ylim(-0.05, 0.5)
+
+    fig.set_figwidth(20)
+    fig.set_figheight(10)
+
+    # This last part was the title which you don't need in production
+    if testing:
+        if optimize:
+            approach = 'Least squares optimizer'
+        else:
+            approach = 'Grid'
+
+        for_join = []
+
+        for let, par in zip(('a', 'b', 'c', 'd'), par_ranges):
+            if len(par) == 1:
+                for_join.append(let + ':{0:.2f}'.format(par[0]))
+            else:
+                mi, ma = (format(min(par), '.2f'), format(max(par), '.2f'))
+                for_join.append(let + ':({0}--{1})'.format(mi, ma))
+
+        if description:
+            descr = ', '.join(for_join) + '\n' + description
+        else:
+            descr = ', '.join(for_join)
+
+        hedr = 'Approach: {0}. Nr random samples: {1}\n\n{2}\n'.format(approach,
+                                                                   randomize, descr)
+        fig.suptitle(hedr)
+
+    return fig, axes
 
 def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
                          randomize, par_ranges, p_line, its_max, ymin, ymax,
@@ -4312,21 +4442,21 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
     for ax in axes.flatten():
         # legend
-        ax.legend(loc='lower left')
+        #ax.legend(loc='lower left')
 
         # xticks
         ax.set_xticks(range(3,its_max))
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,its_max)
-        ax.set_xlabel("Nucleotide from transcription start", size=20)
+        ax.set_xlabel("Nucleotide from transcription start", size=23)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
-            l.set_fontsize(12)
+            l.set_fontsize(15)
         for l in ax.get_yticklabels():
-            l.set_fontsize(12)
+            l.set_fontsize(15)
 
-    axes[0].set_ylabel("Correlation coefficient, $r$", size=20)
+    axes[0].set_ylabel("Correlation coefficient, $r$", size=23)
 
     axes[0].set_yticks(np.arange(ymin, 1.1, 0.1))
     #axes[0].set_yticks(np.arange(0, 1, 0.1))
@@ -4337,13 +4467,17 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
               alpha=0.5)
 
     if print_params:
-        axes[1].set_ylabel("Model parameter values", size=20)
+        axes[1].set_ylabel("Model parameter values", size=23)
         #axes[1].set_yticks(np.arange(-0.05, 0.5, 0.05))
         #axes[1].set_yticklabels(yticklabels_1)
         #axes[1].set_ylim(-0.05, 0.5)
 
-    fig.set_figwidth(13)
-    fig.set_figheight(10)
+        fig.set_figwidth(20)
+        fig.set_figheight(10)
+    else:
+        fig.set_figwidth(10)
+        fig.set_figheight(10)
+
 
     # This last part was the title which you don't need in production
     if testing:
@@ -5918,7 +6052,6 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
     retrofit = 0
 
     #run with optimal parameters
-    debug()
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
                                  randize=randomize, retrofit=retrofit)
 
@@ -5993,8 +6126,8 @@ def two_param_A(ITSs, testing, p_line, par):
     rands = 20 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 3
-        rands = 1
+        grid_size = 6
+        rands = 2
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -6012,8 +6145,8 @@ def two_param_A(ITSs, testing, p_line, par):
     t = np.linspace(0, 1., 100)
 
     its_max = 21
-    if testing:
-        its_max = 16
+    #if testing:
+        #its_max = 16
 
     its_range = range(3, its_max)
 
@@ -6026,7 +6159,7 @@ def two_param_A(ITSs, testing, p_line, par):
     results, rand_results, retrof_results = all_results
 
     # ladder plot
-    ymin = 0 # correlation is always high
+    ymin = -0.4 # correlation is always high
     ymax = 0.9 # correlation is always high
     randomize = rands # you didn't randomize
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
@@ -6049,7 +6182,7 @@ def two_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 3
+        grid_size = 6
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -6067,8 +6200,8 @@ def two_param_AB(ITSs, testing, p_line, par):
     t = np.linspace(0, 1., 100)
 
     its_max = 21
-    if testing:
-        its_max = 16
+    #if testing:
+        #its_max = 16
 
     its_range = range(3, its_max)
 
@@ -6236,7 +6369,8 @@ def paper_figures(ITSs):
     How should I produce the figure? Should all of them be in single-figure so
     that I can manually glue them together? Should you make nice A, B, C, D
     things for example? Maybe you should leave this until the very end ... but
-    make it possible to make fast changes.
+    make it possible to make fast changes. Hey? Didn't you actually do that?
+    Where are the A B C D things?
     """
     testing = True  # if testing, run everything fast
     #testing = False
@@ -6267,10 +6401,15 @@ def paper_figures(ITSs):
 
     ## Figure 2.5 -> Two-parameter model with cross-reference but no parameter
     #estimation
-    ladder_nog_name = 'two_param_A' + append
-    fig_nog_ladder, fig_nog_scatter = two_param_A(ITSs, testing, p_line,
-                                                  global_params)
-    figs.append((fig_nog_ladder, ladder_nog_name))
+    #ladder_nog_name = 'two_param_A' + append
+    #fig_nog_ladder, fig_nog_scatter = two_param_A(ITSs, testing, p_line,
+                                                  #global_params)
+    #figs.append((fig_nog_ladder, ladder_nog_name))
+
+    ## Figure 2.7 -> Compare two and three parameter models
+    compare_name = 'compare_two_three_AB' + append
+    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    figs.append((fig_controversy, compare_name))
 
     #### Figure 3 -> Optimal model model XXX Obsolete?
     #fixed_lad_name = 'Optimal_model' + append
@@ -6283,7 +6422,7 @@ def paper_figures(ITSs):
     #fig_predicted = predicted_vs_measured(ITSs)
     #figs.append((fig_predicted, predicted_name))
 
-    ### Figure 5 -> Selection pressures
+    #### Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
     #fig_predicted = selection_pressure(ITSs)
     #figs.append((fig_predicted, predicted_name))
@@ -6385,6 +6524,74 @@ def full_positive_RNADNA(ITSs, testing, p_line, global_params):
     fig = controversy_ladder(resulter, p_line)
 
     return fig
+
+def compare_two_three(ITSs, testing, p_line, par):
+    """
+    """
+
+    # no cross validation needed
+    control = 0
+
+    # Compare with the PY percentages in this notation
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+
+    optim = False # GRID
+
+    # Time-grid (Note: not evaluated any more)
+    t = np.linspace(0, 1., 100)
+
+    its_max = 21
+    its_range = range(3, its_max)
+
+    grid_size = 10
+
+    if testing:
+        grid_size = 6
+
+    # initial grid
+    c1 = np.array([par['K']]) # insensitive to variation here
+    c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
+    c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
+    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+
+    # define the ranges for the two minimal models
+    three_param = (c1, c2, c3, c4)
+    two_param = (c1, np.array([0]), c3, c4)
+
+    # use the optimal parameters from the optimization
+    # XXX at the moment you will use the 
+    #two = get_optimal_params(PYs, its_range, ITSs, two_param, optim, t)
+    name2 = 'two_param_model'
+    #three = get_optimal_params(PYs, its_range, ITSs, three_param, optim, t)
+    name3 = 'three_param_model'
+
+    collection = [(two_param, name2), (three_param, name3)]
+
+    # collect the results
+    resulter = {}
+
+    for (par_ranges, name) in collection:
+
+        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,t,
+                                     randize=control, retrofit=control)
+
+        # extract the specific results
+        results, rand_results, retrof_results = all_results
+
+        # store result with name
+        resulter[name] = results
+
+    ymin = 0 # correlation is always high
+    ymax = 0.9 # correlation is always high
+    randomize = control # you didn't randomize
+
+    fig_lad, ax_lad = print_scrunch_ladder_compare(resulter, rand_results,
+                                                   retrof_results, optim,
+                                                   randomize, par_ranges,
+                                                   p_line, its_max, ymin, ymax,
+                                                   testing, print_params=True)
+
+    return fig_lad
 
 def positive_RNADNA(ITSs, testing, p_line, par):
     """
