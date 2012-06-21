@@ -3721,7 +3721,7 @@ def print_model_family(resultz, p_line, max_its, ymin, alternative_model=False):
 
             # get its_index and corr-coeff from sorted dict
             if name == 'real':
-                indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_max)
+                indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_min)
                                    for r in sorted(ddict.items())])
 
             elif name == 'random':
@@ -4096,7 +4096,7 @@ def controversy_ladder(resulter, p_line):
     p_lines = []
     for name, result in resulter.items():
 
-        indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_max)
+        indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_min)
                            for r in sorted(result.items())])
 
         if 'alternative' in name:
@@ -4221,7 +4221,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results, optimize
     for (name, result_dict) in results.items():
 
         # get its_index and corr-coeff from sorted dict
-        indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_max)
+        indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_min)
                            for r in sorted(result_dict.items())])
 
         # make x-axis
@@ -4323,6 +4323,13 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results, optimize
                                                                    randomize, descr)
         fig.suptitle(hedr)
 
+
+    if len(axes > 1):
+        for i, label in enumerate(('A', 'B')):
+            ax = axes[i]
+            ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=26,
+                    fontweight='bold', va='top')
+
     return fig, axes
 
 def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
@@ -4364,7 +4371,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
         # get its_index and corr-coeff from sorted dict
         if name == 'real':
-            indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_max)
+            indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_min)
                                for r in sorted(ddict.items())])
 
         elif name == 'random':
@@ -4391,6 +4398,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
             # interpolate pvalues (x, must increase) with correlation (y) and
             # obtain the correlation for p = 0.05 to plot as a black
+
             if p_line:
                 # hack to get pvals and corr coeffs sorted
                 pv, co = zip(*sorted(zip(pvals, corr)))
@@ -4504,6 +4512,13 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
                                                                    randomize, descr)
         fig.suptitle(hedr)
 
+    # Add A and B if two plots
+    if len(axes > 1):
+        for i, label in enumerate(('A', 'B')):
+            ax = axes[i]
+            ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=26,
+                    fontweight='bold', va='top')
+
     return fig, axes
 
 
@@ -4562,9 +4577,8 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, t,
             y0 = [1] + [0 for i in range(state_nr-1)]
 
             # get the 'normal' results
-            normal_obj = grid_scruncher(PYs, its_len, ITSs,
-                                                       ranges, t, y0, state_nr,
-                                                       initial_bubble=init_bubble)
+            normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
+                                        state_nr, initial_bubble=init_bubble)
 
             results[its_len] = normal_obj
 
@@ -5077,7 +5091,6 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
     else:
         minus11_en = 0 # 'ATAATAGATTCAT' after nt 15, it seems that having initial
 
-    print_count = 1
     for its_dict in ITSs:
 
         # must shift by minus 1 ('GATTA' example: GA, AT, TT, TA -> len 5, but 4
@@ -5129,6 +5142,7 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
                     #debug()
 
             finals.append(solution[-1])
+
             # XXX you have a 30 fold variation in reaction rates. Should you
             # again try to correlate this with the AP values?
             #if print_count:
@@ -5166,38 +5180,6 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         result = np.array(finals)
 
         return objective - result
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#0.753906965256 1.15753912926
-#1.57984209061  1.22348213196
-#2.12787508965  1.31332707405
-#2.33202695847  1.39173698425
-#2.48822999001  1.46623897552
-#2.71692585945  1.55383396149
-#2.83940410614  1.62609601021
-#2.99955701828  1.74220299721
-#3.19246292114  1.82454991341
-#3.46146702766  2.03547883034
-#3.4764559269   2.30336284637
-#3.66819119453  2.18707108498
-#3.82449889183  2.31453990936
-#3.98695206642  2.43456697464
-#4.23973894119  2.58376407623
 
 
 def get_mixed_params(truth_table, start_values, const_par):
@@ -6203,7 +6185,8 @@ def two_param_AB(ITSs, testing, p_line, par):
     #if testing:
         #its_max = 16
 
-    its_range = range(3, its_max)
+    #its_range = range(3, its_max)
+    its_range = range(17, its_max)
 
     optim = False
 
@@ -6370,7 +6353,8 @@ def paper_figures(ITSs):
     that I can manually glue them together? Should you make nice A, B, C, D
     things for example? Maybe you should leave this until the very end ... but
     make it possible to make fast changes. Hey? Didn't you actually do that?
-    Where are the A B C D things?
+    Where are the A B C D things? Was that done in another file? No! I remember
+    seeing it for the family plot.
     """
     testing = True  # if testing, run everything fast
     #testing = False
@@ -6392,12 +6376,12 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Two-parameter model with parameter estimation but no
     #cross-reference
-    #ladder_name = 'two_param_model_AB' + append
-    #scatter_name = 'two_param_14_scatter' + append
-    #fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
+    ladder_name = 'two_param_model_AB' + append
+    scatter_name = 'two_param_14_scatter' + append
+    fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
 
-    #figs.append((fig_ladder, ladder_name))
-    #figs.append((fig_scatter, scatter_name))
+    figs.append((fig_ladder, ladder_name))
+    figs.append((fig_scatter, scatter_name))
 
     ## Figure 2.5 -> Two-parameter model with cross-reference but no parameter
     #estimation
@@ -6407,9 +6391,9 @@ def paper_figures(ITSs):
     #figs.append((fig_nog_ladder, ladder_nog_name))
 
     ## Figure 2.7 -> Compare two and three parameter models
-    compare_name = 'compare_two_three_AB' + append
-    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    figs.append((fig_controversy, compare_name))
+    #compare_name = 'compare_two_three_AB' + append
+    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    #figs.append((fig_controversy, compare_name))
 
     #### Figure 3 -> Optimal model model XXX Obsolete?
     #fixed_lad_name = 'Optimal_model' + append
@@ -6422,7 +6406,7 @@ def paper_figures(ITSs):
     #fig_predicted = predicted_vs_measured(ITSs)
     #figs.append((fig_predicted, predicted_name))
 
-    #### Figure 5 -> Selection pressures
+    ### Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
     #fig_predicted = selection_pressure(ITSs)
     #figs.append((fig_predicted, predicted_name))
