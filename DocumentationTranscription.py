@@ -3956,7 +3956,7 @@ class Model(object):
 def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
                           PYs):
     """
-    Print scatter plots at 5, 10, 15, and 20 if available. If not, leave blank.
+    Print scatter plots at peak correlation (14 at the moment)
 
     RESULT this has proven to be a problem. While the correlation itself is good
     for any c1, only a specific c1 value will give similar value ranges for PYs
@@ -3972,7 +3972,8 @@ def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
 
     #rows = [5, 10, 15, 20]
     # pick the site with highest correlation 
-    max_corr_nuc = list(sorted([(r.corr_max, v) for (v, r) in results.items()]))[-1][-1]
+    max_corr_nuc = list(sorted([(r.corr_max, v) for
+                                (v, r) in results.items()]))[-1][-1]
     rows = [max_corr_nuc]
 
     if len(rows) > 1:
@@ -4003,7 +4004,9 @@ def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
         if row_nr == 0:
             #ax.set_xlabel("Abortive propensity", size=20)
             #header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
-            header = 'Pearson: r = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
+            header = 'Pearson: r = {1:.2f}, p = {2:.1e}'.\
+                    format(name, corrs[0], corrs[1])
+
             ax.set_title(header, size=15)
         else:
             header = 'r = {0:.2f}, p = {1:.1e}'.format(corrs[0], corrs[1])
@@ -4194,8 +4197,8 @@ def controversy_ladder(resulter, p_line):
 
 def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
                          randomize, par_ranges, p_line, its_max, ymin, ymax,
-                         description=False, print_params=True, in_axes=False,
-                         ax_nr=0):
+                         testing, description=False, print_params=True,
+                         in_axes=False, ax_nr=0):
     """
     Alternative print-scrunch.
     [0][0] is the pearson for the real and the control
@@ -4339,31 +4342,33 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         #axes[1].set_yticklabels(yticklabels_1)
         #axes[1].set_ylim(-0.05, 0.5)
 
-    fig.set_figwidth(15)
+    fig.set_figwidth(13)
     fig.set_figheight(10)
 
-    if optimize:
-        approach = 'Least squares optimizer'
-    else:
-        approach = 'Grid'
-
-    for_join = []
-
-    for let, par in zip(('a', 'b', 'c', 'd'), par_ranges):
-        if len(par) == 1:
-            for_join.append(let + ':{0:.2f}'.format(par[0]))
+    # This last part was the title which you don't need in production
+    if testing:
+        if optimize:
+            approach = 'Least squares optimizer'
         else:
-            mi, ma = (format(min(par), '.2f'), format(max(par), '.2f'))
-            for_join.append(let + ':({0}--{1})'.format(mi, ma))
+            approach = 'Grid'
 
-    if description:
-        descr = ', '.join(for_join) + '\n' + description
-    else:
-        descr = ', '.join(for_join)
+        for_join = []
 
-    hedr = 'Approach: {0}. Nr random samples: {1}\n\n{2}\n'.format(approach,
-                                                               randomize, descr)
-    fig.suptitle(hedr)
+        for let, par in zip(('a', 'b', 'c', 'd'), par_ranges):
+            if len(par) == 1:
+                for_join.append(let + ':{0:.2f}'.format(par[0]))
+            else:
+                mi, ma = (format(min(par), '.2f'), format(max(par), '.2f'))
+                for_join.append(let + ':({0}--{1})'.format(mi, ma))
+
+        if description:
+            descr = ', '.join(for_join) + '\n' + description
+        else:
+            descr = ', '.join(for_join)
+
+        hedr = 'Approach: {0}. Nr random samples: {1}\n\n{2}\n'.format(approach,
+                                                                   randomize, descr)
+        fig.suptitle(hedr)
 
     return fig, axes
 
@@ -5922,10 +5927,13 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
 
     # ladder plot -- not printing parametes
     ylim = -0.1
+    ymin=0
+    ymax=0.9
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, optim, randomize,
                                            par_ranges, p_line, its_max, ylim,
-                                           print_params=False)
+                                           ymin, ymax, testing,
+                                           print_params=True)
     return fig_lad
 
 def get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t,
@@ -5975,24 +5983,26 @@ def get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t,
 
     return optimal_params
 
-def full_model_grid_and_scatter(ITSs, testing, p_line, par):
+def two_param_A(ITSs, testing, p_line, par):
     """
-    Print full model with grid. Show optimization parameters.
+    Print two parameter model with grid. Do not show optimization parameters.
     """
 
     # grid size
     grid_size = 15
-    rands = 10 # for cross-validating and random sequences
+    rands = 20 # for cross-validating and random sequences
+
     if testing:
-        rands = 2
         grid_size = 3
+        rands = 1
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Parameter ranges you want to test out
     c1 = np.array([par['K']]) # insensitive to variation here
-    c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
+    #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
+    c2 = np.array([0])
     c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
     c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
 
@@ -6007,7 +6017,7 @@ def full_model_grid_and_scatter(ITSs, testing, p_line, par):
 
     its_range = range(3, its_max)
 
-    optim = False # GRID
+    optim = False
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
                                  randize=rands, retrofit=rands)
@@ -6022,7 +6032,62 @@ def full_model_grid_and_scatter(ITSs, testing, p_line, par):
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, optim, randomize,
                                            par_ranges, p_line, its_max, ymin,
-                                           ymax)
+                                           ymax, testing, print_params=False)
+
+    fig_sct = print_scrunch_scatter(results, rand_results, optim, randomize,
+                                    par_ranges, PYs)
+
+    return fig_lad, fig_sct
+
+def two_param_AB(ITSs, testing, p_line, par):
+    """
+    Print two parameter model with grid. Do not show optimization parameters.
+    """
+
+    # grid size
+    grid_size = 15
+    rands = 0 # for cross-validating and random sequences
+
+    if testing:
+        grid_size = 3
+
+    # Compare with the PY percentages in this notation
+    PYs = np.array([itr.PY for itr in ITSs])*0.01
+
+    # Parameter ranges you want to test out
+    c1 = np.array([par['K']]) # insensitive to variation here
+    #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
+    c2 = np.array([0])
+    c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
+    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+
+    par_ranges = (c1, c2, c3, c4)
+
+    # Time-grid
+    t = np.linspace(0, 1., 100)
+
+    its_max = 21
+    if testing:
+        its_max = 16
+
+    its_range = range(3, its_max)
+
+    optim = False
+
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+                                 randize=rands, retrofit=rands)
+
+    # extract the specific results
+    results, rand_results, retrof_results = all_results
+
+    # ladder plot
+    ymin = 0 # correlation is always high
+    ymax = 0.9 # correlation is always high
+    randomize = rands # you didn't randomize
+    fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
+                                           retrof_results, optim, randomize,
+                                           par_ranges, p_line, its_max, ymin,
+                                           ymax, testing, print_params=True)
 
     fig_sct = print_scrunch_scatter(results, rand_results, optim, randomize,
                                     par_ranges, PYs)
@@ -6136,8 +6201,6 @@ def predicted_vs_measured(ITSs):
 
     print min(pred_PY), max(pred_PY)
 
-    debug()
-
     # invent some fake experimental result and plot the predicted vs actual
     # PYs. Scale the std with thew val of p
     fake_experimental = [p + np.random.normal(scale=abs(p)*0.4) for p in pred_PY]
@@ -6193,21 +6256,23 @@ def paper_figures(ITSs):
     # global parameters
     global_params = get_global_params()
 
-    ### Figure 1 and 2 -> Full model with grid-evaluation
-    #ladder_name = 'Full_model_grid' + append
-    #scatter_name = 'Full_model_scatter' + append
-    #fig_ladder, fig_scatter = full_model_grid_and_scatter(ITSs, testing, p_line,
-                                                          #global_params)
+    ### Figure 1 and 2 -> Two-parameter model with parameter estimation but no
+    #cross-reference
+    #ladder_name = 'two_param_model_AB' + append
+    #scatter_name = 'two_param_14_scatter' + append
+    #fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
+
     #figs.append((fig_ladder, ladder_name))
     #figs.append((fig_scatter, scatter_name))
 
-    ### Figure 2.5 -> Full model without grid but with cross correlation and
-    ladder_nog_name = 'Full_model_no_grid' + append
-    fig_nog_ladder, fig_nog_scatter = full_model_grid_and_scatter(ITSs, testing, p_line,
-                                                          global_params)
+    ## Figure 2.5 -> Two-parameter model with cross-reference but no parameter
+    #estimation
+    ladder_nog_name = 'two_param_A' + append
+    fig_nog_ladder, fig_nog_scatter = two_param_A(ITSs, testing, p_line,
+                                                  global_params)
     figs.append((fig_nog_ladder, ladder_nog_name))
 
-    #### Figure 3 -> Optimal model model
+    #### Figure 3 -> Optimal model model XXX Obsolete?
     #fixed_lad_name = 'Optimal_model' + append
     #fig_reduced_fixed = optimal_model_fixed_ladder(ITSs, testing, p_line,
                                                    #global_params)
