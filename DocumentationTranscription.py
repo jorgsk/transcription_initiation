@@ -333,7 +333,7 @@ class Result(object):
     std of the best for each random sample)
     """
     def __init__(self, corr=np.nan, pvals=np.nan, params=np.nan,
-                 finals=np.nan, time_series=False):
+                 finals=np.nan):
 
         self.corr = corr
         self.pvals = pvals
@@ -380,12 +380,6 @@ class Result(object):
         # You rely on that v is sorted in the same order as corr
         self.params_best = dict((k, v[0]) for k,v in params.items())
 
-        if time_series:
-            # OK, how are you going to treat this? supposedly they are sorted in
-            # the its-fashion. There's no problem sending in a class method to
-            # pickle I think... it's if you're multiprocessing from WITHIN a
-            # class it's getting mucky.
-            self.time_series = time_series
 
 class ITS(object):
     """ Storing the ITSs in a class for better handling. """
@@ -3413,13 +3407,8 @@ def new_models(ITSs):
 
     par_ranges = (c1, c2, c3, c4, c5)
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
-
     its_max = 21
     its_range = range(3, its_max)
-
-    optim = False # GRID
 
     #randomize = 5 # here 0 = False (or randomize 0 times)
     randomize = 0 # here 0 = False (or randomize 0 times)
@@ -3428,7 +3417,7 @@ def new_models(ITSs):
     #retrofit = 5
     retrofit = 0
 
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=randomize, retrofit=retrofit)
 
     # extract the specific results
@@ -3445,7 +3434,7 @@ def new_models(ITSs):
     ylim = -0.1
     p_line = True
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
-                                           retrof_results, optim, randomize,
+                                           retrof_results, randomize,
                                            par_ranges, p_line, its_max, ylim,
                                            print_params=True)
     plt.show()
@@ -3477,6 +3466,8 @@ def new_models(ITSs):
 def print_rnap_distribution(results, par_ranges, initial_bubble, ITSs):
     """
     For some selected ITS sequences print the RNAP concentration
+
+    Deprecated since you have removed all references to time_series
     """
     #plt.ion()
     final_result = results[max(results.keys())]
@@ -3563,11 +3554,6 @@ def family_of_models(ITSs, p_line, global_params):
     max_its = 21
     its_range = range(3, max_its)
 
-    optim = False   # GRID
-
-    # Time-grid; arbitrary units
-    t = np.linspace(0, 1., 100)
-
     modelz = get_models(global_params, stepsize=10)
 
     # Skip the following: m4, m5, m9, m10, m11
@@ -3579,7 +3565,7 @@ def family_of_models(ITSs, p_line, global_params):
     for (model_name, m) in modelz.items():
 
         par_ranges = m[:-1]  # extract info
-        opt_params = get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t)
+        opt_params = get_optimal_params(PYs, its_range, ITSs, par_ranges)
 
         model_opt_params[model_name] = (opt_params, m)
 
@@ -3592,7 +3578,7 @@ def family_of_models(ITSs, p_line, global_params):
 
         par_ranges = opt_params
 
-        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                      randize=randomize, retrofit=retrofit)
         # extract the specific results
         results, rand_results, retrof_results = all_results
@@ -3625,11 +3611,6 @@ def alternative_models(ITSs, p_line, global_params):
     max_its = 21
     its_range = range(3, max_its)
 
-    optim = False   # GRID
-
-    # Time-grid; arbitrary units
-    t = np.linspace(0, 1., 100)
-
     modelz = get_models(global_params, stepsize=10, alternative_model=True)
 
     # SKip the following: m4, m5, m9, m10, m11
@@ -3641,7 +3622,7 @@ def alternative_models(ITSs, p_line, global_params):
     for (model_name, m) in modelz.items():
 
         par_ranges = m[:-1]  # extract info
-        opt_params = get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t)
+        opt_params = get_optimal_params(PYs, its_range, ITSs, par_ranges)
 
         model_opt_params[model_name] = (opt_params, m)
 
@@ -3654,7 +3635,7 @@ def alternative_models(ITSs, p_line, global_params):
 
         par_ranges = opt_params
 
-        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                      randize=randomize, retrofit=retrofit)
         # extract the specific results
         results, rand_results, retrof_results = all_results
@@ -3953,7 +3934,7 @@ class Model(object):
 
         self.description = description
 
-def print_scrunch_scatter(results, rand_results, optim, randomize, par_ranges,
+def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
                           PYs):
     """
     Print scatter plots at peak correlation (14 at the moment)
@@ -4189,10 +4170,10 @@ def controversy_ladder(resulter, p_line):
 
     return fig
 
-def print_scrunch_ladder_compare(results, rand_results, retrof_results, optimize,
-                         randomize, par_ranges, p_line, its_max, ymin, ymax,
-                         testing, description=False, print_params=True,
-                         in_axes=False, ax_nr=0):
+def print_scrunch_ladder_compare(results, rand_results, retrof_results,
+                                 randomize, par_ranges, p_line, its_max, ymin,
+                                 ymax, testing, description=False,
+                                 print_params=True, in_axes=False, ax_nr=0):
     """
     Alternative print-scrunch.
     [0][0] is the pearson for the real and the control
@@ -4300,10 +4281,6 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results, optimize
 
     # This last part was the title which you don't need in production
     if testing:
-        if optimize:
-            approach = 'Least squares optimizer'
-        else:
-            approach = 'Grid'
 
         for_join = []
 
@@ -4319,8 +4296,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results, optimize
         else:
             descr = ', '.join(for_join)
 
-        hedr = 'Approach: {0}. Nr random samples: {1}\n\n{2}\n'.format(approach,
-                                                                   randomize, descr)
+        hedr = 'Nr random samples: {1}\n\n{2}\n'.format(randomize, descr)
         fig.suptitle(hedr)
 
 
@@ -4332,10 +4308,10 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results, optimize
 
     return fig, axes
 
-def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
-                         randomize, par_ranges, p_line, its_max, ymin, ymax,
-                         testing, description=False, print_params=True,
-                         in_axes=False, ax_nr=0):
+def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
+                         par_ranges, p_line, its_max, ymin, ymax, testing,
+                         description=False, print_params=True, in_axes=False,
+                         ax_nr=0):
     """
     Alternative print-scrunch.
     [0][0] is the pearson for the real and the control
@@ -4489,10 +4465,6 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
 
     # This last part was the title which you don't need in production
     if testing:
-        if optimize:
-            approach = 'Least squares optimizer'
-        else:
-            approach = 'Grid'
 
         for_join = []
 
@@ -4508,8 +4480,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         else:
             descr = ', '.join(for_join)
 
-        hedr = 'Approach: {0}. Nr random samples: {1}\n\n{2}\n'.format(approach,
-                                                                   randomize, descr)
+        hedr = 'Nr random samples: {1}\n\n{2}\n'.format(randomize, descr)
         fig.suptitle(hedr)
 
     # Add A and B if two plots
@@ -4522,8 +4493,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     return fig, axes
 
 
-def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, t, randize=0,
-                   retrofit=0):
+def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0):
     """
     Wrapper around grid_scrunch and opt_scrunch.
     """
@@ -4536,137 +4506,38 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, t, randize=0,
     results_random = {}
     results_retrof = {}
 
-    ### OPTMIZER
-    if optimize:
+    for its_len in its_range:
 
-        for its_len in its_range:
-            # start assuming first two nt are incorporated
-            state_nr = its_len - 1
-            # The second nt is then state 0
-            # initial vales for the states
-            y0 = [1] + [0 for i in range(state_nr-1)]
+        state_nr = its_len - 1
+        # The second nt is then state 0
+        # initial vales for the states
+        y0 = [1] + [0 for i in range(state_nr-1)]
 
-            optimized_obj = opt_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                          state_nr)
+        # get the 'normal' results
+        normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr)
 
-            results[its_len] = optimized_obj
+        results[its_len] = normal_obj
 
-            if randize:
-                # DO the randomization magic here
-                # What should that be? You have to re-calculate the ITSs
-                optimized_obj = opt_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                              state_nr, randomize=randize)
-            else:
-                optimized_obj = False
+        # Randomize
+        if randize:
+            # get the results for randomized ITS versions
+            random_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0,
+                                        state_nr, randomize=randize)
+        else:
+            random_obj = False
 
-            if retrofit:
-                pass # ...
-            else:
-                retrof_obj = False
+        # Retrofit
+        if retrofit:
+            retrof_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0,
+                                        state_nr, retrof=retrofit)
+        else:
+            retrof_obj = False
 
-            results_retrof[its_len] = retrof_obj
-
-    ### GRID
-    if not optimize:
-        for its_len in its_range:
-
-            state_nr = its_len - 1
-            # The second nt is then state 0
-            # initial vales for the states
-            y0 = [1] + [0 for i in range(state_nr-1)]
-
-            # get the 'normal' results
-            normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                        state_nr)
-
-            results[its_len] = normal_obj
-
-            # Randomize
-            if randize:
-                # get the results for randomized ITS versions
-                random_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                            state_nr, randomize=randize)
-            else:
-                random_obj = False
-
-            # Retrofit
-            if retrofit:
-                retrof_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                            state_nr, retrof=retrofit)
-            else:
-                retrof_obj = False
-
-            results_retrof[its_len] = retrof_obj
-            results_random[its_len] = random_obj
+        results_retrof[its_len] = retrof_obj
+        results_random[its_len] = random_obj
 
 
     return results, results_random, results_retrof
-
-def opt_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=False):
-    """
-    Return a 'result' object either from the original ITS sequences or an
-    average from 'randomized' number of sets of random ITS sequences.
-    """
-
-    variables = []
-    truth_table = []
-    constants = []
-
-    for rang in ranges:
-        if len(rang) == 1:
-            constants.append(rang[0])
-            truth_table.append(False)
-        else:
-            variables.append(np.median(rang))
-            truth_table.append(True)
-
-    if not randomize:
-        ITS_variables = get_its_variables(ITSs)
-        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs, False,
-                     constants, truth_table)
-
-        return get_optimized_result(variables, arguments, truth_table, constants)
-
-    # if randomize, optimize 'randomize' number of random ITS sequences 
-    else:
-
-        rand_objects = []
-        for rand_nr in range(randomize):
-            ITS_variables = get_its_variables(ITSs, randomize=True)
-            arguments = (y0, t, its_len, state_nr, ITS_variables, PYs, False,
-                         constants, truth_table)
-
-            result_obj = get_optimized_result(variables, arguments, truth_table, constants)
-
-            rand_objects.append(result_obj)
-
-        return average_rand_result(rand_objects)
-
-def get_optimized_result(variables, arguments, truth_table, constants):
-
-    # can you use something else than leastsq? It would be great to have the
-    # requirement of no positive exponent. Conclusion, it seems I can only
-    # constrain the parameters themselves, but I want a constraint on the
-    # exponential. I will have to consider the worst-case exponential in terms
-    # of dna-dna etc values and use that as the constraint. That seems difficult
-    # in practise.
-    plsq = optimize.leastsq(cost_function_scruncher, variables,
-                            args = arguments)
-
-    # reconstruct fitted and constant parameters from the truth-table
-    final_param = get_mixed_params(truth_table, plsq[0], constants)
-
-    # change run_once to True compared to above
-    arguments = arguments[:-3] + (True,)
-    finals, time_series = cost_function_scruncher(final_param, *arguments)
-
-    PYs = arguments[-2]
-    corr, pval = pearsonr(PYs, finals)
-
-    params = dict(('c{0}'.format(nr+1), p) for nr, p in enumerate(final_param))
-
-    # return a Result object
-    return Result(corr, pval, params, finals)
 
 
 def get_its_variables(ITSs, randomize=False, retrofit=False, PY=False):
@@ -4707,7 +4578,7 @@ def get_its_variables(ITSs, randomize=False, retrofit=False, PY=False):
 
         return new_ITSs
 
-def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
+def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
                    retrof=0):
     """
     Separate scruch calls into randomize, retrofit, or neither.
@@ -4723,7 +4594,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
             #extract the stuff
             ITS_fitting, ITS_compare, PYs_fitting, PYs_compare = retrovar
 
-            arguments_fit = (y0, t, its_len, state_nr, ITS_fitting, PYs_fitting)
+            arguments_fit = (y0, its_len, state_nr, ITS_fitting, PYs_fitting)
 
             fit_result = grid_scrunch(arguments_fit, ranges)
 
@@ -4741,7 +4612,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
                           for p in par_order]
 
             # rerun with new arguments
-            arguments_compare = (y0, t, its_len, state_nr, ITS_compare,
+            arguments_compare = (y0, its_len, state_nr, ITS_compare,
                                  PYs_compare)
 
             # run the rest of the ITS with the optimal parameters
@@ -4864,7 +4735,7 @@ def grid_scrunch(arguments, ranges):
         all_results = sum([_multi_func(*(pa, arguments)) for pa in divide], [])
 
     # All_results is a list of tuples on the following form:
-    # ((finals, time_series, par, rp, pp))
+    # ((finals, par, rp, pp))
     # Sort them on the pearson correlation pvalue, 'pp'
 
     # Filter and pick the 20 with smalles pval
@@ -4879,7 +4750,6 @@ def grid_scrunch(arguments, ranges):
 
     # now make separate corr, pvals, params, and finals arrays from these
     finals = np.array(top_hits[0][0]) # only get finals for the top top
-    time_series = top_hits[0][1] # only get time series for the top top
     pars = [c[2] for c in top_hits]
     corr = np.array([c[3] for c in top_hits])
     pvals = np.array([c[4] for c in top_hits])
@@ -4891,7 +4761,7 @@ def grid_scrunch(arguments, ranges):
         params['c{0}'.format(par_nr)] = [p[par_nr-1] for p in pars]
 
     # make a Result object
-    result_obj = Result(corr, pvals, params, finals, time_series)
+    result_obj = Result(corr, pvals, params, finals)
 
     print time.time() - t1
 
@@ -4906,8 +4776,7 @@ def _multi_func(paras, arguments):
     PYs = arguments[-2]
 
     for par in paras:
-        finals, time_series = cost_function_scruncher(par, *arguments,
-                                                      run_once=True)
+        finals = cost_function_scruncher(par, *arguments)
 
         # XXX this one is easy to forget ... you don't want answers where the
         # final values are ridiculously small
@@ -4917,7 +4786,7 @@ def _multi_func(paras, arguments):
         # correlation
         rp, pp = pearsonr(PYs, finals)
 
-        all_hits.append((finals, time_series, par, rp, pp))
+        all_hits.append((finals, par, rp, pp))
 
     return all_hits
 
@@ -4936,7 +4805,7 @@ def get_variables(seq):
 
     return rna_dna, dna_dna, keq_delta
 
-def mini_scrunch(seqs, params, state_nr, y0, t, multi_range):
+def mini_scrunch(seqs, params, state_nr, y0, multi_range):
     """
     A new wrapper around scipy.integrate.odeint. The previous one was too
     focused on optimization and you don't need that here.
@@ -5025,8 +4894,6 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
     # initialize empty rates. -2 because you start going from +2 to +3.
     k1 = np.zeros(its_len-2)
 
-    proceed = True  # don't proceed for bad exponenitals and run_once = True
-
     for i in range(1, its_len-1):
         if i == 1:
             KEQ = keq[0]
@@ -5046,10 +4913,10 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
 
         k1[i-2] = rate
 
-    return k1, proceed
+    return k1
 
-def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
-                            run_once=False, const_par=False, truth_table=False):
+def cost_function_scruncher(start_values, y0, its_len, state_nr, ITSs, PYs,
+                            const_par=False, truth_table=False):
     """
     k1 = c1*exp(-(c2*rna_dna_i - c3*dna_dna_{i+1} + c4*Keq_{i-1}) * 1/RT)
 
@@ -5064,7 +4931,6 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
     # RT is the gas constant * temperature
     RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
     finals = []
-    time_series = []
 
     for its_dict in ITSs:
 
@@ -5077,112 +4943,29 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
         rna_dna = its_dict['rna_dna_di'][:its_len-1]
         keq = its_dict['keq_di'][:its_len-2]
 
-        # For run_once and if all 4 parameters are used
-        if len(start_values) == 5:
-            (a, b, c, d, e) = start_values
-        elif len(start_values) == 4:
-            (a, b, c, d) = start_values
-
-        # If optimization and not all 4 are used, a, b, c, d will be a mix
-        # between variable and fixed parameters
-        elif len(start_values) < 4:
-            (a, b, c, d) = get_mixed_params(truth_table, start_values, const_par)
+        (a, b, c, d) = start_values
 
         # New rate equation in town. Dont use the mins11 energy.
-        k1, proceed = calculate_k1_difference(RT, its_len, keq, dna_dna,
-                                              rna_dna, a, b, c, d)
+        k1 = calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna,
+                                     a, b, c, d)
 
-        # you must abort if proceed is false and run_once is true
-        if run_once and not proceed:
-            finals.append(0)
+        # extra free variable: the abortive rate
+        A = equlib_matrix(k1, state_nr)
+
+        # time in which to integrate over
+        tim = 1
+
+        # if there are 'nan' in A-matrix, return nan
+        if True in np.isnan(A):
+            solution = [np.nan]
         else:
+            # using the x(t) = e^{A*t}*y(0) solution 
+            solution = dot(scipy.linalg.expm(A*tim,q=1), y0)
 
-            # extra free variable: the abortive rate
-            if len(start_values) == 5:
-                abortive_rate = e/float(min(9, its_len))
-                A = equlib_matrix_experimental(k1, state_nr, abortive_rate)
-            else:
-                A = equlib_matrix(k1, state_nr)
+        finals.append(solution[-1])
 
-            # time in which to integrate over
-            tim = 1
+    return np.array(finals)
 
-            # if there are 'nan' in A-matrix, return nan
-            if True in np.isnan(A):
-                solution = [np.nan]
-            else:
-                # using the x(t) = e^{A*t}*y(0) solution 
-                solution = dot(scipy.linalg.expm(A*tim,q=1), y0)
-                #if len(solution) >15:
-                    #debug()
-
-            finals.append(solution[-1])
-
-            # XXX you have a 30 fold variation in reaction rates. Should you
-            # again try to correlate this with the AP values?
-            #if print_count:
-                ##print k1
-                #for k, s in zip(k1, solution):
-                    #print k, s
-                #print '$$$\n'
-                #print_count -= 1
-
-                #debug()
-
-            # append at, mid, and end
-            #early = dot(scipy.linalg.expm2(A*time*0.1), y0)
-            #mid = dot(scipy.linalg.expm2(A*time/2.0), y0)
-            # disable the timeseries step and you speed up
-            # if you later need timeseries, just make it optinoal.
-            early = [0]
-            mid = [0]
-
-            #steps = len(soln)
-
-            #time_series.append([soln[steps*0.1], soln[int(steps/2)], soln[-1]])
-            time_series.append([early, mid, [0]])
-
-    if run_once:
-
-        return np.array(finals), time_series
-
-    # if not run once, you're called from an optimizer -> return the distance
-    # vector; also include the distance from var(PY) with var(finals)
-    else:
-
-        # Retry optimizer with PYs as objective
-        objective = np.array(PYs)
-        result = np.array(finals)
-
-        return objective - result
-
-
-def get_mixed_params(truth_table, start_values, const_par):
-    """
-    You pass a variable numer of fixed and constant parameters for optimization.
-    You join these into one parameter set.
-    """
-
-    s_values = start_values.tolist()
-
-    # make a copy of const_par -- otherwise it seems to disappear from the outer
-    # loop. I don't understand how that works. Try to recreate it.
-    c_par = list(const_par)
-
-    # reverse parameters and constant_parameters to be able to pop
-    # front-first
-    s_values.reverse()
-    c_par.reverse()
-
-    mix_param = []
-
-    for ind, boo in enumerate(truth_table):
-        if boo:
-            mix_param.append(s_values.pop())
-        else:
-            mix_param.append(c_par.pop())
-
-    return mix_param
 
 def rnap_solver(y, t, A):
     """
@@ -5483,10 +5266,6 @@ def candidate_its(ITSs, DNADNAfilter=True):
     its_range = range(3, max_its)
 
     grid_size = 15
-    optim = False   # GRID
-
-    # Time-grid; arbitrary units
-    t = np.linspace(0, 1., 100)
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
@@ -5500,7 +5279,7 @@ def candidate_its(ITSs, DNADNAfilter=True):
     # get average from +11 to +15
     av_range = range(11,16)
     #av_range = range(10,13)
-    opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t,
+    opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges,
                                  opt_nucs = av_range)
 
     beg = 'AT'
@@ -5651,14 +5430,9 @@ def print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_le
     # fake PY values; doesn't matter here
     PYs = np.array([1 for _ in range(len(ordered_ITS))])*0.01
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
-
     its_range = range(3, 21)
 
-    optim = False # GRID
-
-    all_results = scrunch_runner(PYs, its_range, ordered_ITS, params, optim, t)
+    all_results = scrunch_runner(PYs, its_range, ordered_ITS, params)
 
     final_conc = all_results[0][its_len].finals
 
@@ -5727,7 +5501,6 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
     # In the first round, calculate until pruning_stop + 2 (AT)
     state_nr = (pruning_stop+2) - 1
     y0 = [1] + [0 for i in range(state_nr-1)]
-    t = np.linspace(0, 1., 100)
     # change variable nr to reflect this
     variable_nr = pruning_stop
 
@@ -5758,7 +5531,7 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
 
     state_nr = its_len - 1 # now going full its_len
     y0 = [1] + [0 for i in range(state_nr-1)]
-    arguments = (params, state_nr, y0, t)
+    arguments = (params, state_nr, y0)
 
     second_pool = multiprocessing.Pool()
     beg=False # don't add an AT second time around
@@ -5975,15 +5748,9 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
-
     # nr of nucleotides to consider
     its_max = 21
     its_range = range(3, its_max)
-
-    # GRID, not optimizer
-    optim = False
 
     grid_size = 10
 
@@ -5997,7 +5764,7 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
     par_ranges = (c1, c2, c3, c4)
 
     # use the optimal parameters froom the optimization
-    opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t)
+    opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges)
 
     # second round, optimal parameters only
     par_ranges = opt_par
@@ -6009,7 +5776,7 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
     retrofit = 0
 
     #run with optimal parameters
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=randomize, retrofit=retrofit)
 
     # extract the specific results
@@ -6020,13 +5787,13 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
     ymin=0
     ymax=0.9
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
-                                           retrof_results, optim, randomize,
+                                           retrof_results, randomize,
                                            par_ranges, p_line, its_max, ylim,
                                            ymin, ymax, testing,
                                            print_params=True)
     return fig_lad
 
-def get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t,
+def get_optimal_params(PYs, its_range, ITSs, par_ranges, t,
                        opt_nucs='max'):
 
     # don't do randomization or cross validation now
@@ -6034,7 +5801,7 @@ def get_optimal_params(PYs, its_range, ITSs, par_ranges, optim, t,
     retrofit = 0
 
     # initial run to get optimal parameters
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, t,
                                  randize=randomize, retrofit=retrofit)
 
     # extract the specific results
@@ -6098,18 +5865,13 @@ def two_param_A(ITSs, testing, p_line, par):
 
     par_ranges = (c1, c2, c3, c4)
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
-
     its_max = 21
     #if testing:
         #its_max = 16
 
     its_range = range(3, its_max)
 
-    optim = False
-
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=rands, retrofit=rands)
 
     # extract the specific results
@@ -6120,11 +5882,11 @@ def two_param_A(ITSs, testing, p_line, par):
     ymax = 0.9 # correlation is always high
     randomize = rands # you didn't randomize
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
-                                           retrof_results, optim, randomize,
+                                           retrof_results, randomize,
                                            par_ranges, p_line, its_max, ymin,
                                            ymax, testing, print_params=False)
 
-    fig_sct = print_scrunch_scatter(results, rand_results, optim, randomize,
+    fig_sct = print_scrunch_scatter(results, rand_results, randomize,
                                     par_ranges, PYs)
 
     return fig_lad, fig_sct
@@ -6153,18 +5915,13 @@ def two_param_AB(ITSs, testing, p_line, par):
 
     par_ranges = (c1, c2, c3, c4)
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
-
     its_max = 21
     #if testing:
         #its_max = 16
 
     its_range = range(3, its_max)
 
-    optim = False
-
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=rands, retrofit=rands)
 
     # extract the specific results
@@ -6175,11 +5932,11 @@ def two_param_AB(ITSs, testing, p_line, par):
     ymax = 0.9 # correlation is always high
     randomize = rands # you didn't randomize
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
-                                           retrof_results, optim, randomize,
+                                           retrof_results, randomize,
                                            par_ranges, p_line, its_max, ymin,
                                            ymax, testing, print_params=True)
 
-    fig_sct = print_scrunch_scatter(results, rand_results, optim, randomize,
+    fig_sct = print_scrunch_scatter(results, rand_results, randomize,
                                     par_ranges, PYs)
 
     return fig_lad, fig_sct
@@ -6196,16 +5953,12 @@ def RNAP_2_PY(ITSs, concentrations, params=(20, 0, 0.022, 0.24), its_len=15):
 
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
-
     its_range = range(3, 21)
 
-    optim = False # GRID
     randomize = 0 # here 0 = False (or randomize 0 times)
     retrofit = 0
 
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=randomize, retrofit=retrofit)
 
     # extract the specific results
@@ -6241,16 +5994,12 @@ def predicted_vs_measured(ITSs):
     PYs = np.array([itr.PY for itr in ITSs])*0.01
     PYerr = np.array([itr.PY_std for itr in ITSs])*0.01
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
-
     its_range = range(3, 21)
 
-    optim = False # GRID
     randomize = 0 # here 0 = False (or randomize 0 times)
     retrofit = 0
 
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=randomize, retrofit=retrofit)
 
     # extract the specific results
@@ -6283,7 +6032,7 @@ def predicted_vs_measured(ITSs):
     fake_py = [0 for _ in range(len(test_obj))]
 
     test_results = scrunch_runner(fake_py, its_range, test_obj, par_ranges,
-                                  optim, t, randize=randomize, retrofit=retrofit)
+                                  randize=randomize, retrofit=retrofit)
 
     results, rand_results, retrof_results = test_results
 
@@ -6350,12 +6099,12 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Two-parameter model with parameter estimation but no
     #cross-reference
-    #ladder_name = 'two_param_model_AB' + append
-    #scatter_name = 'two_param_14_scatter' + append
-    #fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
+    ladder_name = 'two_param_model_AB' + append
+    scatter_name = 'two_param_14_scatter' + append
+    fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
 
-    #figs.append((fig_ladder, ladder_name))
-    #figs.append((fig_scatter, scatter_name))
+    figs.append((fig_ladder, ladder_name))
+    figs.append((fig_scatter, scatter_name))
 
     ### Figure 2.5 -> Two-parameter model with cross-reference but no parameter
     ##estimation
@@ -6365,9 +6114,9 @@ def paper_figures(ITSs):
     figs.append((fig_nog_ladder, ladder_nog_name))
 
     ### Figure 2.7 -> Compare two and three parameter models
-    #compare_name = 'compare_two_three_AB' + append
-    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    #figs.append((fig_controversy, compare_name))
+    compare_name = 'compare_two_three_AB' + append
+    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    figs.append((fig_controversy, compare_name))
 
     #### Figure 3 -> Optimal model model XXX Obsolete?
     #fixed_lad_name = 'Optimal_model' + append
@@ -6376,19 +6125,19 @@ def paper_figures(ITSs):
     #figs.append((fig_reduced_fixed, fixed_lad_name))
 
     ### Figure 4 -> Scatter of predicted VS actual PY
-    #predicted_name = 'Predicted_vs_measured' + append
-    #fig_predicted = predicted_vs_measured(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    predicted_name = 'Predicted_vs_measured' + append
+    fig_predicted = predicted_vs_measured(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     ### Figure 5 -> Selection pressures
-    #predicted_name = 'Selection_pressure' + append
-    #fig_predicted = selection_pressure(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    predicted_name = 'Selection_pressure' + append
+    fig_predicted = selection_pressure(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     ### Figure 6 -> Model family
-    #family_name = 'Model_family' + append
-    #fig_family = family_of_models(ITSs, p_line, global_params)
-    #figs.append((fig_family, family_name))
+    family_name = 'Model_family' + append
+    fig_family = family_of_models(ITSs, p_line, global_params)
+    figs.append((fig_family, family_name))
 
     ### Figure 7 -> Test alternative family model with RNA-DNA destabilizing
     #alternative_name = 'Alternative_models' + append
@@ -6444,12 +6193,7 @@ def full_positive_RNADNA(ITSs, testing, p_line, global_params):
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
-
     its_max = 21
-
-    optim = False # GRID
     its_range = range(3, its_max)
 
     par = global_params
@@ -6468,13 +6212,13 @@ def full_positive_RNADNA(ITSs, testing, p_line, global_params):
     name_normal = 'normal_RNA_Tn'
 
     # get the normal results
-    all_results_n = scrunch_runner(PYs, its_range, ITSs, par_ranges_normal, optim, t)
+    all_results_n = scrunch_runner(PYs, its_range, ITSs, par_ranges_normal)
     results_n, rand_results, retrof_results = all_results_n
 
     resulter[name_normal] = results_n
 
     # get the alternative results
-    all_results_a = scrunch_runner(PYs, its_range, ITSs, par_ranges_altern, optim, t)
+    all_results_a = scrunch_runner(PYs, its_range, ITSs, par_ranges_altern)
     results_a, rand_results, retrof_results = all_results_a
 
     resulter[name_altern] = results_a
@@ -6492,11 +6236,6 @@ def compare_two_three(ITSs, testing, p_line, par):
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
-
-    optim = False # GRID
-
-    # Time-grid (Note: not evaluated any more)
-    t = np.linspace(0, 1., 100)
 
     its_max = 21
     its_range = range(3, its_max)
@@ -6530,7 +6269,7 @@ def compare_two_three(ITSs, testing, p_line, par):
 
     for (par_ranges, name) in collection:
 
-        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,t,
+        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                      randize=control, retrofit=control)
 
         # extract the specific results
@@ -6544,10 +6283,10 @@ def compare_two_three(ITSs, testing, p_line, par):
     randomize = control # you didn't randomize
 
     fig_lad, ax_lad = print_scrunch_ladder_compare(resulter, rand_results,
-                                                   retrof_results, optim,
-                                                   randomize, par_ranges,
-                                                   p_line, its_max, ymin, ymax,
-                                                   testing, print_params=True)
+                                                   retrof_results, randomize,
+                                                   par_ranges, p_line, its_max,
+                                                   ymin, ymax, testing,
+                                                   print_params=True)
 
     return fig_lad
 
@@ -6578,11 +6317,6 @@ def positive_RNADNA(ITSs, testing, p_line, par):
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
-    optim = False # GRID
-
-    # Time-grid
-    t = np.linspace(0, 1., 100)
-
     its_range = range(3, 21)
 
     grid_size = 10
@@ -6598,10 +6332,10 @@ def positive_RNADNA(ITSs, testing, p_line, par):
     par_ranges4 = (c1, np.array([0]), c3, c4)
 
     # use the optimal parameters from the optimization
-    opt_par2 = get_optimal_params(PYs, its_range, ITSs, par_ranges2, optim, t)
+    opt_par2 = get_optimal_params(PYs, its_range, ITSs, par_ranges2)
     name2 = 'alternative_RNA_Tn'
 
-    opt_par4 = get_optimal_params(PYs, its_range, ITSs, par_ranges4, optim, t)
+    opt_par4 = get_optimal_params(PYs, its_range, ITSs, par_ranges4)
     name4 = 'normal_RNA_Tn'
 
     collection = [(opt_par2, name2), (opt_par4, name4)]
@@ -6611,7 +6345,7 @@ def positive_RNADNA(ITSs, testing, p_line, par):
 
     for (par_ranges, name) in collection:
 
-        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim,t,
+        all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                      randize=control, retrofit=control)
 
         # extract the specific results
@@ -7074,16 +6808,12 @@ def DG400_verifier(ITSs):
     PYs = np.array([itr.PY for itr in ITSs])*0.01
     PYerr = np.array([itr.PY_std for itr in ITSs])*0.01
 
-    # Time-grid
-    t = np.linspace(0, 1., 100)
 
     its_range = range(3, 21)
-
-    optim = False # GRID
     randomize = 0 # here 0 = False (or randomize 0 times)
     retrofit = 0
 
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, optim, t,
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=randomize, retrofit=retrofit)
 
     # extract the specific results
