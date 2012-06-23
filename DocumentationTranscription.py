@@ -410,7 +410,7 @@ class ITS(object):
         # Make di-nucleotide vectors for all the energy parameters
         self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
         self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
-        self.keq_di = [Ec.Keq_EC8_EC9[di] for di in __dinucs]
+        #self.keq_di = [Ec.Keq_EC8_EC9[di] for di in __dinucs]
         self.keq_delta_di = [Ec.delta_keq[di] for di in __dinucs]
         self.k1_di = [Ec.k1[di] for di in __dinucs]
         self.kminus1_di = [Ec.kminus1[di] for di in __dinucs]
@@ -4513,7 +4513,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
         fig.suptitle(hedr)
 
     # Add A and B if two plots
-    if len(axes > 1):
+    if len(axes) > 1:
         for i, label in enumerate(('A', 'B')):
             ax = axes[i]
             ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=26,
@@ -4522,8 +4522,8 @@ def print_scrunch_ladder(results, rand_results, retrof_results, optimize,
     return fig, axes
 
 
-def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, t,
-                   init_bubble=False, randize=0, retrofit=0):
+def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, t, randize=0,
+                   retrofit=0):
     """
     Wrapper around grid_scrunch and opt_scrunch.
     """
@@ -4547,7 +4547,7 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, t,
             y0 = [1] + [0 for i in range(state_nr-1)]
 
             optimized_obj = opt_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                          state_nr, init_bubble)
+                                          state_nr)
 
             results[its_len] = optimized_obj
 
@@ -4555,8 +4555,7 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, t,
                 # DO the randomization magic here
                 # What should that be? You have to re-calculate the ITSs
                 optimized_obj = opt_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                              state_nr, randomize=randize,
-                                              initial_bubble=init_bubble)
+                                              state_nr, randomize=randize)
             else:
                 optimized_obj = False
 
@@ -4578,7 +4577,7 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, t,
 
             # get the 'normal' results
             normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                        state_nr, initial_bubble=init_bubble)
+                                        state_nr)
 
             results[its_len] = normal_obj
 
@@ -4586,16 +4585,14 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, optimize, t,
             if randize:
                 # get the results for randomized ITS versions
                 random_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                            state_nr, randomize=randize,
-                                            initial_bubble=init_bubble)
+                                            state_nr, randomize=randize)
             else:
                 random_obj = False
 
             # Retrofit
             if retrofit:
                 retrof_obj = grid_scruncher(PYs, its_len, ITSs, ranges, t, y0,
-                                            state_nr, retrof=retrofit,
-                                            initial_bubble=init_bubble)
+                                            state_nr, retrof=retrofit)
             else:
                 retrof_obj = False
 
@@ -4711,7 +4708,7 @@ def get_its_variables(ITSs, randomize=False, retrofit=False, PY=False):
         return new_ITSs
 
 def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
-                   initial_bubble=True, retrof=0):
+                   retrof=0):
     """
     Separate scruch calls into randomize, retrofit, or neither.
     """
@@ -4726,8 +4723,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
             #extract the stuff
             ITS_fitting, ITS_compare, PYs_fitting, PYs_compare = retrovar
 
-            arguments_fit = (y0, t, its_len, state_nr, ITS_fitting, PYs_fitting,
-                           initial_bubble)
+            arguments_fit = (y0, t, its_len, state_nr, ITS_fitting, PYs_fitting)
 
             fit_result = grid_scrunch(arguments_fit, ranges)
 
@@ -4745,8 +4741,8 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
                           for p in par_order]
 
             # rerun with new arguments
-            arguments_compare = (y0, t, its_len, state_nr, ITS_compare, PYs_compare,
-                         initial_bubble)
+            arguments_compare = (y0, t, its_len, state_nr, ITS_compare,
+                                 PYs_compare)
 
             # run the rest of the ITS with the optimal parameters
             control_result = grid_scrunch(arguments_compare, fit_ranges)
@@ -4770,8 +4766,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
 
             ITS_variables = get_its_variables(ITSs, randomize=True)
 
-            arguments = (y0, t, its_len, state_nr, ITS_variables, PYs,
-                         initial_bubble)
+            arguments = (y0, t, its_len, state_nr, ITS_variables, PYs)
 
             rand_result = grid_scrunch(arguments, ranges)
 
@@ -4790,8 +4785,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, t, y0, state_nr, randomize=0,
         #go from ITS object to dict to appease the impotent pickle
         ITS_variables = get_its_variables(ITSs)
 
-        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs,
-                     initial_bubble)
+        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs)
 
         return grid_scrunch(arguments, ranges)
 
@@ -4991,7 +4985,7 @@ def mini_scrunch(seqs, params, state_nr, y0, t, multi_range):
 
     return py_like
 
-def calculate_k1_difference(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a,
+def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
                             b, c, d):
     """
     The reaction rate array for this ITS. By the arrhenius equation, you should
@@ -5048,17 +5042,6 @@ def calculate_k1_difference(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a,
 
         expo = (-b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
 
-        # if expo is above 0, the exponential will be greater than 1, and
-        # XXX why? have you given this a lot of thought?
-        # this will in general not work
-        #if run_once and expo > 0:
-            #proceed = False
-            #break
-
-        # there should be way of introducing this constraint to the
-        # optimizer. Yes, but you have to change optimizers and it's not
-        # straightforward.
-
         rate = a*np.exp(expo)
 
         k1[i-2] = rate
@@ -5066,30 +5049,22 @@ def calculate_k1_difference(minus11_en, RT, its_len, keq, dna_dna, rna_dna, a,
     return k1, proceed
 
 def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
-                            initial_bubble, run_once=False, const_par=False,
-                            truth_table=False):
+                            run_once=False, const_par=False, truth_table=False):
     """
     k1 = c1*exp(-(c2*rna_dna_i - c3*dna_dna_{i+1} + c4*Keq_{i-1}) * 1/RT)
 
     Dna-bubble one step ahead of the rna-dna hybrid; Keq one step behind.
     When the rna-dna reaches length 9, the you must subtract the hybrid for
-    each step forward.
+    each step forward. New: the hybrid seems to oscillate between a 8bp and a
+    9bp hybrid :S try to implement that. Also you must calculate the DIFFERENCE
+    between the Keq energies. Or are you already doing that?
 
     """
     # get the tuning parameters and the rna-dna and k1, kminus1 values
     # RT is the gas constant * temperature
-    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
+    RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
     finals = []
     time_series = []
-
-    # The energy of the initiation bubble
-    # energy at 0 improves the correlation after +13 or so
-    # But if it's energy difference driving this, the initial stuff doesnt
-    # matter
-    if initial_bubble:
-        minus11_en = -9.95 # 'ATAATAGATTCAT'
-    else:
-        minus11_en = 0 # 'ATAATAGATTCAT' after nt 15, it seems that having initial
 
     for its_dict in ITSs:
 
@@ -5114,8 +5089,8 @@ def cost_function_scruncher(start_values, y0, t, its_len, state_nr, ITSs, PYs,
             (a, b, c, d) = get_mixed_params(truth_table, start_values, const_par)
 
         # New rate equation in town. Dont use the mins11 energy.
-        k1, proceed = calculate_k1_difference(minus11_en, RT, its_len, keq,
-                                              dna_dna, rna_dna, a, b, c, d)
+        k1, proceed = calculate_k1_difference(RT, its_len, keq, dna_dna,
+                                              rna_dna, a, b, c, d)
 
         # you must abort if proceed is false and run_once is true
         if run_once and not proceed:
@@ -6108,8 +6083,8 @@ def two_param_A(ITSs, testing, p_line, par):
     rands = 20 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 6
-        rands = 2
+        grid_size = 8
+        rands = 3
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -6164,7 +6139,7 @@ def two_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 6
+        grid_size = 8
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -6185,8 +6160,7 @@ def two_param_AB(ITSs, testing, p_line, par):
     #if testing:
         #its_max = 16
 
-    #its_range = range(3, its_max)
-    its_range = range(17, its_max)
+    its_range = range(3, its_max)
 
     optim = False
 
@@ -6376,21 +6350,21 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Two-parameter model with parameter estimation but no
     #cross-reference
-    ladder_name = 'two_param_model_AB' + append
-    scatter_name = 'two_param_14_scatter' + append
-    fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
+    #ladder_name = 'two_param_model_AB' + append
+    #scatter_name = 'two_param_14_scatter' + append
+    #fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
 
-    figs.append((fig_ladder, ladder_name))
-    figs.append((fig_scatter, scatter_name))
+    #figs.append((fig_ladder, ladder_name))
+    #figs.append((fig_scatter, scatter_name))
 
-    ## Figure 2.5 -> Two-parameter model with cross-reference but no parameter
-    #estimation
-    #ladder_nog_name = 'two_param_A' + append
-    #fig_nog_ladder, fig_nog_scatter = two_param_A(ITSs, testing, p_line,
-                                                  #global_params)
-    #figs.append((fig_nog_ladder, ladder_nog_name))
+    ### Figure 2.5 -> Two-parameter model with cross-reference but no parameter
+    ##estimation
+    ladder_nog_name = 'two_param_A' + append
+    fig_nog_ladder, fig_nog_scatter = two_param_A(ITSs, testing, p_line,
+                                                  global_params)
+    figs.append((fig_nog_ladder, ladder_nog_name))
 
-    ## Figure 2.7 -> Compare two and three parameter models
+    ### Figure 2.7 -> Compare two and three parameter models
     #compare_name = 'compare_two_three_AB' + append
     #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
     #figs.append((fig_controversy, compare_name))
@@ -6530,7 +6504,7 @@ def compare_two_three(ITSs, testing, p_line, par):
     grid_size = 10
 
     if testing:
-        grid_size = 6
+        grid_size = 8
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
