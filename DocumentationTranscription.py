@@ -4296,7 +4296,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
         else:
             descr = ', '.join(for_join)
 
-        hedr = 'Nr random samples: {1}\n\n{2}\n'.format(randomize, descr)
+        hedr = 'Nr random samples: {0}\n\n{1}\n'.format(randomize, descr)
         fig.suptitle(hedr)
 
 
@@ -4480,7 +4480,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
         else:
             descr = ', '.join(for_join)
 
-        hedr = 'Nr random samples: {1}\n\n{2}\n'.format(randomize, descr)
+        hedr = 'Nr random samples: {0}\n\n{1}\n'.format(randomize, descr)
         fig.suptitle(hedr)
 
     # Add A and B if two plots
@@ -4637,7 +4637,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
 
             ITS_variables = get_its_variables(ITSs, randomize=True)
 
-            arguments = (y0, t, its_len, state_nr, ITS_variables, PYs)
+            arguments = (y0, its_len, state_nr, ITS_variables, PYs)
 
             rand_result = grid_scrunch(arguments, ranges)
 
@@ -4656,7 +4656,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
         #go from ITS object to dict to appease the impotent pickle
         ITS_variables = get_its_variables(ITSs)
 
-        arguments = (y0, t, its_len, state_nr, ITS_variables, PYs)
+        arguments = (y0, its_len, state_nr, ITS_variables, PYs)
 
         return grid_scrunch(arguments, ranges)
 
@@ -4739,7 +4739,7 @@ def grid_scrunch(arguments, ranges):
     # Sort them on the pearson correlation pvalue, 'pp'
 
     # Filter and pick the 20 with smalles pval
-    all_sorted = sorted(all_results, key=itemgetter(4))
+    all_sorted = sorted(all_results, key=itemgetter(3))
 
     # pick top 20
     top_hits = all_sorted[:20]
@@ -4750,9 +4750,9 @@ def grid_scrunch(arguments, ranges):
 
     # now make separate corr, pvals, params, and finals arrays from these
     finals = np.array(top_hits[0][0]) # only get finals for the top top
-    pars = [c[2] for c in top_hits]
-    corr = np.array([c[3] for c in top_hits])
-    pvals = np.array([c[4] for c in top_hits])
+    pars = [c[1] for c in top_hits]
+    corr = np.array([c[2] for c in top_hits])
+    pvals = np.array([c[3] for c in top_hits])
 
     # params must be made into a dict
     # params[c1,c2,c3,c4] = [array]
@@ -4773,7 +4773,8 @@ def _multi_func(paras, arguments):
     the parameters, and the correlation coefficients.
     """
     all_hits = []
-    PYs = arguments[-2]
+    # dangerous.. you depend on arguments never changing
+    PYs = arguments[-1]
 
     for par in paras:
         finals = cost_function_scruncher(par, *arguments)
@@ -4826,7 +4827,7 @@ def mini_scrunch(seqs, params, state_nr, y0, multi_range):
 
         (a, b, c, d) = params
         its_len = state_nr + 1
-        k1, proceed = calculate_k1_difference(minus11_en, RT, its_len,
+        k1 = calculate_k1_difference(minus11_en, RT, its_len,
                                               keq_delta, dna_dna, rna_dna, a, b,
                                               c, d)
         A = equlib_matrix(k1, state_nr)
@@ -4868,50 +4869,75 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
 
     Recall that the energies are in dinucleotide form. Thus ATG -> [0.4, 0.2]
 
-    ATG(G) <- the last G is because the DNA-DNA is one step further than the
-    active site
-    DNADNA = [a, b, c] [AT, TG, GG]
-    RNADNA = [d, e]    [AT, TG]
-    KEQ    = [f]       [AT]
+    See your notebook for how to calculate the exponential free energy stuff.
 
-    the energy contribution is
+    !!There is no RNA-DNA energy change before +9. FFS.
 
-    DNADNA[:2] - DNADNA[:1]
-    RNADNA[:1] - RNADNA[0]
-    KEQ = KEQ[0]
+    Q: what do you get in? the keq, dna_dna etc?
 
-    When you are at ITS_len = 3, then you should calculate the rate 2->3.
+    k1[0] should be for d(x_3)/dt
 
-    The first ITS_len is +3. That means the active sit is at +3. That means that
-    the DNA-DNA bubble is open until +4. So to get here, the transition for the
-    bubble was from +3 to +4. I must take the en[:4] - en[:3]
+    -> keq = (1,2)
+    -> RD = 0
+    -> DD = (1,3) - (1,2)
 
-    It means that the RNA-DNA hybrid extends to +3. So the difference is from
-    en[:3] - en[:2]
+    k1[1] should be for d(x_4)/dt
+
+    -> keq = (2,3)
+    -> RD = 0
+    -> DD = (1,4) - (1,3)
+
+    ...
+
+    k1[8] is the last where RD is zero
+
+    k1[7] is then d(x_10)/dt -- the first where RD gets subtracted
+
+    -> keq = (8,9)
+    -> RD = (2,9) - (1,9)
+    -> DD = (1,10) - (1,9)
+
+    k1[8] is then d(x_11)/dt
+
+    -> keq = (9,10)
+    -> RD = (3,10) - (2,10)
+    -> DD = (1,11) - (1,10)
+
+    ...
+
+    until k1[17] which is d(x_20)/dt -- or do you want to include x_21?
 
     """
 
     # initialize empty rates. -2 because you start going from +2 to +3.
+    # ATGCT -> [0.3, 0.5, 0.2, 0.8]
+    # -> (1,2) = 0.3
+    # -> (1,3) = 0.3 + 0.5
+    # -> (2,3) = (0.5)
     k1 = np.zeros(its_len-2)
 
-    for i in range(1, its_len-1):
-        if i == 1:
-            KEQ = keq[0]
+    for i in range(0, its_len-2):
+
+        KEQ = keq[i]
+
+        #DNA_DNA = sum(dna_dna[:i+1+1]) - sum(dna_dna[:i+1]) #+1 for python
+        DNA_DNA = dna_dna[i+1] # the difference is the same as the last element
+
+        # index 7 is the same as x_10. k[7] is for x_10
+        if i < 7:
+            #RNA_DNA = sum(rna_dna[:i])
+            RNA_DNA = 0 #
         else:
-            KEQ = keq[i-1] - keq[i-2]
+            # the 6 and the 7 are results of starting at +3, dinucleotides, and
+            # python indexing (reminder: start thinking like python with +0 for
+            # start)
+            RNA_DNA = sum(rna_dna[i-6:i+1]) - sum(rna_dna[i-7:i+1])
 
-        DNA_DNA = sum(dna_dna[:i+1]) - sum(dna_dna[:i])
-
-        if i < 9:
-            RNA_DNA = sum(rna_dna[:i]) - sum(rna_dna[:i-1])
-        else:
-            RNA_DNA = sum(rna_dna[i-9:i]) - sum(rna_dna[i-9:i-1])
-
-        expo = (-b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
+        expo = (b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
 
         rate = a*np.exp(expo)
 
-        k1[i-2] = rate
+        k1[i] = rate
 
     return k1
 
@@ -4937,10 +4963,11 @@ def cost_function_scruncher(start_values, y0, its_len, state_nr, ITSs, PYs,
         # must shift by minus 1 ('GATTA' example: GA, AT, TT, TA -> len 5, but 4
         # relevant dinucleotides)
 
-        # get the energy parameters up to a certain length. -1 because of python
-        # 0 based counting.
-        dna_dna = its_dict['dna_dna_di'][:its_len]
-        rna_dna = its_dict['rna_dna_di'][:its_len-1]
+        # first -1 because of python indexing. additional -1 because onlt (1,2)
+        # information is needed for 3. ATG -> [(1,2), (2,3)]. Only DNA-DNA needs
+        # both.
+        dna_dna = its_dict['dna_dna_di'][:its_len-1]
+        rna_dna = its_dict['rna_dna_di'][:its_len-2]
         keq = its_dict['keq_di'][:its_len-2]
 
         (a, b, c, d) = start_values
@@ -5504,7 +5531,7 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
     # change variable nr to reflect this
     variable_nr = pruning_stop
 
-    arguments = (params, state_nr, y0, t)
+    arguments = (params, state_nr, y0)
 
     # Make a workers' pool
     first_pool = multiprocessing.Pool()
@@ -5793,7 +5820,7 @@ def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
                                            print_params=True)
     return fig_lad
 
-def get_optimal_params(PYs, its_range, ITSs, par_ranges, t,
+def get_optimal_params(PYs, its_range, ITSs, par_ranges,
                        opt_nucs='max'):
 
     # don't do randomization or cross validation now
@@ -5801,7 +5828,7 @@ def get_optimal_params(PYs, its_range, ITSs, par_ranges, t,
     retrofit = 0
 
     # initial run to get optimal parameters
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges, t,
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=randomize, retrofit=retrofit)
 
     # extract the specific results
@@ -5894,6 +5921,9 @@ def two_param_A(ITSs, testing, p_line, par):
 def two_param_AB(ITSs, testing, p_line, par):
     """
     Print two parameter model with grid. Do not show optimization parameters.
+
+    After the conceptual change, DD is still better than RD in a two-parameter
+    model. Thank god.
     """
 
     # grid size
@@ -5901,7 +5931,7 @@ def two_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 8
+        grid_size = 10
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5911,6 +5941,7 @@ def two_param_AB(ITSs, testing, p_line, par):
     #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
     c2 = np.array([0])
     c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
+    #c3 = np.array([0])
     c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
 
     par_ranges = (c1, c2, c3, c4)
@@ -5928,7 +5959,7 @@ def two_param_AB(ITSs, testing, p_line, par):
     results, rand_results, retrof_results = all_results
 
     # ladder plot
-    ymin = 0 # correlation is always high
+    ymin = -0.9 # correlation is always high
     ymax = 0.9 # correlation is always high
     randomize = rands # you didn't randomize
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
@@ -6078,6 +6109,19 @@ def paper_figures(ITSs):
     make it possible to make fast changes. Hey? Didn't you actually do that?
     Where are the A B C D things? Was that done in another file? No! I remember
     seeing it for the family plot.
+
+    Update Sankthansaften.
+
+    You found that the Dg = -RT*log(en)/1000 was previously missing log.
+    Further, it should be 1/en since Hein gets the equilibrium constant for the
+    opposite reaction. Your correlation is worse than before and the keq and DD
+    have changed signs log(1/n) = - log(n) which gives the change of sign.) How
+    to get out of this mess? Now the results don't match with the experiments.
+
+    Can you argue to do a function change on Keq? Since it's from another
+    organism and not with a scaffold? You have to do exp(-f(x)) to compensate
+    for the changes you have wrought.
+
     """
     testing = True  # if testing, run everything fast
     #testing = False
@@ -6099,19 +6143,19 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Two-parameter model with parameter estimation but no
     #cross-reference
-    ladder_name = 'two_param_model_AB' + append
-    scatter_name = 'two_param_14_scatter' + append
-    fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
+    #ladder_name = 'two_param_model_AB' + append
+    #scatter_name = 'two_param_14_scatter' + append
+    #fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
 
-    figs.append((fig_ladder, ladder_name))
-    figs.append((fig_scatter, scatter_name))
+    #figs.append((fig_ladder, ladder_name))
+    #figs.append((fig_scatter, scatter_name))
 
     ### Figure 2.5 -> Two-parameter model with cross-reference but no parameter
     ##estimation
-    ladder_nog_name = 'two_param_A' + append
-    fig_nog_ladder, fig_nog_scatter = two_param_A(ITSs, testing, p_line,
-                                                  global_params)
-    figs.append((fig_nog_ladder, ladder_nog_name))
+    #ladder_nog_name = 'two_param_A' + append
+    #fig_nog_ladder, fig_nog_scatter = two_param_A(ITSs, testing, p_line,
+                                                  #global_params)
+    #figs.append((fig_nog_ladder, ladder_nog_name))
 
     ### Figure 2.7 -> Compare two and three parameter models
     compare_name = 'compare_two_three_AB' + append
@@ -6125,19 +6169,19 @@ def paper_figures(ITSs):
     #figs.append((fig_reduced_fixed, fixed_lad_name))
 
     ### Figure 4 -> Scatter of predicted VS actual PY
-    predicted_name = 'Predicted_vs_measured' + append
-    fig_predicted = predicted_vs_measured(ITSs)
-    figs.append((fig_predicted, predicted_name))
+    #predicted_name = 'Predicted_vs_measured' + append
+    #fig_predicted = predicted_vs_measured(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
     ### Figure 5 -> Selection pressures
-    predicted_name = 'Selection_pressure' + append
-    fig_predicted = selection_pressure(ITSs)
-    figs.append((fig_predicted, predicted_name))
+    #predicted_name = 'Selection_pressure' + append
+    #fig_predicted = selection_pressure(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
     ### Figure 6 -> Model family
-    family_name = 'Model_family' + append
-    fig_family = family_of_models(ITSs, p_line, global_params)
-    figs.append((fig_family, family_name))
+    #family_name = 'Model_family' + append
+    #fig_family = family_of_models(ITSs, p_line, global_params)
+    #figs.append((fig_family, family_name))
 
     ### Figure 7 -> Test alternative family model with RNA-DNA destabilizing
     #alternative_name = 'Alternative_models' + append
@@ -6247,13 +6291,20 @@ def compare_two_three(ITSs, testing, p_line, par):
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
-    c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
-    c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
+    c3 = np.linspace(-par['dd_max'], par['dd_max'], grid_size)
+    c4 = np.linspace(-par['eq_max'], par['eq_max'], grid_size)
+    #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
+    #c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
+    #c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
 
     # define the ranges for the two minimal models
     three_param = (c1, c2, c3, c4)
     two_param = (c1, np.array([0]), c3, c4)
+    #two_param = (c1, c2, np.array([0]), c4) # trying out rna-dna and transloc as
+    #the two-parameter model
+    # RESULT since rna-dna is zero, it doesn't contribute. Now RNA-DNA improves
+    # the result a lot after +14, but only if it is allowed to be negative! :S
 
     # use the optimal parameters from the optimization
     # XXX at the moment you will use the 

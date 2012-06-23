@@ -128,13 +128,16 @@ for name, val in EnLibRNA.items():
     #super_en[name] = reKeq[name] - val
     super_en[name] = val - reKeq[name]
 
-# XXX go from Keq to Delta G values; it makes the equation prettier and you
-# avoid the 'ln's in your calculations
+# XXX go from Keq to Delta G values. Do 1/en because Hein paper has got the
+# equilibrium constant for the opposite reaction.
+# Keq = exp(-DG/RT) -> DG = -ln(Keq)*RT
 delta_keq = {}
-
 RT = 1.9858775*(37 + 273.15)
 for din, en in Keq_EC8_EC9.items():
-    delta_keq[din] = -RT*en/1000  #divide by 1000 to get kcal
+    delta_keq[din] = -RT*np.log(1/en)/1000  #divide by 1000 to get kcal
+    #delta_keq[din] = -RT*(1/en)/1000  #divide by 1000 to get kcal
+    #delta_keq[din] = -RT*np.log(en)/1000  #divide by 1000 to get kcal
+    #delta_keq[din] = -RT*en/1000  #divide by 1000 to get kcal
 
 def Delta_trans(sequence):
     """
