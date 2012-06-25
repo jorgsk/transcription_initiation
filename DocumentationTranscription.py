@@ -4858,14 +4858,9 @@ def mini_scrunch(seqs, params, state_nr, y0, multi_range):
 def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
                             b, c, d):
     """
-    The reaction rate array for this ITS. By the arrhenius equation, you should
-    actually use the energy DIFFERENCE, not the actual energy itself. Take this
-    presently into account plz.
-
-    Also, add to +22 to get both DNA and RNA. Seems there is 1 free nucleotide
-    between RNADNA and dnd bubble. I can't find any proof of that however. It
-    might be there in the structural studies. Maybe you just have to cite the
-    others.
+    Seems there is 1 free nucleotide between RNADNA and dnd bubble. I can't
+    find any proof of that however. It might be there in the structural
+    studies. Maybe you just have to cite the others.
 
     Recall that the energies are in dinucleotide form. Thus ATG -> [0.4, 0.2]
 
@@ -4935,7 +4930,7 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
 
         expo = (b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
 
-        rate = a*np.exp(expo)
+        rate = a*np.exp(-expo)
 
         k1[i] = rate
 
@@ -5877,8 +5872,8 @@ def two_param_A(ITSs, testing, p_line, par):
     rands = 20 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 8
-        rands = 3
+        grid_size = 10
+        rands = 5
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5931,7 +5926,7 @@ def two_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 10
+        grid_size = 15
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5940,8 +5935,10 @@ def two_param_AB(ITSs, testing, p_line, par):
     c1 = np.array([par['K']]) # insensitive to variation here
     #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
     c2 = np.array([0])
-    c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
+    #c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
+    c3 = -np.linspace(par['dd_min'], par['dd_max'], grid_size)
     #c3 = np.array([0])
+    #c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
     c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
 
     par_ranges = (c1, c2, c3, c4)
@@ -5959,7 +5956,7 @@ def two_param_AB(ITSs, testing, p_line, par):
     results, rand_results, retrof_results = all_results
 
     # ladder plot
-    ymin = -0.9 # correlation is always high
+    ymin = 0 # correlation is always high
     ymax = 0.9 # correlation is always high
     randomize = rands # you didn't randomize
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
@@ -6151,7 +6148,7 @@ def paper_figures(ITSs):
     #figs.append((fig_scatter, scatter_name))
 
     ### Figure 2.5 -> Two-parameter model with cross-reference but no parameter
-    ##estimation
+    ##estimation plot
     #ladder_nog_name = 'two_param_A' + append
     #fig_nog_ladder, fig_nog_scatter = two_param_A(ITSs, testing, p_line,
                                                   #global_params)
@@ -6273,6 +6270,30 @@ def full_positive_RNADNA(ITSs, testing, p_line, global_params):
 
 def compare_two_three(ITSs, testing, p_line, par):
     """
+    Plot A: two-parameter and three-parameter models correlations compared.
+    Plot B: three-parameter model parameter plot
+
+
+    Results. With the new model, keq and rna-dna are positive. dna-dna is
+    negative in sign. That means that ultimately (multiplying with -1):
+
+    exp(-keq), exp(-rna-dna), exp(dna-dna)
+
+    The exponential tages negative values to zero and positive values to + inf
+
+    What does this mean?
+    exp(dna-dna): GC-rich -> low rate. AT-rich -> high rate
+
+    exp(-rna-dna): GC-rich -> high rate. AT-rich -> low rate
+
+    exp(-keq) NEW: Pre-translocated -> low rate, post-translocated -> high rate
+
+    In the old model Keq has a positive sign
+
+    exp(keq) OLD: pre-translocated -> low rate, post-translocated -> high rate
+
+    This actually makes perfect sense, now it's just the correlation that is
+    strange.
     """
 
     # no cross validation needed
@@ -6287,13 +6308,16 @@ def compare_two_three(ITSs, testing, p_line, par):
     grid_size = 10
 
     if testing:
-        grid_size = 8
+        grid_size = 10
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
-    c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
-    c3 = np.linspace(-par['dd_max'], par['dd_max'], grid_size)
-    c4 = np.linspace(-par['eq_max'], par['eq_max'], grid_size)
+    c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
+    c3 = -np.linspace(par['dd_min'], par['dd_max'], grid_size)
+    c4 = -np.linspace(par['eq_min'], par['eq_max']+1, grid_size)
+    #c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
+    #c3 = np.linspace(-par['dd_max'], par['dd_max'], grid_size)
+    #c4 = np.linspace(-par['eq_max'], par['eq_max'], grid_size)
     #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
     #c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
     #c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)

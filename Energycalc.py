@@ -134,10 +134,10 @@ for name, val in EnLibRNA.items():
 delta_keq = {}
 RT = 1.9858775*(37 + 273.15)
 for din, en in Keq_EC8_EC9.items():
-    delta_keq[din] = -RT*np.log(1/en)/1000  #divide by 1000 to get kcal
+    #delta_keq[din] = -RT*np.log(1/en)/1000  #divide by 1000 to get kcal
     #delta_keq[din] = -RT*(1/en)/1000  #divide by 1000 to get kcal
     #delta_keq[din] = -RT*np.log(en)/1000  #divide by 1000 to get kcal
-    #delta_keq[din] = -RT*en/1000  #divide by 1000 to get kcal
+    delta_keq[din] = -RT*en/1000  # old and wrong
 
 def Delta_trans(sequence):
     """
