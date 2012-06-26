@@ -409,6 +409,9 @@ class ITS(object):
         self.k1_di = [Ec.k1[di] for di in __dinucs]
         self.kminus1_di = [Ec.kminus1[di] for di in __dinucs]
 
+    def __repr__(self):
+        return "{0}, PY: {1}".format(self.name, self.PY)
+
 def RedlistInvestigator(ITSs):
     """ Read minus ten elements from Filereader and add redlisted sequence
     elements to the ITS class instances."""
@@ -4815,8 +4818,6 @@ def mini_scrunch(seqs, params, state_nr, y0, multi_range):
     """
 
     RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
-    #minus11_en = -9.95 # 'ATAATAGATTCAT'
-    minus11_en = 0 # 'ATAATAGATTCAT'
 
     py_like = []
 
@@ -4827,9 +4828,8 @@ def mini_scrunch(seqs, params, state_nr, y0, multi_range):
 
         (a, b, c, d) = params
         its_len = state_nr + 1
-        k1 = calculate_k1_difference(minus11_en, RT, its_len,
-                                              keq_delta, dna_dna, rna_dna, a, b,
-                                              c, d)
+        k1 = calculate_k1_difference(RT, its_len, keq_delta, dna_dna, rna_dna,
+                                     a, b, c, d)
         A = equlib_matrix(k1, state_nr)
 
         # time in which to integrate over
@@ -4923,7 +4923,7 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
             #RNA_DNA = sum(rna_dna[:i])
             RNA_DNA = 0 #
         else:
-            # the 6 and the 7 are results of starting at +3, dinucleotides, and
+            # the 6 and the 7 are because of starting at +3, dinucleotides, and
             # python indexing (reminder: start thinking like python with +0 for
             # start)
             RNA_DNA = sum(rna_dna[i-6:i+1]) - sum(rna_dna[i-7:i+1])
@@ -5276,7 +5276,12 @@ def candidate_its(ITSs, DNADNAfilter=True):
     You won't be able to test all possible variants. I think you should test all
     possible variants for the first 8;  well, 10 took like 15 minutes. that's
     not too bad. Will be 7 on work computer.
+
+    Update: you have changed the model a bit and need to make new sequences.
     """
+
+    # where the output should be printed
+    outfile = open('output/predicted_seqs', 'wb')
 
     plt.ion()
     par = get_global_params()
@@ -5284,31 +5289,31 @@ def candidate_its(ITSs, DNADNAfilter=True):
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Range of its values
-    max_its = 21
+    max_its = 12
     its_range = range(3, max_its)
 
-    grid_size = 15
+    grid_size = 8
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
     c2 = np.array([0]) # rna-dna to zero
-    c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    c3 = np.linspace(-par['dd_max'], par['dd_max'], grid_size)
+    c4 = np.linspace(-par['eq_max'], par['eq_max'], grid_size)
 
     par_ranges = (c1, c2, c3, c4)
 
     # use the optimal parameters froom the optimization
     # get average from +11 to +15
-    av_range = range(11,16)
-    #av_range = range(10,13)
+    #av_range = range(10,16)
+    av_range = range(10,12)
     opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges,
                                  opt_nucs = av_range)
 
     beg = 'AT'
     N25 = 'ATAAATTTGAGAGAGGAGTT'
 
-    pruning_stop = 10 # stop after this many variations; trim the dataset; continue
-    #pruning_stop = 7
+    #pruning_stop = 10 # stop after this many variations; trim the dataset; continue
+    pruning_stop = 7
     # 5 => 0.4, 6 => 1.9, 7 =>8.9, 8 => 32.8, 9 => 128
     # At work: 7 => 1.95,  8 => 7.2, 9 => 30.1
 
@@ -5317,8 +5322,8 @@ def candidate_its(ITSs, DNADNAfilter=True):
     # batch size (multiprocess in batches)
     batch_size = 300
 
-    its_len = 15 # the ultimate goal
-    #its_len = 12
+    #its_len = 15 # the ultimate goal
+    its_len = 11
 
     # get a dict of some candidate sets
     candidates = get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
@@ -5396,7 +5401,7 @@ def candidate_its(ITSs, DNADNAfilter=True):
 
     DNA_its = [Ec.DNA_DNAenergy(s.sequence[:15]) for s in ITSs]
 
-    save_result(ITSs, for_saving, dna_dna, candidates, opt_par, its_len)
+    save_result(outfile, ITSs, for_saving, dna_dna, candidates, opt_par, its_len)
 
     fig, ax = plt.subplots()
 
@@ -5433,7 +5438,8 @@ def candidate_its(ITSs, DNADNAfilter=True):
 def print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_len):
     """
     DG401-DG406 have been ordered. Where do they fit into the grander scheme of
-    things?
+    things? UPDATE: The DG401-DG406 as well as the DG426 to DG452 have been
+    ordered. You'll need to check all of them.
 
     You will have to re-simulate these sequences and then run conc2py on them.
     Then you can fit them into some of the templates you have already produced.
@@ -5446,8 +5452,11 @@ def print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_le
     """
 
     # make an ITS list of the ITS already ordered
-    ordered_ITS = [ITS(l.split()[1], name=l.split()[0]) for l in
-                   open(ordered_samples, 'rb')]
+    ordered_ITS = []
+    for txt_file in ordered_samples:
+        for line in open(txt_file, 'rb'):
+            ordered_ITS.append(ITS(line.split()[1],
+                                   name=line.split()[0]))
 
     # fake PY values; doesn't matter here
     PYs = np.array([1 for _ in range(len(ordered_ITS))])*0.01
@@ -5460,27 +5469,28 @@ def print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_le
 
     orderd_predPY = RNAP_2_PY(ITSs, final_conc, params=params, its_len=its_len)
 
-    # you must return the information in a dict so you can pick out those ITS
-    # that have actually been ordered.
-
-    ordred_seqs = ['DG401', 'DG402', 'DG403', 'DG404', 'DG405', 'DG406']
+    # I think it's a design flaw that you did not pass the predicted PY onto the
+    # ITS objects. Then you would not need to hope that the order is preserved
+    # throughout.
+    ordred_seqs = [its.name for its in ordered_ITS]
 
     # write 
-    for (os, predPY) in zip(ordred_seqs, orderd_predPY):
+    for (predPY, os) in sorted(zip(orderd_predPY, ordred_seqs)):
         outfile.write('\t'.join([os, str(predPY)]) + '\n')
 
 
-def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
+def save_result(outfile, ITSs, for_saving, dna_dna, candidates, params, its_len):
     """
     Save this output kthnx.
     1 spearmanr nucleotide_distribution
     SEQ PY DNA-DNA
     """
-    outfile = open('output/predicted_seqs', 'wb')
 
     # First, print the predicted PY of the sequences you have already evaluated.
     # this way you can see how they fit into the greater scheme of things
-    ordered_samples = 'output_seqs/seqs_for_testing.txt'
+    ordered_samples = ['output_seqs/second_batch_dg400.txt',
+                       'output_seqs/first_ordered_seqs.txt']
+
     print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_len)
 
     for set_nr, concs_seqs in candidates.items():
@@ -6002,7 +6012,9 @@ def RNAP_2_PY(ITSs, concentrations, params=(20, 0, 0.022, 0.24), its_len=15):
         return  slope*x + intercept
 
     # return the predicted PY values
-    return [predicted_PY(x, slope, intercept) for x in concentrations]
+    pred_PY = [predicted_PY(x, slope, intercept) for x in concentrations]
+
+    return pred_PY
 
 def predicted_vs_measured(ITSs):
     """
@@ -6086,14 +6098,12 @@ def get_global_params():
                      'dd_best': 0.2, # approximately
                      'rd_best': 0.2, # approximately
                      'eq_best': 0.6, # approximately
-                     'alt_rdMin': -0.01,
-                     'alt_rdMax': -1.4,
-                     'dd_min': 0.01,
+                     'dd_min': 0.001,
                      'dd_max': 1.4,
                      'rd_min': 0.001, # this one goes pretty much to zero
                      'rd_max': 1.4,
                      'eq_min': 0.1,
-                     'eq_max': 1.4}
+                     'eq_max': 1.7}
 
     return global_params
 
@@ -6972,7 +6982,7 @@ def main():
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
-    paper_figures(ITSs)
+    #paper_figures(ITSs)
 
     #selection_pressure(ITSs)
 
@@ -6982,7 +6992,7 @@ def main():
     # to confirm.
 
     # XXX Generate candidate sequences! : )
-    #candidate_its(ITSs, DNADNAfilter=False)
+    candidate_its(ITSs, DNADNAfilter=False)
 
     # test method for writing already ordered sequences
     #write_test(ITSs)
