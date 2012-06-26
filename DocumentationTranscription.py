@@ -3952,60 +3952,36 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
     PYs = PYs*100
 
     #rows = [5, 10, 15, 20]
-    # pick the site with highest correlation 
-    max_corr_nuc = list(sorted([(r.corr_max, v) for
-                                (v, r) in results.items()]))[-1][-1]
-    rows = [max_corr_nuc]
+    # pick the nucleotide position with max correlation 
+    maxnuc = list(sorted([(r.corr_max, v) for (v, r) in
+                          results.items()]))[-1][-1]
 
-    if len(rows) > 1:
-        fig, axes = plt.subplots(len(rows), 1, sharey=True)
+    fig, ax = plt.subplots()
+
+    # if you haven't calculated anything, return the empty figure
+    if maxnuc in results:
+        finals = results[maxnuc].finals # you were comparing to PY/100
     else:
-        fig, ax = plt.subplots()
-        axes = [ax]
+        return fig
 
-    # for each row, pick the results 
-    fmts = ['k', 'g', 'b', 'c']
+    ax.scatter(finals, PYs, color= 'k')
 
-    for row_nr, maxnuc in enumerate(rows):
-        name = '1_{0}_scatter_comparison'.format(maxnuc)
+    ax.set_ylabel("Productive yield", size=15)
+    ax.set_xlabel("RNAP concentration at +18".format(maxnuc), size=15)
 
-        if maxnuc in results:
-            finals = results[maxnuc].finals # you were comparing to PY/100
-        else:
-            continue
+    # awkward way of setting the tick sizes
+    for l in ax.get_xticklabels():
+        l.set_fontsize(12)
+        #l.set_fontsize(6)
+    for l in ax.get_yticklabels():
+        l.set_fontsize(12)
+        #l.set_fontsize(6)
 
-        ax = axes[row_nr]
+    fmin, fmax = min(finals), max(finals)
 
-        ax.scatter(finals, PYs, color= fmts[row_nr])
+    scale = (fmax-fmin)*0.2
 
-        corrs = pearsonr(finals, PYs)
-
-        ax.set_ylabel("PY ({0} nt of ITS)".format(maxnuc), size=15)
-
-        if row_nr == 0:
-            #ax.set_xlabel("Abortive propensity", size=20)
-            #header = '{0}\nr = {1:.2f}, p = {2:.1e}'.format(name, corrs[0], corrs[1])
-            header = 'Pearson: r = {1:.2f}, p = {2:.1e}'.\
-                    format(name, corrs[0], corrs[1])
-
-            ax.set_title(header, size=15)
-        else:
-            header = 'r = {0:.2f}, p = {1:.1e}'.format(corrs[0], corrs[1])
-            ax.set_title(header, size=15)
-
-        # awkward way of setting the tick sizes
-        for l in ax.get_xticklabels():
-            l.set_fontsize(12)
-            #l.set_fontsize(6)
-        for l in ax.get_yticklabels():
-            l.set_fontsize(12)
-            #l.set_fontsize(6)
-
-        fmin, fmax = min(finals), max(finals)
-
-        scale = (fmax-fmin)*0.2
-
-        ax.set_xlim(fmin-scale, fmax+scale)
+    ax.set_xlim(fmin-scale, fmax+scale)
 
     return fig
 
@@ -4069,9 +4045,11 @@ def controversy_ladder(resulter, p_line):
 
     colors_params = ['r', 'c', 'm', 'k']
     all_params = ('c1', 'c2', 'c3', 'c4')
+    labels = ['K', 'RNA-DNA', 'DNA-DNA', "3' dinucleotide"]
 
     # assign colors to parameters
     par2col = dict(zip(all_params, colors_params))
+    par2label = dict(zip(all_params, labels))
 
     # take the average of the two p-lines generated
     p_lines = []
@@ -4107,8 +4085,8 @@ def controversy_ladder(resulter, p_line):
 
         # get its_index parameter values (they are index-sorted)
         paramz_best = [r[1].params_best for r in sorted(result.items())]
-        paramz_mean = [r[1].params_mean for r in sorted(result.items())]
-        paramz_std = [r[1].params_std for r in sorted(result.items())]
+        #paramz_mean = [r[1].params_mean for r in sorted(result.items())]
+        #paramz_std = [r[1].params_std for r in sorted(result.items())]
 
         # each parameter should be plotted with its best (solid) and mean
         # (striped) values (mean should have std)
@@ -4116,10 +4094,10 @@ def controversy_ladder(resulter, p_line):
 
             # print the best parameters
             best_par_vals = [d[parameter] for d in paramz_best]
-            side_ax.plot(incrX, best_par_vals, label=parameter, linewidth=2,
-                         color=par2col[parameter])
+            side_ax.plot(incrX, best_par_vals, label=par2label[parameter],
+                         linewidth=2, color=par2col[parameter])
             # mean
-            mean_par_vals = [d[parameter] for d in paramz_mean]
+            #mean_par_vals = [d[parameter] for d in paramz_mean]
 
             # std
             # print the mean and std of the top 20 parameters
@@ -4189,12 +4167,14 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
     colors_params = ['r', 'c', 'm', 'k', 'g']
 
     all_params = ('c1', 'c2', 'c3', 'c4', 'c5')
+    labels = ['K', 'RNA-DNA', 'DNA-DNA', "3' dinucleotide"]
 
     # only plot parameters that are variable 
     plot_params = [p for p, r in zip(all_params, par_ranges) if len(r) > 1]
 
     # assign colors to parameters
     par2col = dict(zip(all_params, colors_params))
+    par2label = dict(zip(all_params, labels))
 
     # go over both the real and random results
     # This loop covers [0][0] and [0][1]
@@ -4211,7 +4191,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
         # check for nan in corr (make it 0)
         corr, pvals = remove_nan(corr, pvals)
 
-        axes[0].plot(incrX, corr, label=name, linewidth=2, color=col_corr.pop())
+        axes[0].plot(incrX, corr, label=name, linewidth=3, color=col_corr.pop())
 
         # interpolate pvalues (x, must increase) with correlation (y) and
         # obtain the correlation for p = 0.05 to plot as a black
@@ -4220,7 +4200,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
             pv, co = zip(*sorted(zip(pvals, corr)))
             f = interpolate(pv, co, k=1)
             axes[0].axhline(y=f(0.05), ls='--', color='r',
-                        label='p = 0.05 threshold', linewidth=2)
+                        label='p = 0.05 threshold', linewidth=3)
 
         # get its_index parameter values (they are index-sorted)
         if name == 'three_param_model':
@@ -4232,8 +4212,8 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
 
                 # print the best parameters
                 best_par_vals = [d[parameter] for d in paramz_best]
-                axes[1].plot(incrX, best_par_vals, label=parameter,
-                                   linewidth=2, color=par2col[parameter])
+                axes[1].plot(incrX, best_par_vals, label=par2label[parameter],
+                                   linewidth=3, color=par2col[parameter])
                 # mean
                 #mean_par_vals = [d[parameter] for d in paramz_mean]
 
@@ -4326,14 +4306,18 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
     if in_axes:
         axes = in_axes
 
-    colors_params = ['r', 'c', 'm', 'k', 'g']
 
+    # assign colors to parameters
+    colors_params = ['r', 'c', 'm', 'k', 'g']
     all_params = ('c1', 'c2', 'c3', 'c4', 'c5')
+    labels = ['K', 'RNA-DNA', 'DNA-DNA', "3' dinucleotide"]
     # only plot parameters that are variable 
+
     plot_params = [p for p, r in zip(all_params, par_ranges) if len(r) > 1]
 
     # assign colors to parameters
     par2col = dict(zip(all_params, colors_params))
+    par2label = dict(zip(all_params, labels))
 
     # go over both the real and random results
     # This loop covers [0][0] and [0][1]
@@ -4370,7 +4354,8 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
             # check for nan in corr (make it 0)
             corr, pvals = remove_nan(corr, pvals)
 
-            axes[ax_nr].plot(incrX, corr, label=name, linewidth=2, color=colr)
+            lab = 'correlation with promoter escape'
+            axes[ax_nr].plot(incrX, corr, label=lab, linewidth=3, color=colr)
 
             # interpolate pvalues (x, must increase) with correlation (y) and
             # obtain the correlation for p = 0.05 to plot as a black
@@ -4380,22 +4365,21 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
                 pv, co = zip(*sorted(zip(pvals, corr)))
                 f = interpolate(pv, co, k=1)
                 axes[ax_nr].axhline(y=f(0.05), ls='--', color='r',
-                            label='p = 0.05 threshold', linewidth=2)
+                            label='p = 0.05 threshold', linewidth=3)
 
         elif name == 'random':
-            axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
+            lab = 'using random sequences'
+            axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=lab, linewidth=2,
                              color=colr)
 
         elif name == 'cross-validated':
-            axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=name, linewidth=2,
+            lab = 'cross-validation'
+            axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=lab, linewidth=2,
                              color=colr)
 
         # skip if you're not printing parametes
-        if not print_params:
-            continue
+        if print_params and name == 'real':
 
-        # get its_index parameter values (they are index-sorted)
-        if name == 'real':
             paramz_best = [r[1].params_best for r in sorted(ddict.items())]
             #paramz_mean = [r[1].params_mean for r in sorted(ddict.items())]
             #paramz_std = [r[1].params_std for r in sorted(ddict.items())]
@@ -4406,8 +4390,9 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
 
                 # print the best parameters
                 best_par_vals = [d[parameter] for d in paramz_best]
-                axes[ax_nr+1].plot(incrX, best_par_vals, label=parameter,
-                                   linewidth=2, color=par2col[parameter])
+                axes[ax_nr+1].plot(incrX, best_par_vals,
+                                   label=par2label[parameter], linewidth=3,
+                                   color=par2col[parameter])
                 # mean
                 #mean_par_vals = [d[parameter] for d in paramz_mean]
 
@@ -4426,7 +4411,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
 
     for ax in axes.flatten():
         # legend
-        #ax.legend(loc='lower left')
+        ax.legend(loc='lower right')
 
         # xticks
         ax.set_xticks(range(3,its_max))
@@ -4439,6 +4424,14 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
             l.set_fontsize(15)
         for l in ax.get_yticklabels():
             l.set_fontsize(15)
+        #axes[0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                  #alpha=0.5)
+        #axes[0].xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                  #alpha=0.5)
+        ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+             alpha=0.5)
+        ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                  alpha=0.5)
 
     axes[0].set_ylabel("Correlation coefficient, $r$", size=23)
 
@@ -4447,11 +4440,9 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
     axes[0].set_yticklabels(yticklabels)
     axes[0].set_ylim(ymin, ymax)
     # you need a grid to see your awsome 0.8 + correlation coefficient
-    axes[0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-              alpha=0.5)
 
     if print_params:
-        axes[1].set_ylabel("Model parameter values", size=23)
+        axes[1].set_ylabel("Parameter value", size=23)
         #axes[1].set_yticks(np.arange(-0.05, 0.5, 0.05))
         #axes[1].set_yticklabels(yticklabels_1)
         #axes[1].set_ylim(-0.05, 0.5)
@@ -4464,7 +4455,8 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
 
 
     # This last part was the title which you don't need in production
-    if testing:
+    # (Remove and False if you ever want to print something like this again)
+    if testing and False:
 
         for_join = []
 
@@ -4815,8 +4807,6 @@ def mini_scrunch(seqs, params, state_nr, y0, multi_range):
     """
 
     RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
-    #minus11_en = -9.95 # 'ATAATAGATTCAT'
-    minus11_en = 0 # 'ATAATAGATTCAT'
 
     py_like = []
 
@@ -4827,9 +4817,8 @@ def mini_scrunch(seqs, params, state_nr, y0, multi_range):
 
         (a, b, c, d) = params
         its_len = state_nr + 1
-        k1 = calculate_k1_difference(minus11_en, RT, its_len,
-                                              keq_delta, dna_dna, rna_dna, a, b,
-                                              c, d)
+        k1 = calculate_k1_difference(RT, its_len, keq_delta, dna_dna, rna_dna,
+                                     a, b, c, d)
         A = equlib_matrix(k1, state_nr)
 
         # time in which to integrate over
@@ -5284,22 +5273,22 @@ def candidate_its(ITSs, DNADNAfilter=True):
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Range of its values
-    max_its = 21
+    max_its = 16
     its_range = range(3, max_its)
 
-    grid_size = 15
+    grid_size = 20
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
     c2 = np.array([0]) # rna-dna to zero
-    c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    c3 = np.linspace(-par['dd_max'], par['dd_max'], grid_size)
+    c4 = np.linspace(-par['eq_max'], par['eq_max'], grid_size)
 
     par_ranges = (c1, c2, c3, c4)
 
     # use the optimal parameters froom the optimization
     # get average from +11 to +15
-    av_range = range(11,16)
+    av_range = range(10,16)
     #av_range = range(10,13)
     opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges,
                                  opt_nucs = av_range)
@@ -5307,8 +5296,8 @@ def candidate_its(ITSs, DNADNAfilter=True):
     beg = 'AT'
     N25 = 'ATAAATTTGAGAGAGGAGTT'
 
-    pruning_stop = 10 # stop after this many variations; trim the dataset; continue
-    #pruning_stop = 7
+    #pruning_stop = 10 # stop after this many variations; trim the dataset; continue
+    pruning_stop = 10
     # 5 => 0.4, 6 => 1.9, 7 =>8.9, 8 => 32.8, 9 => 128
     # At work: 7 => 1.95,  8 => 7.2, 9 => 30.1
 
@@ -5318,7 +5307,7 @@ def candidate_its(ITSs, DNADNAfilter=True):
     batch_size = 300
 
     its_len = 15 # the ultimate goal
-    #its_len = 12
+    #its_len = 13
 
     # get a dict of some candidate sets
     candidates = get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
@@ -5463,11 +5452,11 @@ def print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_le
     # you must return the information in a dict so you can pick out those ITS
     # that have actually been ordered.
 
-    ordred_seqs = ['DG401', 'DG402', 'DG403', 'DG404', 'DG405', 'DG406']
+    names = [its.name for its in ordered_ITS]
 
     # write 
-    for (os, predPY) in zip(ordred_seqs, orderd_predPY):
-        outfile.write('\t'.join([os, str(predPY)]) + '\n')
+    for (predPY, name) in sorted(zip(orderd_predPY, names)):
+        outfile.write('\t'.join([name, str(predPY)]) + '\n')
 
 
 def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
@@ -5480,8 +5469,8 @@ def save_result(ITSs, for_saving, dna_dna, candidates, params, its_len):
 
     # First, print the predicted PY of the sequences you have already evaluated.
     # this way you can see how they fit into the greater scheme of things
-    ordered_samples = 'output_seqs/seqs_for_testing.txt'
-    print_already_ordered_samples(ITSs, outfile, ordered_samples, params, its_len)
+    already_used = 'output_seqs/second_batch_dg400.txt'
+    print_already_ordered_samples(ITSs, outfile, already_used, params, its_len)
 
     for set_nr, concs_seqs in candidates.items():
 
@@ -5549,7 +5538,7 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
     print variable_nr
 
     # get second results
-    batch_size = 200
+    batch_size = 500
 
     state_nr = its_len - 1 # now going full its_len
     y0 = [1] + [0 for i in range(state_nr-1)]
@@ -5559,8 +5548,8 @@ def get_final_candidates(beg, pruning_stop, sample_nr, batch_size,
     beg=False # don't add an AT second time around
 
     second_results = multicore_scrunch_wrap(beg, variable_nr, batch_size,
-                                           arguments, second_pool, DNADNAfilter,
-                                           start_seqs=first_seqs,
+                                            arguments, second_pool,
+                                            DNADNAfilter, start_seqs=first_seqs,
                                             multi_range=av_range)
 
     set_nr = 20 # get 50 final outputs to choose from
@@ -5862,18 +5851,18 @@ def get_optimal_params(PYs, its_range, ITSs, par_ranges,
 
     return optimal_params
 
-def two_param_A(ITSs, testing, p_line, par):
+def three_param_control_A(ITSs, testing, p_line, par):
     """
-    Print two parameter model with grid. Do not show optimization parameters.
+    Print three parameter model with the two controls.
+
+    Question? What parameters to pick? Try the RNA-DNA at +18 and the DNA-DNA at
+    +10? Keq for the average of the two. Lol, they are at 0.5 each.
     """
 
-    # grid size
-    grid_size = 15
     rands = 20 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 10
-        rands = 5
+        rands = 3
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5881,9 +5870,11 @@ def two_param_A(ITSs, testing, p_line, par):
     # Parameter ranges you want to test out
     c1 = np.array([par['K']]) # insensitive to variation here
     #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
-    c2 = np.array([0])
-    c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    #c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
+    #c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    c2 = np.array([0.5])
+    c3 = np.array([-0.5])
+    c4 = np.array([1])
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -5913,12 +5904,9 @@ def two_param_A(ITSs, testing, p_line, par):
 
     return fig_lad, fig_sct
 
-def two_param_AB(ITSs, testing, p_line, par):
+def three_param_AB(ITSs, testing, p_line, par):
     """
-    Print two parameter model with grid. Do not show optimization parameters.
-
-    After the conceptual change, DD is still better than RD in a two-parameter
-    model. Thank god.
+    Print three parameter model with parameter estimation values.
     """
 
     # grid size
@@ -5926,19 +5914,15 @@ def two_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 15
+        grid_size = 5
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Parameter ranges you want to test out
     c1 = np.array([par['K']]) # insensitive to variation here
-    #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
-    c2 = np.array([0])
-    #c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    c3 = -np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    #c3 = np.array([0])
-    #c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
+    c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size)
     c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
 
     par_ranges = (c1, c2, c3, c4)
@@ -6086,14 +6070,12 @@ def get_global_params():
                      'dd_best': 0.2, # approximately
                      'rd_best': 0.2, # approximately
                      'eq_best': 0.6, # approximately
-                     'alt_rdMin': -0.01,
-                     'alt_rdMax': -1.4,
-                     'dd_min': 0.01,
+                     'dd_min': 0.001,
                      'dd_max': 1.4,
                      'rd_min': 0.001, # this one goes pretty much to zero
                      'rd_max': 1.4,
                      'eq_min': 0.1,
-                     'eq_max': 1.4}
+                     'eq_max': 1.7}
 
     return global_params
 
@@ -6119,6 +6101,10 @@ def paper_figures(ITSs):
     organism and not with a scaffold? You have to do exp(-f(x)) to compensate
     for the changes you have wrought.
 
+    Update again: you have found that the slight reduction in correlation output
+    is not too bad. As a bonus you got the RNA-DNA hybrid kicking in after +13;
+    possibly affecting the productive yield values a bit.
+
     """
     testing = True  # if testing, run everything fast
     #testing = False
@@ -6140,24 +6126,25 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Two-parameter model with parameter estimation but no
     #cross-reference
-    #ladder_name = 'two_param_model_AB' + append
-    #scatter_name = 'two_param_14_scatter' + append
-    #fig_ladder, fig_scatter = two_param_AB(ITSs, testing, p_line, global_params)
+    #ladder_name = 'three_param_model_AB' + append
+    #scatter_name = 'three_param_14_scatter' + append
+    #fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
 
     #figs.append((fig_ladder, ladder_name))
     #figs.append((fig_scatter, scatter_name))
 
-    ### Figure 2.5 -> Two-parameter model with cross-reference but no parameter
-    ##estimation plot
-    #ladder_nog_name = 'two_param_A' + append
-    #fig_nog_ladder, fig_nog_scatter = two_param_A(ITSs, testing, p_line,
-                                                  #global_params)
-    #figs.append((fig_nog_ladder, ladder_nog_name))
+    ### Figure 2.5 -> Three-parameter model with cross-reference but no parameter
+    #estimation plot
+    ladder_nog_name = 'three_param_control_A' + append
+    fig_nog_ladder, fig_nog_scatter = three_param_control_A(ITSs, testing,
+                                                            p_line,
+                                                            global_params)
+    figs.append((fig_nog_ladder, ladder_nog_name))
 
     ### Figure 2.7 -> Compare two and three parameter models
-    compare_name = 'compare_two_three_AB' + append
-    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    figs.append((fig_controversy, compare_name))
+    #compare_name = 'compare_two_three_AB' + append
+    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    #figs.append((fig_controversy, compare_name))
 
     #### Figure 3 -> Optimal model model XXX Obsolete?
     #fixed_lad_name = 'Optimal_model' + append
