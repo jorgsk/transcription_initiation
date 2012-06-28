@@ -4309,7 +4309,6 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
     if in_axes:
         axes = in_axes
 
-
     # assign colors to parameters
     colors_params = ['r', 'c', 'm', 'k', 'g']
     all_params = ('c1', 'c2', 'c3', 'c4', 'c5')
@@ -4488,7 +4487,8 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
     return fig, axes
 
 
-def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0):
+def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
+                   normal=True):
     """
     Wrapper around grid_scrunch and opt_scrunch.
     """
@@ -4509,9 +4509,10 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0):
         y0 = [1] + [0 for i in range(state_nr-1)]
 
         # get the 'normal' results
-        normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr)
-
-        results[its_len] = normal_obj
+        if normal:
+            normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr)
+        else:
+            normal_obj = False
 
         # Randomize
         if randize:
@@ -4528,6 +4529,7 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0):
         else:
             retrof_obj = False
 
+        results[its_len] = normal_obj
         results_retrof[its_len] = retrof_obj
         results_random[its_len] = random_obj
 
@@ -4597,11 +4599,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
             if not fit_result:
                 continue
 
-            # update the ranges to the optimal for the fitting
-            if len(ranges) == 5:
-                par_order = ('c1', 'c2', 'c3', 'c4', 'c5')
-            else:
-                par_order = ('c1', 'c2', 'c3', 'c4')
+            par_order = ('c1', 'c2', 'c3', 'c4')
 
             fit_ranges = [np.array([fit_result.params_best[p]])
                           for p in par_order]
@@ -4620,6 +4618,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
             else:
                 retro_results.append(control_result)
 
+        # average the results (keeping mean and std) and return 
         return average_rand_result(retro_results)
 
     # RANDOMIZE
@@ -4656,30 +4655,21 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
         return grid_scrunch(arguments, ranges)
 
 def average_rand_result(rand_results):
-    """make new corr, pvals, and params; just add them together; ignore the
-    #finals
-
-    # Here you must think anew. What do you want to show for the randomized
-    # values in the final plot? There are, say, 10 random versions. At each
-    # randomization, I pick the one with max correlation. I disregard the 20
-    # best; just keep the max.
-    #
-
-    # For the parameters I want to show the average and std of those parameters
-    # that were used to obtain the 'best' correlation coefficients.
-
-    # What do I get in? Is it the same for the grid and the optimized? No, it's
-    # not. For the Grid you get the 20 best.
+    """
+    Keep only the top scores for each of the results in the sample. Those top
+    scores will then be used to make a new object with the average and std of
+    those scores. That object is then returned. This makes these objects
+    different from the 'normal' result objects, where the std and mean are
+    from sub-optimal results.
     """
 
     new_corr, new_pvals, new_params = [], [], {'c1':[], 'c2':[],
                                                'c3':[], 'c4':[]}
 
     # Add the values from the X random versions
-    # You don't want all 20, you just want the best ones
 
-    # check if 
-
+    # You don't want all 20 saved outcomes from each random version, you just
+    # want the best ones
     for res_obj in rand_results:
         # check if this is a NaN object; skip it
         if res_obj.corr is np.nan:
@@ -4696,7 +4686,9 @@ def average_rand_result(rand_results):
         return Result()
     else:
         # make a new result object
-        return Result(new_corr, new_pvals, new_params, res_obj.finals)
+        new_res = Result(new_corr, new_pvals, new_params, res_obj.finals)
+
+        return new_res
 
 def grid_scrunch(arguments, ranges):
     """
@@ -5868,30 +5860,33 @@ def three_param_control_A(ITSs, testing, p_line, par):
 
     Question? What parameters to pick? Try the RNA-DNA at +18 and the DNA-DNA at
     +10? Keq for the average of the two. Lol, they are at 0.5 each.
+
+    TODO OK, 1 thing is that you want to have the controls in plot A. But I also
+    want to have controls in plot B! For this plot, I need no rands. The easiest
+    way will be to remove the axes of plot B, and add a new axes with the new
+    figure you have made. The question remains; do I save this information? I
+    believe I do.
     """
 
     rands = 20 # for cross-validating and random sequences
 
     if testing:
-        rands = 3
+        rands = 1
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Parameter ranges you want to test out
     c1 = np.array([par['K']]) # insensitive to variation here
-    #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
-    #c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    #c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
     c2 = np.array([0.5])
     c3 = np.array([-0.5])
     c4 = np.array([1])
 
     par_ranges = (c1, c2, c3, c4)
 
-    its_max = 21
-    #if testing:
-        #its_max = 16
+    #its_max = 21
+    if testing:
+        its_max = 16
 
     its_range = range(3, its_max)
 
@@ -5908,12 +5903,102 @@ def three_param_control_A(ITSs, testing, p_line, par):
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, randomize,
                                            par_ranges, p_line, its_max, ymin,
-                                           ymax, testing, print_params=False)
+                                           ymax, testing, print_params=True)
 
-    fig_sct = print_scrunch_scatter(results, rand_results, randomize,
-                                    par_ranges, PYs)
+    # clear the parameter axis -- you will add a new axis
+    ax_lad[1].cla()
 
-    return fig_lad, fig_sct
+    # calculate a new plot B
+    grid_size = 15
+
+    if testing:
+        grid_size = 10
+
+    if testing:
+        rands = 5
+
+    # Parameter ranges you want to test out
+    c1 = np.array([par['K']]) # insensitive to variation here
+    c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
+    c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size)
+    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+
+    par_ranges = (c1, c2, c3, c4)
+
+    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
+                                 randize=0, retrofit=rands, normal=False)
+
+    # Add the new ax-2 to ax_lad
+    new_ax_two(ax_lad, all_results, its_max, par_ranges)
+
+
+    return fig_lad, False
+
+def new_ax_two(ax_lad, all_results, its_max, par_ranges):
+    """
+    Add a plot with error-bars on parameter values. You modify an incoming
+    object (ax_lad) so you don't need to return anything.
+    """
+
+    results, rand_results, retrof_results = all_results
+
+    incrX = range(3, its_max)
+
+    # assign colors to parameters
+    colors_params = ['r', 'c', 'm', 'k', 'g']
+    all_params = ('c1', 'c2', 'c3', 'c4', 'c5')
+    labels = ['K', 'RNA-DNA', 'DNA-DNA', "3' dinucleotide"]
+    # only plot parameters that are variable 
+
+    plot_params = [p for p, r in zip(all_params, par_ranges) if len(r) > 1]
+
+    # assign colors to parameters
+    par2col = dict(zip(all_params, colors_params))
+    par2label = dict(zip(all_params, labels))
+
+    paramz_mean = [r[1].params_mean for r in sorted(retrof_results.items())]
+    paramz_std = [r[1].params_std for r in sorted(retrof_results.items())]
+
+    # each parameter should be plotted with its best (solid) and mean
+    # (striped) values (mean should have std)
+    ax = ax_lad[1]
+
+    for parameter in plot_params:
+
+        #print the mean and std of the top 20 parameters
+        mean_par_vals = [d[parameter] for d in paramz_mean]
+        std_par_vals = [d[parameter] for d in paramz_std]
+
+        # make the error bar plot
+        ax.errorbar(incrX, mean_par_vals, yerr=std_par_vals,
+                           label=par2label[parameter], color=par2col[parameter],
+                           linestyle='--')
+
+    # Set the axes accessories
+
+    # legend
+    ax.legend(loc='lower right')
+
+    # xticks
+    xticklabels = [str(integer) for integer in range(3, its_max)]
+    ax.set_xticks(range(3,its_max))
+    ax.set_xticklabels(xticklabels)
+    ax.set_xlim(3,its_max)
+    ax.set_xlabel("Nucleotide from transcription start", size=23)
+
+    # awkward way of setting the tick font sizes
+    for l in ax.get_xticklabels():
+        l.set_fontsize(15)
+    for l in ax.get_yticklabels():
+        l.set_fontsize(15)
+    ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+         alpha=0.5)
+    ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+              alpha=0.5)
+
+    # Add a B
+    ax.text(0.03, 0.97, 'B', transform=ax.transAxes, fontsize=26,
+            fontweight='bold', va='top')
 
 def three_param_AB(ITSs, testing, p_line, par):
     """
@@ -6118,6 +6203,8 @@ def paper_figures(ITSs):
     is not too bad. As a bonus you got the RNA-DNA hybrid kicking in after +13;
     possibly affecting the productive yield values a bit.
 
+    IDEA: make standard deviations for the parameters as well! :)
+
     """
     testing = True  # if testing, run everything fast
     #testing = False
@@ -6146,9 +6233,9 @@ def paper_figures(ITSs):
     #figs.append((fig_ladder, ladder_name))
     #figs.append((fig_scatter, scatter_name))
 
-    ### Figure 2.5 -> Three-parameter model with cross-reference but no parameter
+    ### Figure 2.5 -> Three-parameter model with controls 
     #estimation plot
-    ladder_nog_name = 'three_param_control_A' + append
+    ladder_nog_name = 'three_param_control_AB' + append
     fig_nog_ladder, fig_nog_scatter = three_param_control_A(ITSs, testing,
                                                             p_line,
                                                             global_params)
@@ -6972,7 +7059,7 @@ def main():
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
-    #paper_figures(ITSs)
+    paper_figures(ITSs)
 
     #selection_pressure(ITSs)
 
@@ -6982,7 +7069,7 @@ def main():
     # to confirm.
 
     # XXX Generate candidate sequences! : )
-    candidate_its(ITSs, DNADNAfilter=False)
+    #candidate_its(ITSs, DNADNAfilter=False)
 
     # test method for writing already ordered sequences
     #write_test(ITSs)
