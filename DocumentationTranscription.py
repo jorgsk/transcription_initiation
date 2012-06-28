@@ -5871,7 +5871,7 @@ def three_param_control_A(ITSs, testing, p_line, par):
     rands = 20 # for cross-validating and random sequences
 
     if testing:
-        rands = 1
+        rands = 10
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -5884,9 +5884,9 @@ def three_param_control_A(ITSs, testing, p_line, par):
 
     par_ranges = (c1, c2, c3, c4)
 
-    #its_max = 21
-    if testing:
-        its_max = 16
+    its_max = 21
+    #if testing:
+        #its_max = 16
 
     its_range = range(3, its_max)
 
@@ -5912,10 +5912,7 @@ def three_param_control_A(ITSs, testing, p_line, par):
     grid_size = 15
 
     if testing:
-        grid_size = 10
-
-    if testing:
-        rands = 5
+        grid_size = 12
 
     # Parameter ranges you want to test out
     c1 = np.array([par['K']]) # insensitive to variation here
@@ -5926,7 +5923,7 @@ def three_param_control_A(ITSs, testing, p_line, par):
     par_ranges = (c1, c2, c3, c4)
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
-                                 randize=0, retrofit=rands, normal=False)
+                                 randize=0, retrofit=rands)
 
     # Add the new ax-2 to ax_lad
     new_ax_two(ax_lad, all_results, its_max, par_ranges)
@@ -5956,6 +5953,10 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges):
     par2col = dict(zip(all_params, colors_params))
     par2label = dict(zip(all_params, labels))
 
+    # extract the optimal parameters
+    paramz_best = [r[1].params_best for r in sorted(results.items())]
+
+    # extract the mean and std of the best cross-validated runs
     paramz_mean = [r[1].params_mean for r in sorted(retrof_results.items())]
     paramz_std = [r[1].params_std for r in sorted(retrof_results.items())]
 
@@ -5971,10 +5972,13 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges):
 
         # make the error bar plot
         ax.errorbar(incrX, mean_par_vals, yerr=std_par_vals,
-                           label=par2label[parameter], color=par2col[parameter],
-                           linestyle='--')
+                    color=par2col[parameter], linestyle='--')
 
-    # Set the axes accessories
+        # print the best unz too
+        best_par_vals = [d[parameter] for d in paramz_best]
+
+        ax.plot(incrX, best_par_vals, label=par2label[parameter],
+                     linewidth=2, color=par2col[parameter])
 
     # legend
     ax.legend(loc='lower right')
@@ -6235,16 +6239,16 @@ def paper_figures(ITSs):
 
     ### Figure 2.5 -> Three-parameter model with controls 
     #estimation plot
-    ladder_nog_name = 'three_param_control_AB' + append
-    fig_nog_ladder, fig_nog_scatter = three_param_control_A(ITSs, testing,
-                                                            p_line,
-                                                            global_params)
-    figs.append((fig_nog_ladder, ladder_nog_name))
+    #ladder_nog_name = 'three_param_control_AB' + append
+    #fig_nog_ladder, fig_nog_scatter = three_param_control_A(ITSs, testing,
+                                                            #p_line,
+                                                            #global_params)
+    #figs.append((fig_nog_ladder, ladder_nog_name))
 
     ### Figure 2.7 -> Compare two and three parameter models
-    #compare_name = 'compare_two_three_AB' + append
-    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    #figs.append((fig_controversy, compare_name))
+    compare_name = 'compare_two_three_AB' + append
+    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    figs.append((fig_controversy, compare_name))
 
     #### Figure 3 -> Optimal model model XXX Obsolete?
     #fixed_lad_name = 'Optimal_model' + append
@@ -6357,16 +6361,10 @@ def full_positive_RNADNA(ITSs, testing, p_line, global_params):
 
 def compare_two_three(ITSs, testing, p_line, par):
     """
-    Plot A: two-parameter and three-parameter models correlations compared.
-    Plot B: three-parameter model parameter plot
+    Plot A: two-parameter without RNA-DNA
+    Plot B: two-parameter without DNA-DNA
 
-
-    Results. With the new model, keq and rna-dna are positive. dna-dna is
-    negative in sign. That means that ultimately (multiplying with -1):
-
-    exp(-keq), exp(-rna-dna), exp(dna-dna)
-
-    The exponential tages negative values to zero and positive values to + inf
+    Shows the effect of leaving out either of these two components in the model.
 
     What does this mean?
     exp(dna-dna): GC-rich -> low rate. AT-rich -> high rate
@@ -6395,36 +6393,29 @@ def compare_two_three(ITSs, testing, p_line, par):
     grid_size = 10
 
     if testing:
-        grid_size = 10
+        grid_size = 3
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
     c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
     c3 = -np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    c4 = -np.linspace(par['eq_min'], par['eq_max']+1, grid_size)
-    #c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
-    #c3 = np.linspace(-par['dd_max'], par['dd_max'], grid_size)
-    #c4 = np.linspace(-par['eq_max'], par['eq_max'], grid_size)
-    #c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
-    #c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    #c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
 
     # define the ranges for the two minimal models
     three_param = (c1, c2, c3, c4)
-    two_param = (c1, np.array([0]), c3, c4)
-    #two_param = (c1, c2, np.array([0]), c4) # trying out rna-dna and transloc as
-    #the two-parameter model
-    # RESULT since rna-dna is zero, it doesn't contribute. Now RNA-DNA improves
-    # the result a lot after +14, but only if it is allowed to be negative! :S
+    two_param_A = (c1, np.array([0]), c3, c4)
+    two_param_B = (c1, c2, np.array([0]), c4)
 
     # use the optimal parameters from the optimization
     # XXX at the moment you will use the 
     #two = get_optimal_params(PYs, its_range, ITSs, two_param, optim, t)
-    name2 = 'two_param_model'
+    name2A = 'Model lacking RNA-DNA hybrid'
+    name2B = 'Model lacking DNA-DNA bubble'
     #three = get_optimal_params(PYs, its_range, ITSs, three_param, optim, t)
-    name3 = 'three_param_model'
+    name3 = 'Full model'
 
-    collection = [(two_param, name2), (three_param, name3)]
+    collection = [(two_param_A, name2A), (two_param_B, name2B),
+                  (three_param, name3)]
 
     # collect the results
     resulter = {}
@@ -6444,13 +6435,84 @@ def compare_two_three(ITSs, testing, p_line, par):
     ymax = 0.9 # correlation is always high
     randomize = control # you didn't randomize
 
-    fig_lad, ax_lad = print_scrunch_ladder_compare(resulter, rand_results,
-                                                   retrof_results, randomize,
-                                                   par_ranges, p_line, its_max,
-                                                   ymin, ymax, testing,
-                                                   print_params=True)
+    fig, axes = plt.subplots(1,2)
+    combos = [(name3, name2A), (name3, name2B)]
 
-    return fig_lad
+    # plot them 
+    for ax_nr, combo in enumerate(combos):
+        ax = axes[ax_nr]
+        compare_plot(ax, ax_nr, combo, resulter, its_max, par_ranges, p_line,
+                     ymin, ymax)
+
+    fig.set_figwidth(20)
+    fig.set_figheight(10)
+
+    return fig
+
+def compare_plot(ax, ax_nr, combo, resulter, its_max, par_ranges, p_line, ymin,
+                 ymax):
+    """
+    Plot on top of each other the two ladder plots.
+    """
+
+    col_corr = ['b', 'g']
+    for name in combo:
+        result_dict = resulter[name]
+
+        # get its_index andecorr-coeff from sorted dict
+        indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_min)
+                           for r in sorted(result_dict.items())])
+
+        # make x-axis
+        incrX = range(indx[0], indx[-1]+1)
+
+        # check for nan in corr (make it 0)
+        corr, pvals = remove_nan(corr, pvals)
+        ax.plot(incrX, corr, label=name, linewidth=3, color=col_corr.pop())
+
+        # interpolate pvalues (x, must increase) with correlation (y) and
+        # obtain the correlation for p = 0.05 to plot as a black
+        if p_line and name == 'three_param_model':
+            # hack to get pvals and corr coeffs sorted
+            pv, co = zip(*sorted(zip(pvals, corr)))
+            f = interpolate(pv, co, k=1)
+            ax.axhline(y=f(0.05), ls='--', color='r',
+                       label='p = 0.05 threshold', linewidth=3)
+
+    xticklabels = [str(integer) for integer in range(3, its_max)]
+    #Make sure ymin has only one value behind the comma
+    ymin = float(format(ymin, '.1f'))
+    yticklabels = [format(i ,'.1f') for i in np.arange(ymin, 1.1, 0.1)]
+
+    # legend
+    ax.legend(loc='lower left')
+
+    # xticks
+    ax.set_xticks(range(3,its_max))
+    ax.set_xticklabels(xticklabels)
+    ax.set_xlim(3,its_max)
+    ax.set_xlabel("Nucleotide from transcription start", size=23)
+
+    # awkward way of setting the tick font sizes
+    for l in ax.get_xticklabels():
+        l.set_fontsize(15)
+    for l in ax.get_yticklabels():
+        l.set_fontsize(15)
+
+    ax.set_ylabel("Correlation coefficient, $r$", size=23)
+
+    ax.set_yticks(np.arange(ymin, 1.1, 0.1))
+    ax.set_yticklabels(yticklabels)
+    ax.set_ylim(ymin, ymax)
+    ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+              alpha=0.5)
+    ax.set_ylabel("Model parameter values", size=23)
+
+    for i, label in enumerate(('A', 'B')):
+        if i == ax_nr:
+            ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=26,
+                    fontweight='bold', va='top')
+
 
 def positive_RNADNA(ITSs, testing, p_line, par):
     """
