@@ -6246,9 +6246,9 @@ def paper_figures(ITSs):
     #figs.append((fig_nog_ladder, ladder_nog_name))
 
     ### Figure 2.7 -> Compare two and three parameter models
-    compare_name = 'compare_two_three_AB' + append
-    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    figs.append((fig_controversy, compare_name))
+    #compare_name = 'compare_two_three_AB' + append
+    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    #figs.append((fig_controversy, compare_name))
 
     #### Figure 3 -> Optimal model model XXX Obsolete?
     #fixed_lad_name = 'Optimal_model' + append
@@ -6262,8 +6262,13 @@ def paper_figures(ITSs):
     #figs.append((fig_predicted, predicted_name))
 
     ### Figure 5 -> Selection pressures
-    #predicted_name = 'Selection_pressure' + append
-    #fig_predicted = selection_pressure(ITSs)
+    predicted_name = 'Selection_pressure' + append
+    fig_predicted = selection_pressure(ITSs)
+    figs.append((fig_predicted, predicted_name))
+
+    ### Figure 5.5 -> Selection pressures ITS-style
+    #predicted_name = 'ITS_centrict_selection' + append
+    #fig_predicted = ITS_centric_selection(ITSs)
     #figs.append((fig_predicted, predicted_name))
 
     ### Figure 6 -> Model family
@@ -6582,6 +6587,86 @@ def positive_RNADNA(ITSs, testing, p_line, par):
 
     return fig
 
+def ITS_centric_selection(ITSs):
+    """
+    The nucleotide distribution in the ITSs is not uniform. Calculate the
+    energies for each dinucleotide from +1 to +20 for the 43 ITS and for all the
+    E coli ITS.
+
+    The result is that you don't really see any kind of selection in the 43
+    compared to WT e coli. Maybe that needs to go from your paper. Check the
+    previous distributions again this time by removing the three first?
+    """
+
+    # Get the DNA-DNA, translocation, and RNA-RNA energies for the first 10
+    # nucleotides. Then obtain the distribution from completely random DNA.
+    # Do it for the first 10 and then for the second 10
+
+    # Mandatory AT start
+    DD = []
+    RD = []
+    TR = []
+    # Sum the energies of each dinucleotide for all 43 ITS variants
+    # DD[0] will be the sum of DNA-DNA energies of the first dinucleotide
+    for i in range(0,20):
+        dna_ens = [Ec.DNA_DNAenergy(its.sequence[i:i+2]) for its in ITSs]
+        rdna_ens = [Ec.RNA_DNAenergy(its.sequence[i:i+2]) for its in ITSs]
+        tr_ens = [Ec.Delta_trans(its.sequence[i:i+2]) for its in ITSs]
+
+        DD.append(sum(dna_ens)/len(dna_ens))
+        RD.append(sum(rdna_ens)/len(rdna_ens))
+        TR.append(sum(tr_ens)/len(tr_ens))
+
+
+    # Do the same but for the native e coli ITS
+    DD_native = []
+    RD_native = []
+    TR_native = []
+
+    its_native = get_ecoli_ITS(sigma70=True, one_promoter=False, min50UTR=True,
+                              ITS_len=20)
+    for i in range(0,20):
+        dna_ens = [Ec.DNA_DNAenergy(its[i:i+2]) for its in its_native]
+        rdna_ens = [Ec.RNA_DNAenergy(its[i:i+2]) for its in its_native]
+        tr_ens = [Ec.Delta_trans(its[i:i+2]) for its in its_native]
+
+        DD_native.append(sum(dna_ens)/len(dna_ens))
+        RD_native.append(sum(rdna_ens)/len(rdna_ens))
+        TR_native.append(sum(tr_ens)/len(tr_ens))
+
+    fig, axes = plt.subplots(nrows=3, ncols=1)
+
+    # prepare the energies in a logical way
+    its_e = [DD, RD, TR]
+    ecoli_e = [DD_native, RD_native, TR_native]
+
+    ylabels = ['DNA-DNA', 'RNA-DNA', 'Translocation']
+
+    for row_nr in range(3):
+
+        ax = axes[row_nr]
+
+        the_43_y = np.abs(its_e[row_nr]) # absolute value
+        wt_y = np.abs(ecoli_e[row_nr])
+
+        ylabel = ylabels[row_nr]
+
+        nr_elements = len(wt_y)
+
+        step = 1.5
+        # position of the_43
+        the_43_x = np.arange(0.5, step*(nr_elements), step)
+        wt_x = np.arange(1, step*(nr_elements)+0.5, step)
+
+        ax.bar(the_43_x, the_43_y, width=0.5, color='g')
+        ax.bar(wt_x, wt_y, width=0.5, color='b')
+
+        ax.set_ylabel(ylabel)
+
+        ax.set_xticklabels(range(1,21))
+
+    return fig
+
 def selection_pressure(ITSs):
     """
     The nucleotide distribution in the ITSs is not uniform. What has caused the
@@ -6606,9 +6691,9 @@ def selection_pressure(ITSs):
     # Do it for the first 10 and then for the second 10
 
     # Mandatory AT start
-    DD15 = [Ec.DNA_DNAenergy(i.sequence[:15]) for i in ITSs]
-    RR15 = [Ec.RNA_DNAenergy(i.sequence[:15]) for i in ITSs]
-    TR15 = [Ec.Delta_trans(i.sequence[:15]) for i in ITSs]
+    DD15 = [Ec.DNA_DNAenergy(i.sequence[3:15]) for i in ITSs]
+    RR15 = [Ec.RNA_DNAenergy(i.sequence[3:15]) for i in ITSs]
+    TR15 = [Ec.Delta_trans(i.sequence[3:15]) for i in ITSs]
 
     # Generate 100000 random DNA of length 10 and calculate the above energies
     # WITH AT START
@@ -6624,11 +6709,11 @@ def selection_pressure(ITSs):
     its_native = get_ecoli_ITS(sigma70=True, one_promoter=False, min50UTR=True)
 
     for its in its_native:
-        eDD15.append(Ec.DNA_DNAenergy(its))
-        eRR15.append(Ec.RNA_DNAenergy(its))
-        eTR15.append(Ec.Delta_trans(its))
+        eDD15.append(Ec.DNA_DNAenergy(its[3:]))
+        eRR15.append(Ec.RNA_DNAenergy(its[3:]))
+        eTR15.append(Ec.Delta_trans(its[3:]))
 
-    for random_dna in ITS_generator(10000, length=15, ATstart=False):
+    for random_dna in ITS_generator(10000, length=12, ATstart=False):
         rDD15.append(Ec.DNA_DNAenergy(random_dna))
         rRR15.append(Ec.RNA_DNAenergy(random_dna))
         rTR15.append(Ec.Delta_trans(random_dna))
