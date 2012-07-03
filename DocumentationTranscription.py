@@ -4900,6 +4900,7 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
         KEQ = keq[i]
 
         #DNA_DNA = sum(dna_dna[:i+1+1]) - sum(dna_dna[:i+1]) #+1 for python
+        #DNA_DNA = sum(dna_dna[:i+1]) # proving a point ...
         DNA_DNA = dna_dna[i+1] # the difference is the same as the last element
 
         # index 7 is the same as x_10. k[7] is for x_10
@@ -6014,7 +6015,7 @@ def three_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 5
+        grid_size = 10
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -7195,8 +7196,151 @@ def write_test(ITSs):
     # close file
     outfile.close()
 
+def up_hill_vs_elongation(ITSs):
+    """
+    Show that there is a cumulative effect here compared to elongation
+    """
+    first_its = ITSs[0]
+
+    up_hill_en = [sum(first_its.dna_dna_di[1:i]) for i in range(2,21)]
+
+    pre_tss_seq = 'AGCATGCATGCTAGATG'
+
+    pre_en = [Ec.NNDD[pre_tss_seq[i:i+2]] for i in range(len(pre_tss_seq)-2)]
+
+    join_en = pre_en + first_its.dna_dna_di
+
+    elongation_dna_dna = [sum(join_en[i+1:i+15]) - sum(join_en[i:i+14]) for i in
+                     range(2,21)]
+
+    elongation_en = [sum(elongation_dna_dna[1:i]) for i in range(2,21)]
+
+    fig, [ax, ax2, ax3] = plt.subplots(1,3)
+
+    its_X = range(2,21)
+
+    ax.plot(its_X, up_hill_en, label='"Up hill" model, added', color='g', lw=3)
+    ax.plot(its_X, elongation_en, label='Transcription elongation, added', lw=3)
+
+    ax.set_xlabel("Position of the ITS", size=20)
+    ax.set_ylabel("DNA bubble free energy change", size=20)
+
+    ax.legend(loc='lower left')
+
+    # Plot the up-hill versus cumulative at each point
+    model_en = first_its.dna_dna_di[1:20]
+    cumul_en = [sum(first_its.dna_dna_di[:i]) for i in range(1,20)]
+
+    ax2.plot(its_X, model_en, label='"Up hill" at each point', color='g', lw=3)
+    ax2.plot(its_X, cumul_en, label='"Cumulative" at each point', lw=3)
+
+    ax2.legend(loc='lower left')
+    ax2.set_xlabel("Position of the ITS", size=20)
+    ax2.set_ylabel("DNA bubble free energy change", size=20)
+
+    # Plot the % of increase at each point
+    norm_model = [100*abs((abs(model_en[i+1]) - abs(model_en[i]))/abs(model_en[i]))
+                  for i in range(18)]
+
+    # Add the from -11 thing
+    norm_cumul = [100*abs((abs(cumul_en[i+1]) - abs(cumul_en[i]))/abs(cumul_en[i]))
+                  for i in range(18)]
+
+    its_X = range(3,21)
+
+    ax3.plot(its_X, norm_model, label='"Up hill" at each point', color='g', lw=3)
+    ax3.plot(its_X, norm_cumul, label='"Cumulative" at each point', lw=3)
+
+    ax3.set_xlabel("Position of the ITS", size=20)
+    ax3.set_ylabel("Percentage change at each nucleotide", size=20)
+
+    ax3.legend(loc='upper left')
+
+    for axx in [ax, ax2, ax3]:
+
+        axx.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                  alpha=0.8)
+        axx.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                  alpha=0.8)
+
+    return fig
+
+def uphill_vs_cumulative(ITSs):
+    """
+    Compare the current, 'up hill' model versus the cumulative model.
+
+    Can you show that the information contained in both is identical? Normalize
+    both values to 1 and you will see the same ups and downs. A problem with
+    cumulative is that the % of change decreases. This means that each
+    nucleotide has comparatively less and less to say for the matter.
+    """
+
+    #testing = False
+    testing = True
+    p_line = True
+    global_params = get_global_params()
+
+    fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
+
+def no_dnadna(ITSs):
+    """
+    There is no correlation between DNADNA energy at +10, +15, and +20 and PY.
+    """
+
+    fig, axes = plt.subplots(1,3)
+
+    PYs = [its.PY for its in ITSs]
+
+    for plt_nr, pos in enumerate([10, 15, 20]):
+
+        DNA_en = [sum(its.dna_dna_di[:pos]) for its in ITSs]
+
+        ax = axes[plt_nr]
+
+        ax.scatter(DNA_en, PYs)
+
+        ax.set_xlabel('Cumulative DNA-DNA energy up to +{0}'.format(pos))
+
+        corr, p = pearsonr(DNA_en, PYs)
+        ax.set_title('Correlation {0:.2f}, p-value {1:.3f}\n'.format(corr, p))
+
+    axes[0].set_ylabel('PY')
+
+    return fig
+
+
+def third_report_figures(ITSs):
+    """
+    Make the 4-5 plots which you think argue your case.
+    """
+
+    the_figs = []
+
+    #1) Cumulative increase in DNA-DNA energy compared to elongation
+    # The cumulative term is not used in each step -- but the initiation complex
+    # has suffered an uphill battle against -17 dG at +15 
+    #name = 'uphill_elongation'
+    #fig = up_hill_vs_elongation(ITSs)
+    #the_figs.append((name, fig))
+    #plt.show()
+
+    #2) Model output comparing the two methods of calculating DNA-DNA energy 
+    # Upper plot is 'current, 'up hill'' model, lower plot is cumulative energy.
+    # Maybe show in a table the DNADNA contribution at each step?
+    # XXX you did this manually.
+    #name = 'uphill_vs_cumulative'
+    #fig = uphill_vs_cumulative(ITSs)
+
+    #3) Absence between correlation of DNA-DNA at +10, +15, and +20 for the PY
+    #name = 'no_dnadna_correlation'
+    #fig = no_dnadna(ITSs)
+    #the_figs.append((name, fig))
+
+
 def main():
     ITSs = ReadAndFixData() # read raw data
+
+    third_report_figures(ITSs)
 
     #print np.median([i.msat for i in ITSs])
     #debug()
@@ -7206,7 +7350,7 @@ def main():
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
-    paper_figures(ITSs)
+    #paper_figures(ITSs)
 
     #selection_pressure(ITSs)
 
