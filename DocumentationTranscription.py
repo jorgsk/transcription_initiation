@@ -1939,7 +1939,6 @@ def get_expression(expr_path):
 
     return dpkms
 
-
 def reverseComplement(sequence):
     complement = {'A':'T','C':'G','G':'C','T':'A','N':'N'}
     return "".join([complement[nt] for nt in sequence[::-1]])
@@ -5277,7 +5276,7 @@ def candidate_its(ITSs, DNADNAfilter=True):
     max_its = 16
     its_range = range(3, max_its)
 
-    grid_size = 20
+    grid_size = 10
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
@@ -5293,6 +5292,10 @@ def candidate_its(ITSs, DNADNAfilter=True):
     #av_range = range(10,13)
     opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges,
                                  opt_nucs = av_range)
+
+    # Why haven't you saved the parameters! :S:? that will take forever to get
+    # at home.
+    debug()
 
     beg = 'AT'
     N25 = 'ATAAATTTGAGAGAGGAGTT'
@@ -6098,52 +6101,33 @@ def predicted_vs_measured(ITSs):
     You ran, I think, with these parameters.
     params = (15, 0, 0.022, 0.24)
 
-    But maybe you should get the PYs with 20? Should be trivial.
+    Hey, you did not. You'll need to get the parameters you ran with :S
 
+    OK, you get a decent correlation -- but now you need to change the K=20
+    value :S wtf is up with this? :S You need to get the correct parameters you
+    used for running the model and then apply it. The good news is that spearman
+    is between 0.4 and 0.6 and pearson depends more on the K value but is up to
+    0.68..! :)
     """
 
     # 2) Calculate the PY scores for them.
-    params = (20, 0, 0.2, 0.6)
+    # TODO update these parameters
+    params = (20, 0, -0.52, 0.94)
     par_ranges = [np.array([p]) for p in params]
-
-    PYs = np.array([itr.PY for itr in ITSs])*0.01
-    PYerr = np.array([itr.PY_std for itr in ITSs])*0.01
 
     its_range = range(3, 21)
 
     randomize = 0 # here 0 = False (or randomize 0 times)
     retrofit = 0
 
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
-                                 randize=randomize, retrofit=retrofit)
-
-    # extract the specific results
-    results, rand_results, retrof_results = all_results
-
-    finals = results[15].finals
-
-    # make a linear model
-    slope, intercept, corr, pval, stderr = scipy.stats.linregress(finals, PYs)
-
-    # make a predictive function
-    def predicted_PY(x, slope, intercept):
-        return  slope*x + intercept
-
-    minX, maxX = min(finals), max(finals)
-
-    minY, maxY = slope*minX + intercept, slope*maxX + intercept
-
-    plt.scatter(finals, PYs)
-    plt.errorbar(finals, PYs, yerr=PYerr, fmt=None)
-    plt.plot([minX, maxX], [minY, maxY])
-
-    # 1) Get the sequences you sent to Hsu
-    seq_file = 'sequence_data/seqs_for_testing.txt'
+    # 1) Get the sequences you sent which Hsu tested
+    seq_file = 'output_seqs/tested_seqs.txt'
     testseqs = [l.split() for l in open(seq_file, 'rb')]
 
-    # 2) Run the testseqs and get the output
+    # 2) Make ITS objects from the tested seqs
     test_obj = [ITS(seq + 'GAGTT', name) for name, seq in testseqs]
 
+    # 2) Run the testseqs and get the output
     fake_py = [0 for _ in range(len(test_obj))]
 
     test_results = scrunch_runner(fake_py, its_range, test_obj, par_ranges,
@@ -6151,22 +6135,60 @@ def predicted_vs_measured(ITSs):
 
     results, rand_results, retrof_results = test_results
 
-    pred_PY = [predicted_PY(f, slope, intercept) for f in results[15].finals]
+    # add the output to the PY value
+    for its, outp in zip(test_obj, results[15].finals):
+        its.PY = outp
 
-    print min(pred_PY), max(pred_PY)
+    # make a dictionary of promoter -> outp
+    pred_PY = dict((its.name, its.PY) for its in test_obj)
 
-    # invent some fake experimental result and plot the predicted vs actual
-    # PYs. Scale the std with thew val of p
-    fake_experimental = [p + np.random.normal(scale=abs(p)*0.4) for p in pred_PY]
+    # Get the PYs from the experiamant!
+    pred_file = 'prediction_experiment/summary.txt'
+    tested_PY = get_new_exprimetal_py(pred_file)
+
+    predicted, tested = zip(*[(pred_PY[pr], tested_PY[pr]) for pr in pred_PY])
 
     fig, ax = plt.subplots()
 
-    ax.scatter(pred_PY, fake_experimental)
+    ax.scatter(predicted, tested)
 
-    ax.set_xlabel('Predicted PY')
-    ax.set_ylabel('Fake experimental results')
+    ax.set_xlabel('Model output (arbitray units)')
+    ax.set_ylabel('Experimental results (PY)')
+
+    spearm = spearmanr(predicted, tested)
+    pears = pearsonr(predicted, tested)
+
+    ax.set_title("Spearman: r: {0:.2f}, pval: {1:2f}".format(*spearm))
 
     return fig
+
+def get_new_exprimetal_py(pred_file):
+    """
+    Read the experimental data and get the predicted values
+    Return them as ITS objects
+    """
+
+    newFileObj = open(pred_file, 'rb')
+
+    # read the entries from the file
+    promoters = newFileObj.next().split()[1:]
+    totalRNA = newFileObj.next()
+    abortiveRNA = newFileObj.next()
+    fulllenRNA = newFileObj.next()
+    abortiveYield = newFileObj.next()
+    productiveYield = newFileObj.next().split()[1:]
+    apRatio = newFileObj.next()
+
+    newITS = {}
+
+    for promoter, PY in zip(promoters, productiveYield):
+        if promoter not in newITS:
+            newITS[promoter] = float(PY)
+        else:
+            newITS[promoter] = (newITS[promoter] + float(PY))/2
+
+    return newITS
+
 
 def get_global_params():
     global_params = {'K': 20,
@@ -6182,6 +6204,18 @@ def get_global_params():
 
     return global_params
 
+def equilibrium_vs_py(ITSs, testing, gobal_params):
+    """
+    Plot the relationship between the accumulated value of the equilibrium
+    constant and the PY value.
+
+    How should the figure be made? Make it somehow different than the other
+    figures.
+
+    I can't really think of anything. Maybe just another scatter plot? The Keq
+    variable alone against PY? Get the optimal params and re-calculate the Keq
+    from the calc_k1 formula.
+    """
 
 def paper_figures(ITSs):
     """
@@ -6209,7 +6243,6 @@ def paper_figures(ITSs):
     possibly affecting the productive yield values a bit.
 
     IDEA: make standard deviations for the parameters as well! :)
-
     """
     testing = True  # if testing, run everything fast
     #testing = False
@@ -6228,6 +6261,12 @@ def paper_figures(ITSs):
 
     # global parameters
     global_params = get_global_params()
+
+    # Figure 0 -> Keq equilibrium and PY values
+    # It's good with a direct image showing what you are saying with words
+    # XXX TODO
+    equilib_name = 'equilibrium_vs_py'
+    equilib_fig = equilibrium_vs_py(ITSs, testing, gobal_params)
 
     ### Figure 1 and 2 -> Two-parameter model with parameter estimation but no
     #cross-reference
@@ -6258,14 +6297,14 @@ def paper_figures(ITSs):
     #figs.append((fig_reduced_fixed, fixed_lad_name))
 
     ### Figure 4 -> Scatter of predicted VS actual PY
-    #predicted_name = 'Predicted_vs_measured' + append
-    #fig_predicted = predicted_vs_measured(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    predicted_name = 'Predicted_vs_measured' + append
+    fig_predicted = predicted_vs_measured(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     ### Figure 5 -> Selection pressures
-    predicted_name = 'Selection_pressure' + append
-    fig_predicted = selection_pressure(ITSs)
-    figs.append((fig_predicted, predicted_name))
+    #predicted_name = 'Selection_pressure' + append
+    #fig_predicted = selection_pressure(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
     ### Figure 5.5 -> Selection pressures ITS-style
     #predicted_name = 'ITS_centrict_selection' + append
@@ -7366,10 +7405,54 @@ def third_report_figures(ITSs):
         fig.savefig(os.path.join(odir, savename), transparent=True,
                     format=formt)
 
+def ratio_issue(ITSs):
+    """
+    Compare old to new PY ratio
+    """
+
+    common_promoters = ['N25', 'DG115a', 'DG133', 'N25/A1anti']
+
+    newPY_file = 'prediction_experiment/summary.txt'
+
+    newFileObj = open(newPY_file, 'rb')
+
+    # read the entries from the file
+    promoters = newFileObj.next().split()[1:]
+    totalRNA = newFileObj.next()
+    abortiveRNA = newFileObj.next()
+    fulllenRNA = newFileObj.next()
+    abortiveYield = newFileObj.next()
+    productiveYield = newFileObj.next().split()[1:]
+    apRatio = newFileObj.next()
+
+    newITS = {}
+
+    for promoter, PY in zip(promoters, productiveYield):
+        if promoter not in newITS:
+            newITS[promoter] = float(PY)
+        else:
+            newITS[promoter] = (newITS[promoter] + float(PY))/2
+
+    ratios = []
+    for promoter in common_promoters:
+        new = newITS[promoter]
+        old = [its.PY for its in ITSs if its.name==promoter][0]
+
+        ratio = new/old
+        ratios.append(ratio)
+
+        print(promoter)
+        print("New/old ratio: {0}".format(ratio))
+        print('\n')
+
+    print('\n')
+    print('Mean and std of ratios: {0}, {1}'.format(np.mean(ratios),
+                                                    np.std(ratios)))
+
 def main():
     ITSs = ReadAndFixData() # read raw data
 
-    third_report_figures(ITSs)
+    #third_report_figures(ITSs)
 
     #print np.median([i.msat for i in ITSs])
     #debug()
@@ -7379,7 +7462,11 @@ def main():
     #new_ladder(lizt)
     #new_scatter(lizt, ITSs)
 
-    #paper_figures(ITSs)
+    # XXX Hsu's PYnew experiments have higher PY values
+    # Compare the ratio in the new to the old
+    #ratio_issue(ITSs)
+
+    paper_figures(ITSs)
 
     #selection_pressure(ITSs)
 
