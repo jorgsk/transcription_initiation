@@ -4708,7 +4708,7 @@ def grid_scrunch(arguments, ranges):
     #make a pool of workers for multicore action
     # this is only efficient if you have a range longer than 10 or so
     rmax = sum([len(r) for r in ranges])
-    #rmax = 5 #XXX remove me later kthnx. just for debugging.
+    #rmax = 5 #XXX uncomment for multiprocessing debugging.
     if rmax > 6:
         my_pool = multiprocessing.Pool()
         results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
@@ -4849,6 +4849,10 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
 
     See your notebook for how to calculate the exponential free energy stuff.
 
+    Tip for the future; start at +1 also for nucleotides, so all arrays have the
+    same length. Just have the first values as 0. Makes it much easier to
+    understand the code later. The 0s are placeholders.
+
     !!There is no RNA-DNA energy change before +9. FFS.
 
     Q: what do you get in? the keq, dna_dna etc?
@@ -4880,7 +4884,6 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
     -> keq = (9,10)
     -> RD = (3,10) - (2,10)
     -> DD = (1,11) - (1,10)
-
     ...
 
     until k1[17] which is d(x_20)/dt -- or do you want to include x_21?
@@ -6018,16 +6021,17 @@ def three_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 10
+        grid_size = 6
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Parameter ranges you want to test out
     c1 = np.array([par['K']]) # insensitive to variation here
-    c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
-    c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size)
-    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    c2 = np.linspace(0, par['rd_max'], grid_size)
+    #c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size)
+    c3 = np.linspace(-par['dd_max'], 0, grid_size)
+    c4 = np.linspace(0, par['eq_max'], grid_size)
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6152,7 +6156,7 @@ def predicted_vs_measured(ITSs):
 
     ax.scatter(predicted, tested)
 
-    ax.set_xlabel('Model output (arbitray units)')
+    ax.set_xlabel('Model output [RNAP$_{final}$]')
     ax.set_ylabel('Experimental results (PY)')
 
     spearm = spearmanr(predicted, tested)
@@ -6204,7 +6208,7 @@ def get_global_params():
 
     return global_params
 
-def equilibrium_vs_py(ITSs, testing, gobal_params):
+def equilibrium_vs_py(ITSs, testing, global_params):
     """
     Plot the relationship between the accumulated value of the equilibrium
     constant and the PY value.
@@ -6215,7 +6219,71 @@ def equilibrium_vs_py(ITSs, testing, gobal_params):
     I can't really think of anything. Maybe just another scatter plot? The Keq
     variable alone against PY? Get the optimal params and re-calculate the Keq
     from the calc_k1 formula.
+
+    # I don't understand; the PY values and the sum of k1 don't correlate. what
+    # is missing?
     """
+    PYs = [its.PY for its in ITSs]
+
+    par = global_params
+    grid_size = 10
+
+    c1 = np.array([par['K']]) # insensitive to variation here
+    #c2 = np.linspace(par['rd_min'], par['dd_max'], grid_size)
+    c2 = np.array([0]) # constant
+    c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size)
+    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+
+    par_ranges = (c1, c2, c3, c4)
+
+    # use the optimal parameters from the optimization
+    # get average from +11 to +15
+    av_range = range(10,16)
+    its_len = 16
+    #its_len = 15
+    its_range = range(3, its_len)
+    av_range = range(10,13) # faster ...
+
+    #opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges,
+                                 #opt_nucs = av_range)
+
+    ##get the optimal parameters
+    #a, b, c, d = [o[0] for o in opt_par]
+
+    # calculate the accumulated k1 values for all ITS
+    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
+    for its in ITSs:
+
+        # calculate the 3d, dd, and rd (the -1/2 just works)
+        keq = its.keq_delta_di[:its_len-2]
+        #dna_dna = its.dna_dna_di[:its_len-1]
+        dna_dna = its.dna_dna_di[:its_len-2]
+        #ddlen = len(dna_dna)
+        #dna_dna = dna_dna[:10] + [0 for i in range(ddlen-10)]
+        #rna_dna = its.rna_dna_di[:its_len-2]
+        #rdlen = len(rna_dna)
+        #rna_dna = [0 for i in range(10)] + rna_dna[-(rdlen-10):]
+
+        # the accumulated k1 up to its_len
+        #k1 = calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a, b,
+                                     #c, d)
+
+        #its.k1 = sum(k1)
+        #its.k1 = sum(-np.array(keq) + np.array(dna_dna) - np.array(rna_dna))
+        its.k1 = sum(-np.array(keq) + np.array(dna_dna))/RT
+
+    # extract the PY and k1 values
+    PYs, k1s = zip(*[(its.PY, its.k1) for its in ITSs])
+
+    #
+    fig, ax = plt.subplots()
+    ax.scatter(k1s, PYs)
+
+    ax.set_xlabel('Sum of translocation equilibrium constants')
+    ax.set_ylabel('PY')
+
+    return fig
+
 
 def paper_figures(ITSs):
     """
@@ -6264,20 +6332,21 @@ def paper_figures(ITSs):
 
     # Figure 0 -> Keq equilibrium and PY values
     # It's good with a direct image showing what you are saying with words
-    # XXX TODO
-    equilib_name = 'equilibrium_vs_py'
-    equilib_fig = equilibrium_vs_py(ITSs, testing, gobal_params)
+    # RESULT you could only do it well with DD + 3D. Shit la gaa?
+    #equilib_name = 'equilibrium_vs_py'
+    #equilib_fig = equilibrium_vs_py(ITSs, testing, global_params)
+    #figs.append((equilib_fig, equilib_name))
 
-    ### Figure 1 and 2 -> Two-parameter model with parameter estimation but no
+    ### Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     #cross-reference
-    #ladder_name = 'three_param_model_AB' + append
-    #scatter_name = 'three_param_14_scatter' + append
-    #fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
+    ladder_name = 'three_param_model_AB' + append
+    scatter_name = 'three_param_14_scatter' + append
+    fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
 
-    #figs.append((fig_ladder, ladder_name))
-    #figs.append((fig_scatter, scatter_name))
+    figs.append((fig_ladder, ladder_name))
+    figs.append((fig_scatter, scatter_name))
 
-    ### Figure 2.5 -> Three-parameter model with controls 
+    ## Figure 2.5 -> Three-parameter model with controls 
     #estimation plot
     #ladder_nog_name = 'three_param_control_AB' + append
     #fig_nog_ladder, fig_nog_scatter = three_param_control_A(ITSs, testing,
@@ -6285,28 +6354,28 @@ def paper_figures(ITSs):
                                                             #global_params)
     #figs.append((fig_nog_ladder, ladder_nog_name))
 
-    ### Figure 2.7 -> Compare two and three parameter models
+    ## Figure 2.7 -> Compare two and three parameter models
     #compare_name = 'compare_two_three_AB' + append
     #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
     #figs.append((fig_controversy, compare_name))
 
-    #### Figure 3 -> Optimal model model XXX Obsolete?
+    ### Figure 3 -> Optimal model model XXX Obsolete?
     #fixed_lad_name = 'Optimal_model' + append
     #fig_reduced_fixed = optimal_model_fixed_ladder(ITSs, testing, p_line,
                                                    #global_params)
     #figs.append((fig_reduced_fixed, fixed_lad_name))
 
-    ### Figure 4 -> Scatter of predicted VS actual PY
-    predicted_name = 'Predicted_vs_measured' + append
-    fig_predicted = predicted_vs_measured(ITSs)
-    figs.append((fig_predicted, predicted_name))
+    ## Figure 4 -> Scatter of predicted VS actual PY
+    #predicted_name = 'Predicted_vs_measured' + append
+    #fig_predicted = predicted_vs_measured(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
-    ### Figure 5 -> Selection pressures
+    ## Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
     #fig_predicted = selection_pressure(ITSs)
     #figs.append((fig_predicted, predicted_name))
 
-    ### Figure 5.5 -> Selection pressures ITS-style
+    ## Figure 5.5 -> Selection pressures ITS-style
     #predicted_name = 'ITS_centrict_selection' + append
     #fig_predicted = ITS_centric_selection(ITSs)
     #figs.append((fig_predicted, predicted_name))
@@ -6322,9 +6391,9 @@ def paper_figures(ITSs):
     #figs.append((fig_alternative, alternative_name))
 
     ### Figure 8 -> Correlation between DNA variables
-    #variable_name = 'Variable_correlation' + append
-    #fig_variable = variable_corr()
-    #figs.append((fig_variable, variable_name))
+    variable_name = 'Variable_correlation' + append
+    fig_variable = variable_corr()
+    figs.append((fig_variable, variable_name))
 
     ### Figure 9 -> The RNA-DNA controversy made flesh
     #positive_name = 'Positive_RNADNA' + append
@@ -6438,7 +6507,7 @@ def compare_two_three(ITSs, testing, p_line, par):
     grid_size = 10
 
     if testing:
-        grid_size = 3
+        grid_size = 6
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
@@ -6455,7 +6524,7 @@ def compare_two_three(ITSs, testing, p_line, par):
     # XXX at the moment you will use the 
     #two = get_optimal_params(PYs, its_range, ITSs, two_param, optim, t)
     name2A = 'Model lacking RNA-DNA hybrid'
-    name2B = 'Model lacking DNA-DNA bubble'
+    name2B = 'Model lacking DNA bubble'
     #three = get_optimal_params(PYs, its_range, ITSs, three_param, optim, t)
     name3 = 'Full model'
 
