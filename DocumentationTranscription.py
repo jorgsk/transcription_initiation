@@ -405,6 +405,7 @@ class ITS(object):
         self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
         self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
         #self.keq_di = [Ec.Keq_EC8_EC9[di] for di in __dinucs]
+
         self.keq_delta_di = [Ec.delta_keq[di] for di in __dinucs]
         self.k1_di = [Ec.k1[di] for di in __dinucs]
         self.kminus1_di = [Ec.kminus1[di] for di in __dinucs]
@@ -6147,22 +6148,27 @@ def predicted_vs_measured(ITSs):
     pred_PY = dict((its.name, its.PY) for its in test_obj)
 
     # Get the PYs from the experiamant!
-    pred_file = 'prediction_experiment/summary.txt'
+    pred_file = 'prediction_experiment/my_summary_first_quant.csv'
+    #pred_file = 'prediction_experiment/Second_quantification/summary_second_quant.csv'
     tested_PY = get_new_exprimetal_py(pred_file)
 
-    predicted, tested = zip(*[(pred_PY[pr], tested_PY[pr]) for pr in pred_PY])
+    predicted, tested = zip(*[(pred_PY[pr], tested_PY[pr].PY) for pr in pred_PY])
+    # get standard deviation
+    tested_std = [tested_PY[pr].PY_std for pr in pred_PY]
 
     fig, ax = plt.subplots()
 
     ax.scatter(predicted, tested)
+    plt.errorbar(predicted, tested, yerr=tested_std, fmt=None)
+    #plt.errorbar(predicted, tested, yerr=tested_std)
 
     ax.set_xlabel('Model output [RNAP$_{final}$]')
-    ax.set_ylabel('Experimental results (PY)')
+    ax.set_ylabel('Productive yield')
 
     spearm = spearmanr(predicted, tested)
     pears = pearsonr(predicted, tested)
 
-    ax.set_title("Spearman: r: {0:.2f}, pval: {1:2f}".format(*spearm))
+    ax.set_title("Spearman: r: {0:.2f}, pval: {1:.2e}".format(*spearm))
 
     return fig
 
@@ -6170,26 +6176,31 @@ def get_new_exprimetal_py(pred_file):
     """
     Read the experimental data and get the predicted values
     Return them as ITS objects
+    the file is:
+        Header
+        Promoter PY1 PY2 PY3 ...
     """
 
-    newFileObj = open(pred_file, 'rb')
-
-    # read the entries from the file
-    promoters = newFileObj.next().split()[1:]
-    totalRNA = newFileObj.next()
-    abortiveRNA = newFileObj.next()
-    fulllenRNA = newFileObj.next()
-    abortiveYield = newFileObj.next()
-    productiveYield = newFileObj.next().split()[1:]
-    apRatio = newFileObj.next()
-
     newITS = {}
+    dummy_seq = 'GATTACA'
 
-    for promoter, PY in zip(promoters, productiveYield):
-        if promoter not in newITS:
-            newITS[promoter] = float(PY)
-        else:
-            newITS[promoter] = (newITS[promoter] + float(PY))/2
+    for line in open(pred_file, 'rb'):
+        # skip first line
+        if line.startswith('Promoter'):
+            continue
+        contents = line.split()
+
+        # extract promoter data
+        promoter = contents[0] # promoter name
+        PYs = [float(c) for c in contents[1:]] # py values
+
+        mean_PY = np.mean(PYs)
+        std_PY = np.std(PYs)
+
+        # make an ITS object
+        itsObj = ITS(dummy_seq, name=promoter, PY=mean_PY, PY_std=std_PY)
+
+        newITS[promoter] = itsObj
 
     return newITS
 
@@ -6339,15 +6350,14 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     #cross-reference
-    ladder_name = 'three_param_model_AB' + append
-    scatter_name = 'three_param_14_scatter' + append
-    fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
+    #ladder_name = 'three_param_model_AB' + append
+    #scatter_name = 'three_param_14_scatter' + append
+    #fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
 
-    figs.append((fig_ladder, ladder_name))
-    figs.append((fig_scatter, scatter_name))
+    #figs.append((fig_ladder, ladder_name))
+    #figs.append((fig_scatter, scatter_name))
 
     ## Figure 2.5 -> Three-parameter model with controls 
-    #estimation plot
     #ladder_nog_name = 'three_param_control_AB' + append
     #fig_nog_ladder, fig_nog_scatter = three_param_control_A(ITSs, testing,
                                                             #p_line,
@@ -6365,10 +6375,10 @@ def paper_figures(ITSs):
                                                    #global_params)
     #figs.append((fig_reduced_fixed, fixed_lad_name))
 
-    ## Figure 4 -> Scatter of predicted VS actual PY
-    #predicted_name = 'Predicted_vs_measured' + append
-    #fig_predicted = predicted_vs_measured(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    ##Figure 4 -> Scatter of predicted VS actual PY
+    predicted_name = 'Predicted_vs_measured' + append
+    fig_predicted = predicted_vs_measured(ITSs)
+    figs.append((fig_predicted, predicted_name))
 
     ## Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
@@ -6391,9 +6401,9 @@ def paper_figures(ITSs):
     #figs.append((fig_alternative, alternative_name))
 
     ### Figure 8 -> Correlation between DNA variables
-    variable_name = 'Variable_correlation' + append
-    fig_variable = variable_corr()
-    figs.append((fig_variable, variable_name))
+    #variable_name = 'Variable_correlation' + append
+    #fig_variable = variable_corr()
+    #figs.append((fig_variable, variable_name))
 
     ### Figure 9 -> The RNA-DNA controversy made flesh
     #positive_name = 'Positive_RNADNA' + append
@@ -7517,9 +7527,38 @@ def ratio_issue(ITSs):
     print('\n')
     print('Mean and std of ratios: {0}, {1}'.format(np.mean(ratios),
                                                     np.std(ratios)))
+def compare_quantitations():
+    """
+    Compare round 1 and round 2 of quantitations
+    """
+    pred_file1 = 'prediction_experiment/my_summary_first_quant.csv'
+    pred_file2 = 'prediction_experiment/Second_quantification/summary_second_quant.csv'
+
+    pys = []
+    errs = []
+    for pfile in [pred_file1, pred_file2]:
+        tested_PY = get_new_exprimetal_py(pfile)
+        pys.append([its.PY for its in tested_PY.values()])
+        errs.append([its.PY_std for its in tested_PY.values()])
+
+    plt.scatter(pys[0], pys[1])
+    plt.xlabel('First quantitation (PY)')
+    plt.ylabel('Second quantitation (PY)')
+    plt.plot(range(30), range(30))
+
+    plt.errorbar(pys[0], pys[1], xerr=errs[0], yerr=errs[1], fmt=None)
+
+    corrs = spearmanr(pys[0], pys[1])
+
+    header = 'r = {0:.2f}, p = {1:.2e}'.format(corrs[0], corrs[1])
+    plt.title(header)
+    plt.show()
 
 def main():
     ITSs = ReadAndFixData() # read raw data
+
+    compare_quantitations()
+
 
     #third_report_figures(ITSs)
 
@@ -7535,7 +7574,7 @@ def main():
     # Compare the ratio in the new to the old
     #ratio_issue(ITSs)
 
-    paper_figures(ITSs)
+    #paper_figures(ITSs)
 
     #selection_pressure(ITSs)
 
