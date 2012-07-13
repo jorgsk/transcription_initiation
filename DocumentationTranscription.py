@@ -67,7 +67,8 @@ hsu5 = '/Hsu/csvHsu2008_full'
 # The path to the directory the script is located in
 here = os.path.dirname(os.path.realpath(__file__))
 fig_dir1 = os.path.join(here, 'figures')
-fig_dir2 = '/home/jorgsk/phdproject/The-Tome/my_papers/rna-dna-paper/figures'
+#fig_dir2 = '/home/jorgsk/phdproject/The-Tome/my_papers/rna-dna-paper/figures'
+fig_dir2 = '/home/jorgsk/Dropbox/The-Tome/my_papers/rna-dna-paper/figures'
 
 fig_dirs = (fig_dir1, fig_dir2)
 
@@ -3938,7 +3939,7 @@ class Model(object):
         self.description = description
 
 def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
-                          PYs):
+                          PYs, pos=None):
     """
     Print scatter plots at peak correlation (14 at the moment)
 
@@ -3955,9 +3956,14 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
     PYs = PYs*100
 
     #rows = [5, 10, 15, 20]
-    # pick the nucleotide position with max correlation 
-    maxnuc = list(sorted([(r.corr_max, v) for (v, r) in
-                          results.items()]))[-1][-1]
+
+    # use the position form the pos argument; if not given, use the position
+    # wigh highest correlation
+    if pos:
+        maxnuc = pos
+    else:
+        maxnuc = list(sorted([(r.corr_max, v) for (v, r) in
+                              results.items()]))[-1][-1]
 
     fig, ax = plt.subplots()
 
@@ -3967,10 +3973,12 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
     else:
         return fig
 
+    print("Spearman for maxnuc: {0} and PY".format(maxnuc))
+    print(spearmanr(finals, PYs))
     ax.scatter(finals, PYs, color= 'k')
 
     ax.set_ylabel("Productive yield", size=15)
-    ax.set_xlabel("RNAP concentration at +18".format(maxnuc), size=15)
+    ax.set_xlabel("[RNAP$_{{0}}$]".format(maxnuc), size=15)
 
     # awkward way of setting the tick sizes
     for l in ax.get_xticklabels():
@@ -6022,7 +6030,7 @@ def three_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 6
+        grid_size = 9
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -6057,8 +6065,10 @@ def three_param_AB(ITSs, testing, p_line, par):
                                            par_ranges, p_line, its_max, ymin,
                                            ymax, testing, print_params=True)
 
+    # where to make the scatter plot
+    maxnuc = 20
     fig_sct = print_scrunch_scatter(results, rand_results, randomize,
-                                    par_ranges, PYs)
+                                    par_ranges, PYs, pos=maxnuc)
 
     return fig_lad, fig_sct
 
@@ -6148,8 +6158,8 @@ def predicted_vs_measured(ITSs):
     pred_PY = dict((its.name, its.PY) for its in test_obj)
 
     # Get the PYs from the experiamant!
-    pred_file = 'prediction_experiment/my_summary_first_quant.csv'
-    #pred_file = 'prediction_experiment/Second_quantification/summary_second_quant.csv'
+    #pred_file = 'prediction_experiment/my_summary_first_quant.csv'
+    pred_file = 'prediction_experiment/Second_quantification/summary_second_quant.csv'
     tested_PY = get_new_exprimetal_py(pred_file)
 
     predicted, tested = zip(*[(pred_PY[pr], tested_PY[pr].PY) for pr in pred_PY])
@@ -6344,6 +6354,7 @@ def paper_figures(ITSs):
     # Figure 0 -> Keq equilibrium and PY values
     # It's good with a direct image showing what you are saying with words
     # RESULT you could only do it well with DD + 3D. Shit la gaa?
+    #
     #equilib_name = 'equilibrium_vs_py'
     #equilib_fig = equilibrium_vs_py(ITSs, testing, global_params)
     #figs.append((equilib_fig, equilib_name))
@@ -6375,7 +6386,7 @@ def paper_figures(ITSs):
                                                    #global_params)
     #figs.append((fig_reduced_fixed, fixed_lad_name))
 
-    ##Figure 4 -> Scatter of predicted VS actual PY
+    #Figure 4 -> Predicted VS actual PY
     predicted_name = 'Predicted_vs_measured' + append
     fig_predicted = predicted_vs_measured(ITSs)
     figs.append((fig_predicted, predicted_name))
@@ -7557,8 +7568,7 @@ def compare_quantitations():
 def main():
     ITSs = ReadAndFixData() # read raw data
 
-    compare_quantitations()
-
+    #compare_quantitations()
 
     #third_report_figures(ITSs)
 
@@ -7574,7 +7584,7 @@ def main():
     # Compare the ratio in the new to the old
     #ratio_issue(ITSs)
 
-    #paper_figures(ITSs)
+    paper_figures(ITSs)
 
     #selection_pressure(ITSs)
 
