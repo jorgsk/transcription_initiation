@@ -122,22 +122,37 @@ def seq2din(sequence):
     indiv = list(sequence) # splitting sequence into individual letters
     return [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
-## XXX Big news: create a super_function by subtracting reKeq from RNA_DNA
-super_en = {}
-for name, val in EnLibRNA.items():
-    #super_en[name] = reKeq[name] - val
-    super_en[name] = val - reKeq[name]
+def dnaizer(in_dict):
+    """
+    in_dict has got RNA dinucleotides to energy, NN: float
+
+        XXXXXNN
+        YYYYYZZ
+
+    return ZZ: float to get he DNA version
+    """
+    translate = {'A':'T', 'C': 'G', 'G':'C', 'T':'A', 'U':'A'}
+
+    out_dict = {}
+
+    for rna_din, val in in_dict.items():
+        dna_din = ''.join([translate[nuc] for nuc in list(rna_din)])
+
+        out_dict[dna_din] = val
+
+    return out_dict
 
 # XXX go from Keq to Delta G values. Do 1/en because Hein paper has got the
 # equilibrium constant for the opposite reaction.
 # Keq = exp(-DG/RT) -> DG = -ln(Keq)*RT
-delta_keq = {}
+# Also go from RNA to DNA sequence
+
 RT = 1.9858775*(37 + 273.15)
-for din, en in Keq_EC8_EC9.items():
+dna_keq = dnaizer(Keq_EC8_EC9)
+
+delta_keq = {}
+for din, en in dna_keq.items():
     delta_keq[din] = -RT*np.log(1/en)/1000  #divide by 1000 to get kcal
-    #delta_keq[din] = -RT*(1/en)/1000  #divide by 1000 to get kcal
-    #delta_keq[din] = -RT*np.log(en)/1000  #divide by 1000 to get kcal
-    #delta_keq[din] = -RT*en/1000  # old and wrong
 
 def Delta_trans(sequence):
     """
@@ -145,10 +160,6 @@ def Delta_trans(sequence):
     """
 
     return sum([delta_keq[din] for din in seq2din(sequence)])
-
-def super_f(sequence):
-
-    return sum([super_en[din] for din in seq2din(sequence)])
 
 def res_frac(sequence):
     """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
@@ -179,11 +190,3 @@ def Keq(sequence):
 
     return sum([Keq_EC8_EC9[din] for din in seq2din(sequence)])
 
-def invKeq(sequence):
-    """
-    Use the inverted Keq by getting the 9/8 rate instead of the 8/9 rate
-    """
-    if len(sequence) < 2:
-        return 0
-
-    return sum([invEq[din] for din in seq2din(sequence)])
