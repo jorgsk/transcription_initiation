@@ -346,12 +346,11 @@ class Result(object):
         # its_len)
         self.corr_mean = np.mean(corr)
         self.corr_std = np.std(corr)
-        self.corr_max = np.max(corr)
-        self.corr_min = np.min(corr)
+        max_indx = np.abs(corr).argmax() # correlation may be negative
+        self.corr_max = corr[max_indx]
 
         self.pvals_mean = np.mean(pvals)
         self.pvals_std = np.std(pvals)
-        self.pvals_max = np.max(pvals)
         self.pvals_min = np.min(pvals)
 
         self.finals_mean = np.mean(finals)
@@ -405,11 +404,7 @@ class ITS(object):
         # Make di-nucleotide vectors for all the energy parameters
         self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
         self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
-        #self.keq_di = [Ec.Keq_EC8_EC9[di] for di in __dinucs]
-
         self.keq_delta_di = [Ec.delta_keq[di] for di in __dinucs]
-        self.k1_di = [Ec.k1[di] for di in __dinucs]
-        self.kminus1_di = [Ec.kminus1[di] for di in __dinucs]
 
     def __repr__(self):
         return "{0}, PY: {1}".format(self.name, self.PY)
@@ -3140,36 +3135,50 @@ def naive_energies(ITSs, new_set=False):
     else:
         return zip(outp, PYs)
 
+def optim_naive_model(its_len, PYs, rna_dna, dna_dna, keq_delta):
+    """
+    Simple optimizer. Assume its_len is 20.
+    """
+
+    results = []
+
+    RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
+
+    par_range = np.linspace(-1.5, 1.5, 10)
+
+    for params in itertools.product(par_range, repeat=3):
+
+        c2, c3, c4 = params
+
+        #DD =
+        # you stop right here since you found out you'd been using
+        # rna-dinucleotides for keq
+
+        exponential = (c2*dna_dna + c3*keq_delta)/RT + c4*rna_dna
+
 def naive_model(ITSs, new_set=[]):
     """
     Plot the ITS according to the naive model
 
         PY = c1*exp(b1*DNADNA + b2*delta_KEQ)
 
-    And then plot how the new_set looks accordingly
-
-    How are you going to plot the new set if you don't know their PYs?
-
-    You'll have to plot their distribution in the energies only. Shit what a
-    responsibility.
     """
 
-    ITSlen = 15
+    ITSlen = 20
     # get the variables you need 
-    #rna_dna = np.array([Ec.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
+    rna_dna = np.array([Ec.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
     dna_dna = np.array([Ec.DNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
     keq_delta = np.array([Ec.Delta_trans(s.sequence[:ITSlen]) for s in ITSs])
+    # PYs
+    PYs = np.array([itr.PY for itr in ITSs])
 
-    #### the exp model with log(keq) and /RT
-    parameters = (10, 0.1, 0.1)
-    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
-    c1, c2, c3 = parameters
+    # optimize parameters XXX unfinished, maybe you can delete this later.
+    output, opt_param = optim_naive_model(ITSlen, PYs, rna_dna, dna_dna,
+                                          keq_delta)
 
-    exponential = (c2*dna_dna + c3*keq_delta)/RT
-    #exponential = (c2*rna_dna + c3*keq_delta)/RT
-    outp = c1*np.exp(exponential)
-
-    return outp
+    #exponential = (c2*dna_dna + c3*keq_delta + c4*rna_dna)/RT
+    exponential = (c2*dna_dna + c3*keq_delta)/RT + c4*rna_dna
+    outp = c1*np.exp(-exponential)
 
     # Make a continuous energy values for plotting
     minval = min(exponential)
@@ -3177,8 +3186,6 @@ def naive_model(ITSs, new_set=[]):
     plot_range = np.arange(minval, maxval, 0.01)
 
     plot_data = c1*np.exp(plot_range)
-
-    debug()
 
     # PYs
     PYs = np.array([itr.PY for itr in ITSs])
@@ -3192,17 +3199,17 @@ def naive_model(ITSs, new_set=[]):
 
     fig, ax = plt.subplots()
     ax.errorbar(c1*exponential, PYs, yerr=PYs_std, fmt='go')
-    for name, py, fit in zip(names, PYs, c1*exponential):
+    #for name, py, fit in zip(names, PYs, c1*exponential):
 
-        # only annotate these
-        if name not in ('N25', 'DG115a', 'DG133', 'N25/A1anti'):
-            continue
+        ## only annotate these
+        #if name not in ('N25', 'DG115a', 'DG133', 'N25/A1anti'):
+            #continue
 
-        ax.annotate(name,
-                xy=(fit, py), xytext=(-20,20),
-                textcoords='offset points', ha='right', va='bottom',
-                bbox=dict(boxstyle='round, pad=0.5', fc='g', alpha=0.9),
-                arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+        #ax.annotate(name,
+                #xy=(fit, py), xytext=(-20,20),
+                #textcoords='offset points', ha='right', va='bottom',
+                #bbox=dict(boxstyle='round, pad=0.5', fc='g', alpha=0.9),
+                #arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
 
     # define the x-values for plot_data
     xbeg = min(c1*exponential)
@@ -3975,6 +3982,7 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
 
     print("Spearman for maxnuc: {0} and PY".format(maxnuc))
     print(spearmanr(finals, PYs))
+    print(pearsonr(finals, PYs))
     ax.scatter(finals, PYs, color= 'k')
 
     ax.set_ylabel("Productive yield", size=15)
@@ -4300,9 +4308,9 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
     return fig, axes
 
 def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
-                         par_ranges, p_line, its_max, ymin, ymax, testing,
-                         description=False, print_params=True, in_axes=False,
-                         ax_nr=0):
+                         par_ranges, p_line, its_max, its_range, ymin, ymax,
+                         testing, description=False, print_params=True,
+                         in_axes=False, ax_nr=0):
     """
     Alternative print-scrunch.
     [0][0] is the pearson for the real and the control
@@ -4344,6 +4352,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
             indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_min)
                                for r in sorted(ddict.items())])
 
+
         elif name == 'random':
             indx, corr = zip(*[(r[0], r[1].corr_mean)
                                for r in sorted(ddict.items())])
@@ -4356,10 +4365,9 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
 
             stds = [r[1].corr_std for r in sorted(ddict.items())]
 
-        # make x-axis
-        incrX = range(indx[0], indx[-1]+1)
+        # points on x-axis for plotting -- same as its_lenghts
+        incrX = its_range
 
-        # if random, plot with errorbars
         if name == 'real':
             # check for nan in corr (make it 0)
             corr, pvals = remove_nan(corr, pvals)
@@ -4377,6 +4385,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
                 axes[ax_nr].axhline(y=f(0.05), ls='--', color='r',
                             label='p = 0.05 threshold', linewidth=3)
 
+        # if random, plot with errorbars
         elif name == 'random':
             lab = 'using random sequences'
             axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=lab, linewidth=2,
@@ -4496,9 +4505,14 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
 
 
 def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
-                   normal=True):
+                   normal=True, non_rnap=True):
     """
     Wrapper around grid_scrunch and opt_scrunch.
+
+    randize and retrofit will randomize DNA and do cross-validation of parameter
+    values. normal is on by default; it calculates the normal correlation you're
+    after (CBP or [RNAP]). non_rnap will not calculate the [RNAP] concentration
+    but will instead calculate the cumulative sum of Keq at the its_ranges.
     """
 
     # make 'int' into a 'list' containing just that int
@@ -4518,7 +4532,8 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
 
         # get the 'normal' results
         if normal:
-            normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr)
+            normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0,
+                                        state_nr, non_rnap=non_rnap)
         else:
             normal_obj = False
 
@@ -4526,14 +4541,16 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
         if randize:
             # get the results for randomized ITS versions
             random_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0,
-                                        state_nr, randomize=randize)
+                                        state_nr, non_rnap=non_rnap,
+                                        randomize=randize)
         else:
             random_obj = False
 
         # Retrofit
         if retrofit:
             retrof_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0,
-                                        state_nr, retrof=retrofit)
+                                        state_nr, non_rnap=non_rnap,
+                                        retrof=retrofit)
         else:
             retrof_obj = False
 
@@ -4584,7 +4601,7 @@ def get_its_variables(ITSs, randomize=False, retrofit=False, PY=False):
         return new_ITSs
 
 def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
-                   retrof=0):
+                   retrof=0, non_rnap=True):
     """
     Separate scruch calls into randomize, retrofit, or neither.
     """
@@ -4599,7 +4616,8 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
             #extract the stuff
             ITS_fitting, ITS_compare, PYs_fitting, PYs_compare = retrovar
 
-            arguments_fit = (y0, its_len, state_nr, ITS_fitting, PYs_fitting)
+            arguments_fit = (y0, its_len, state_nr, ITS_fitting, PYs_fitting,
+                             non_rnap)
 
             fit_result = grid_scrunch(arguments_fit, ranges)
 
@@ -4614,7 +4632,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
 
             # rerun with new arguments
             arguments_compare = (y0, its_len, state_nr, ITS_compare,
-                                 PYs_compare)
+                                 PYs_compare, non_rnap)
 
             # run the rest of the ITS with the optimal parameters
             control_result = grid_scrunch(arguments_compare, fit_ranges)
@@ -4639,7 +4657,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
 
             ITS_variables = get_its_variables(ITSs, randomize=True)
 
-            arguments = (y0, its_len, state_nr, ITS_variables, PYs)
+            arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap)
 
             rand_result = grid_scrunch(arguments, ranges)
 
@@ -4650,7 +4668,6 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
             else:
                 rand_results.append(rand_result)
 
-
         return average_rand_result(rand_results)
 
     # NO RETROFIT AND NO RANDOMIZE
@@ -4658,7 +4675,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
         #go from ITS object to dict to appease the impotent pickle
         ITS_variables = get_its_variables(ITSs)
 
-        arguments = (y0, its_len, state_nr, ITS_variables, PYs)
+        arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap)
 
         return grid_scrunch(arguments, ranges)
 
@@ -4768,14 +4785,15 @@ def _multi_func(paras, arguments):
     the parameters, and the correlation coefficients.
     """
     all_hits = []
-    # dangerous.. you depend on arguments never changing
-    PYs = arguments[-1]
+    # v. dangerous. should pass arguments in a dictionary to avoid this.
+    PYs = arguments[-2]
 
     for par in paras:
         finals = cost_function_scruncher(par, *arguments)
 
         # XXX this one is easy to forget ... you don't want answers where the
         # final values are ridiculously small
+        # this will only apply when calculating [RNAP] though. I guess.
         if sum(finals) < 0.000000001:
             continue
 
@@ -4926,6 +4944,8 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
 
         expo = (b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
 
+        #expo = (d*KEQ)/RT
+
         rate = a*np.exp(-expo)
 
         k1[i] = rate
@@ -4933,15 +4953,14 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
     return k1
 
 def cost_function_scruncher(start_values, y0, its_len, state_nr, ITSs, PYs,
-                            const_par=False, truth_table=False):
+                            non_rnap, const_par=False, truth_table=False):
     """
-    k1 = c1*exp(-(c2*rna_dna_i - c3*dna_dna_{i+1} + c4*Keq_{i-1}) * 1/RT)
+    k1 = exp(-(c2*rna_dna_i + c3*dna_dna_{i+1} + c4*Keq_{i-1}) * 1/RT)
 
     Dna-bubble one step ahead of the rna-dna hybrid; Keq one step behind.
     When the rna-dna reaches length 9, the you must subtract the hybrid for
-    each step forward. New: the hybrid seems to oscillate between a 8bp and a
-    9bp hybrid :S try to implement that. Also you must calculate the DIFFERENCE
-    between the Keq energies. Or are you already doing that?
+    each step forward. The hybrid oscillates between a 8bp and a
+    9bp hybrid during translocation.
 
     """
     # get the tuning parameters and the rna-dna and k1, kminus1 values
@@ -4963,24 +4982,34 @@ def cost_function_scruncher(start_values, y0, its_len, state_nr, ITSs, PYs,
 
         (a, b, c, d) = start_values
 
-        # New rate equation in town. Dont use the mins11 energy.
+        # equilibrium constants at each position
         k1 = calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna,
                                      a, b, c, d)
 
-        # extra free variable: the abortive rate
-        A = equlib_matrix(k1, state_nr)
-
-        # time in which to integrate over
-        tim = 1
-
-        # if there are 'nan' in A-matrix, return nan
-        if True in np.isnan(A):
-            solution = [np.nan]
+        # if not calculating [RNAP], simply return the sum of k1
+        if non_rnap:
+            output = sum(k1)
+            #if its_len > 15:
+                #debug()
         else:
-            # using the x(t) = e^{A*t}*y(0) solution 
-            solution = dot(scipy.linalg.expm(A*tim,q=1), y0)
 
-        finals.append(solution[-1])
+            # extra free variable: the abortive rate
+            A = equlib_matrix(k1, state_nr)
+
+            # time in which to integrate over
+            tim = 1
+
+            # if there are 'nan' in A-matrix, return nan
+            if True in np.isnan(A):
+                solution = [np.nan]
+            else:
+                # using the x(t) = e^{A*t}*y(0) solution 
+                solution = dot(scipy.linalg.expm(A*tim,q=1), y0)
+
+            output = solution[-1] # [RNAP_final]
+
+        # finals are the values which will be correlated with PY
+        finals.append(output)
 
     return np.array(finals)
 
@@ -5092,9 +5121,11 @@ def equlib_matrix_experimental(rate, state_nr, abortive_rate):
 def equlib_matrix(rate, state_nr):
     """
     Assume equlibrium for the reaction:
-    X_f_0 <=> X_e_0 -> X_f_1
+    Xf_0 <=> Xe_0 -> Xf_1
 
-    Then you get d(Xf_1)/dt = k1[Xf_0]
+    Then you get d(Xf_1)/dt = k0[Xf_0]
+
+    where k0 is the equilibrium constant (ke/kf)
 
     Example:
 
@@ -6023,6 +6054,11 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges):
 def three_param_AB(ITSs, testing, p_line, par):
     """
     Print three parameter model with parameter estimation values.
+
+    expo = (c2*RNA_DNA +c3*DNA_DNA +c4*KEQ)/RT
+
+    Wow, awzm. Your new results show no role for the RNA-DNA hybrid. Also you've
+    got 90% peak correlation at +11! :) Peaks at +14 instead.
     """
 
     # grid size
@@ -6030,17 +6066,23 @@ def three_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 9
+        grid_size = 10
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
     # Parameter ranges you want to test out
+    # free it up
     c1 = np.array([par['K']]) # insensitive to variation here
-    c2 = np.linspace(0, par['rd_max'], grid_size)
-    #c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size)
-    c3 = np.linspace(-par['dd_max'], 0, grid_size)
-    c4 = np.linspace(0, par['eq_max'], grid_size)
+
+    #c2 = np.linspace(0, par['rd_max'], grid_size)
+    #c3 = np.linspace(-par['dd_max'], 0, grid_size)
+    #c4 = np.linspace(0, par['eq_max'], grid_size)
+
+    #c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
+    c2 = np.linspace(0, 0, 1)
+    c3 = np.linspace(0, 1, grid_size)
+    c4 = np.linspace(-1, 0, grid_size)
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6049,20 +6091,24 @@ def three_param_AB(ITSs, testing, p_line, par):
         #its_max = 16
 
     its_range = range(3, its_max)
+    #its_range = [5, 10, 15, 20]
+    #its_range = [10, 12, 15, 18, 20]
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=rands, retrofit=rands)
+                                 #randize=rands, retrofit=rands, non_rnap=False)
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
 
     # ladder plot
-    ymin = 0 # correlation is always high
+    ymin = -0.9 # correlation is always high
     ymax = 0.9 # correlation is always high
     randomize = rands # you didn't randomize
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, randomize,
-                                           par_ranges, p_line, its_max, ymin,
+                                           par_ranges, p_line, its_max,
+                                           its_range, ymin,
                                            ymax, testing, print_params=True)
 
     # where to make the scatter plot
@@ -6216,7 +6262,8 @@ def get_new_exprimetal_py(pred_file):
 
 
 def get_global_params():
-    global_params = {'K': 20,
+    #global_params = {'K': 20,
+    global_params = {'K': 2,
                      'dd_best': 0.2, # approximately
                      'rd_best': 0.2, # approximately
                      'eq_best': 0.6, # approximately
@@ -6234,15 +6281,15 @@ def equilibrium_vs_py(ITSs, testing, global_params):
     Plot the relationship between the accumulated value of the equilibrium
     constant and the PY value.
 
-    How should the figure be made? Make it somehow different than the other
-    figures.
+    Define cumulative propensity of backtracking (CPB)
+    Sum(Keq_i)
 
-    I can't really think of anything. Maybe just another scatter plot? The Keq
-    variable alone against PY? Get the optimal params and re-calculate the Keq
-    from the calc_k1 formula.
+    Alternatively call it the abortive propensity
 
-    # I don't understand; the PY values and the sum of k1 don't correlate. what
-    # is missing?
+    Hey, Jude. Can you pass an option to the functinos you've already written
+    that's called CPB. If True, you would calculate not the [RNAP_i] but the
+    CPB. Should be possibleh. Even enable it by default.
+
     """
     PYs = [its.PY for its in ITSs]
 
@@ -6251,52 +6298,57 @@ def equilibrium_vs_py(ITSs, testing, global_params):
 
     c1 = np.array([par['K']]) # insensitive to variation here
     #c2 = np.linspace(par['rd_min'], par['dd_max'], grid_size)
-    c2 = np.array([0]) # constant
-    c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size)
-    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    c2 = np.array([0]) # DNA-DNA
+    c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size) # RNA-DNA
+    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size) # 3D
 
     par_ranges = (c1, c2, c3, c4)
 
-    # use the optimal parameters from the optimization
-    # get average from +11 to +15
-    av_range = range(10,16)
-    its_len = 16
-    #its_len = 15
-    its_range = range(3, its_len)
-    av_range = range(10,13) # faster ...
+    #stages = range(21)
+    its_lens = [5, 10, 15, 20]
 
-    #opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges,
-                                 #opt_nucs = av_range)
+    # The RT constant
+    RT = 1.9858775*(37 + 273.15)/1000 # divide by 1000 to get kcalories
 
-    ##get the optimal parameters
-    #a, b, c, d = [o[0] for o in opt_par]
+    # store the top results for each its_len
+    results = dict((ilen, []) for ilen in its_lens)
 
-    # calculate the accumulated k1 values for all ITS
-    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
-    for its in ITSs:
+    for its_len in its_lens:
+        # go over each parameter combination
+        for param_comb in itertools.product(*par_ranges):
+            # calculate the CPB for all ITS for this parameter combination
+            (a, b, c, d) = param_comb
 
-        # calculate the 3d, dd, and rd (the -1/2 just works)
-        keq = its.keq_delta_di[:its_len-2]
-        #dna_dna = its.dna_dna_di[:its_len-1]
-        dna_dna = its.dna_dna_di[:its_len-2]
-        #ddlen = len(dna_dna)
-        #dna_dna = dna_dna[:10] + [0 for i in range(ddlen-10)]
-        #rna_dna = its.rna_dna_di[:its_len-2]
-        #rdlen = len(rna_dna)
-        #rna_dna = [0 for i in range(10)] + rna_dna[-(rdlen-10):]
+            for its in ITSs:
+                # calculate the 3d, dd, and rd (the -1/2 just works)
+                keq = its.keq_delta_di[:its_len-2]
+                dna_dna = its.dna_dna_di[:its_len-1]
+                dna_dna = its.dna_dna_di[:its_len-2]
+                ddlen = len(dna_dna)
+                dna_dna = dna_dna[:10] + [0 for i in range(ddlen-10)]
+                rna_dna = its.rna_dna_di[:its_len-2]
+                rdlen = len(rna_dna)
+                rna_dna = [0 for i in range(10)] + rna_dna[-(rdlen-10):]
 
-        # the accumulated k1 up to its_len
-        #k1 = calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a, b,
-                                     #c, d)
+                # the accumulated k1 up to its_len
+                k1 = calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna,
+                                             a, b, c, d)
 
-        #its.k1 = sum(k1)
-        #its.k1 = sum(-np.array(keq) + np.array(dna_dna) - np.array(rna_dna))
-        its.k1 = sum(-np.array(keq) + np.array(dna_dna))/RT
+                its.k1 = sum(k1)
+                #its.k1 = sum(-np.array(keq) + np.array(dna_dna) - np.array(rna_dna))
+                #its.k1 = sum(-np.array(keq) + np.array(dna_dna))/RT
 
-    # extract the PY and k1 values
-    PYs, k1s = zip(*[(its.PY, its.k1) for its in ITSs])
+            # extract the PY and k1 values
+            PYs, k1s = zip(*[(its.PY, its.k1) for its in ITSs])
+            corr, pval = spearmanr(PYs, k1s)
 
-    #
+            results[its_len].append((pval, corr))
+
+    for its_len, outp in results.items():
+        print its_len
+        best_res = sorted(outp)
+        debug()
+
     fig, ax = plt.subplots()
     ax.scatter(k1s, PYs)
 
@@ -6308,30 +6360,9 @@ def equilibrium_vs_py(ITSs, testing, global_params):
 
 def paper_figures(ITSs):
     """
-    How should I produce the figure? Should all of them be in single-figure so
-    that I can manually glue them together? Should you make nice A, B, C, D
-    things for example? Maybe you should leave this until the very end ... but
-    make it possible to make fast changes. Hey? Didn't you actually do that?
-    Where are the A B C D things? Was that done in another file? No! I remember
-    seeing it for the family plot.
+    Update malaga. When using only Keq, getting negative correlations suddenly.
+    As well, separmanr gives better correlation. Why the negative correlation?
 
-    Update Sankthansaften.
-
-    You found that the Dg = -RT*log(en)/1000 was previously missing log.
-    Further, it should be 1/en since Hein gets the equilibrium constant for the
-    opposite reaction. Your correlation is worse than before and the keq and DD
-    have changed signs log(1/n) = - log(n) which gives the change of sign.) How
-    to get out of this mess? Now the results don't match with the experiments.
-
-    Can you argue to do a function change on Keq? Since it's from another
-    organism and not with a scaffold? You have to do exp(-f(x)) to compensate
-    for the changes you have wrought.
-
-    Update again: you have found that the slight reduction in correlation output
-    is not too bad. As a bonus you got the RNA-DNA hybrid kicking in after +13;
-    possibly affecting the productive yield values a bit.
-
-    IDEA: make standard deviations for the parameters as well! :)
     """
     testing = True  # if testing, run everything fast
     #testing = False
@@ -6352,21 +6383,19 @@ def paper_figures(ITSs):
     global_params = get_global_params()
 
     # Figure 0 -> Keq equilibrium and PY values
-    # It's good with a direct image showing what you are saying with words
-    # RESULT you could only do it well with DD + 3D. Shit la gaa?
-    #
+    # UPDATE: now doing this with previous approach: just passing argument
     #equilib_name = 'equilibrium_vs_py'
     #equilib_fig = equilibrium_vs_py(ITSs, testing, global_params)
     #figs.append((equilib_fig, equilib_name))
 
     ### Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     #cross-reference
-    #ladder_name = 'three_param_model_AB' + append
-    #scatter_name = 'three_param_14_scatter' + append
-    #fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
+    ladder_name = 'three_param_model_AB' + append
+    scatter_name = 'three_param_14_scatter' + append
+    fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
 
-    #figs.append((fig_ladder, ladder_name))
-    #figs.append((fig_scatter, scatter_name))
+    figs.append((fig_ladder, ladder_name))
+    figs.append((fig_scatter, scatter_name))
 
     ## Figure 2.5 -> Three-parameter model with controls 
     #ladder_nog_name = 'three_param_control_AB' + append
@@ -6387,9 +6416,9 @@ def paper_figures(ITSs):
     #figs.append((fig_reduced_fixed, fixed_lad_name))
 
     #Figure 4 -> Predicted VS actual PY
-    predicted_name = 'Predicted_vs_measured' + append
-    fig_predicted = predicted_vs_measured(ITSs)
-    figs.append((fig_predicted, predicted_name))
+    #predicted_name = 'Predicted_vs_measured' + append
+    #fig_predicted = predicted_vs_measured(ITSs)
+    #figs.append((fig_predicted, predicted_name))
 
     ## Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append

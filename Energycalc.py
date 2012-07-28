@@ -149,6 +149,7 @@ def dnaizer(in_dict):
 
 RT = 1.9858775*(37 + 273.15)
 dna_keq = dnaizer(Keq_EC8_EC9)
+#dna_keq = Keq_EC8_EC9
 
 delta_keq = {}
 for din, en in dna_keq.items():

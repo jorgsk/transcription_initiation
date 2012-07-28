@@ -3,6 +3,9 @@
 Dictionaries with dinucleotide values from:
 
 RNA Transcript 3′-Proximal Sequence Affects Translocation Bias of RNA Polymerase
+
+NOTE dinucleotides are for the RNA, not the DNA.
+
 """
 resistant_fraction = {
 'AA': 0.64,
