@@ -333,7 +333,7 @@ class Result(object):
     the X*20 best. For random, mean and std are what's interesting (the mean and
     std of the best for each random sample)
     """
-    def __init__(self, corr=np.nan, pvals=np.nan, params=np.nan,
+    def __init__(self, corr=[np.nan], pvals=np.nan, params=np.nan,
                  finals=np.nan):
 
         self.corr = corr
@@ -347,7 +347,10 @@ class Result(object):
         self.corr_mean = np.mean(corr)
         self.corr_std = np.std(corr)
         max_indx = np.abs(corr).argmax() # correlation may be negative
-        self.corr_max = corr[max_indx]
+        if len(corr) == 1 and np.isnan(corr[0]):
+            self.corr_max = np.nan
+        else:
+            self.corr_max = corr[max_indx]
 
         self.pvals_mean = np.mean(pvals)
         self.pvals_std = np.std(pvals)
@@ -666,9 +669,6 @@ def ReadAndFixData():
     #lazt = Filereader.PYHsu(hsu4) # 2007 data, skipping N25, N25anti
     #lazt = Filereader.PYHsu(hsu5) # 2007 data, including N25, N25anti
     #biotech = '/Rahmi/full_sequences_standardModified'
-
-    #lazt = Filereader.Rahmi104(adapt=True)
-    # you should normalize these with the RBS calculator
 
     # Selecting the columns I want from Hsu. Removing all st except PYst.
     # list=[Name 0, Sequence 1, PY 2, PYstd 3, RPY 4, RIFT 5, APR 6, MSAT 7, R 8]
@@ -1765,7 +1765,7 @@ def new_long5UTR(lizt):
             fig.suptitle('{0}: no correlation between dinucleotide counts and resistant'\
                          ' fraction or optimal parameters'.format(headr), size=20)
 
-def new_AP(lizt, ITSs):
+def new_AP(ITSs):
     """
     Check of the abortive probabilities correlate with your dinucleotide
     propensities
@@ -1791,46 +1791,35 @@ def new_AP(lizt, ITSs):
                 abortProbs[prom].append(float(datum))
 
     # add all abortives and all propensities
-    APs = []
-    props = []
-    pys = []
+    #APs = []
+    #props = []
+    #pys = []
 
-    for ITS in ITSs:
+    nr= 0
+    for its in ITSs:
+        nr +=1
+        if nr >10:
+            break
         ap = []
-        prob = []
-
-        indiv = list(ITS.sequence[:9])
-        neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
         # not always agreement between ITS.msat and abortive probs
-        abortz = [a for a in abortProbs[ITS.name] if a != '-']
+        abortz = [a for a in abortProbs[its.name] if a != '-']
 
-        # zip them
-        for dinuc, AP in zip(neigh, abortz):
-            ap.append(AP)
-            prob.append(Ec.super_en[dinuc])
-            #prob.append(Ec.Keq_EC8_EC9[dinuc])
+        #get the keqs up to the length of abortiz
+        keqs = its.keq_delta_di[:len(abortz)]
 
-            # compare the standard deviations
-        APs.append(np.std(ap))
-        props.append(np.std(prob))
-        pys.append(ITS.PY)
+        #APs.append(np.std(ap))
+        #props.append(np.std(keqs))
+        #pys.append(its.PY)
 
-        #r, pval = spearmanr(ap, prob)
+        fig, ax = plt.subplots()
+        ax.scatter(abortz, keqs)
+        ax.set_title(its.name)
 
-        #fig, ax = plt.subplots()
-        #ax.bar(range(2, len(ap)+2), ap, color='b', alpha=0.7)
-        #ax.bar(range(2, len(prob)+2), prob, color='r', alpha=0.7)
-        #ax.set_title(ITS.name)
+        #print spearmanr(ap, keqs)
 
-            #print ITS.name
-            #print ap
-        #print spearmanr(ap, prob)
+    plt.show()
 
-
-
-    print spearmanr(APs, props)
-    print spearmanr(APs, pys)
     debug()
 
 def new_promoter_strength():
@@ -3581,8 +3570,8 @@ def family_of_models(ITSs, p_line, global_params):
         model_opt_params[model_name] = (opt_params, m)
 
     # then solve the equation again with randomization and retrofitting
-    randomize = 10
-    retrofit = 10
+    randomize = 0
+    retrofit = 0
 
     all_model_results = {}
     for (model_name, (opt_params, m)) in model_opt_params.items():
@@ -3703,9 +3692,12 @@ def print_model_family(resultz, p_line, max_its, ymin, alternative_model=False):
 
         # go over both the real and random results
         # This loop covers [0][0] and [0][1]
-        for (ddict, name, colr) in [(results, 'real', 'b'),
-                                    (rand_results, 'random', 'g'),
-                                   (retrof_results, 'cross-validated', 'r')]:
+        # don't print random and cross anymore?
+        #for (ddict, name, colr) in [(results, 'real', 'b'),
+                                    #(rand_results, 'random', 'g'),
+                                   #(retrof_results, 'cross-validated', 'r')]:
+
+        for (ddict, name, colr) in [(results, 'real', 'b')]:
 
             # don't process 'random' or 'retrofit' if not evaluated
             if False in ddict.values():
@@ -3769,6 +3761,8 @@ def print_model_family(resultz, p_line, max_its, ymin, alternative_model=False):
 
             # yticks
             ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                          alpha=0.5)
+            ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                           alpha=0.5)
 
             ax.set_ylim(ymin, 1)
@@ -4505,7 +4499,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
 
 
 def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
-                   normal=True, non_rnap=True):
+                   normal=True, non_rnap=True, predictive=False):
     """
     Wrapper around grid_scrunch and opt_scrunch.
 
@@ -4513,6 +4507,10 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
     values. normal is on by default; it calculates the normal correlation you're
     after (CBP or [RNAP]). non_rnap will not calculate the [RNAP] concentration
     but will instead calculate the cumulative sum of Keq at the its_ranges.
+
+    use non_rnap to not use diffeq model.
+
+    use predictive if not sending in py values
     """
 
     # make 'int' into a 'list' containing just that int
@@ -4533,7 +4531,8 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
         # get the 'normal' results
         if normal:
             normal_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0,
-                                        state_nr, non_rnap=non_rnap)
+                                        state_nr, predictive=predictive,
+                                        non_rnap=non_rnap)
         else:
             normal_obj = False
 
@@ -4541,16 +4540,16 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
         if randize:
             # get the results for randomized ITS versions
             random_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0,
-                                        state_nr, non_rnap=non_rnap,
-                                        randomize=randize)
+                                        state_nr, predictive=predictive,
+                                        non_rnap=non_rnap, randomize=randize)
         else:
             random_obj = False
 
         # Retrofit
         if retrofit:
             retrof_obj = grid_scruncher(PYs, its_len, ITSs, ranges, y0,
-                                        state_nr, non_rnap=non_rnap,
-                                        retrof=retrofit)
+                                        state_nr, predictive=predictive,
+                                        non_rnap=non_rnap, retrof=retrofit)
         else:
             retrof_obj = False
 
@@ -4601,7 +4600,7 @@ def get_its_variables(ITSs, randomize=False, retrofit=False, PY=False):
         return new_ITSs
 
 def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
-                   retrof=0, non_rnap=True):
+                   retrof=0, non_rnap=True, predictive=False):
     """
     Separate scruch calls into randomize, retrofit, or neither.
     """
@@ -4632,7 +4631,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
 
             # rerun with new arguments
             arguments_compare = (y0, its_len, state_nr, ITS_compare,
-                                 PYs_compare, non_rnap)
+                                 PYs_compare, non_rnap, predictive)
 
             # run the rest of the ITS with the optimal parameters
             control_result = grid_scrunch(arguments_compare, fit_ranges)
@@ -4657,7 +4656,8 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
 
             ITS_variables = get_its_variables(ITSs, randomize=True)
 
-            arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap)
+            arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap,
+                         predictive)
 
             rand_result = grid_scrunch(arguments, ranges)
 
@@ -4675,7 +4675,8 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
         #go from ITS object to dict to appease the impotent pickle
         ITS_variables = get_its_variables(ITSs)
 
-        arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap)
+        arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap,
+                     predictive)
 
         return grid_scrunch(arguments, ranges)
 
@@ -4748,15 +4749,17 @@ def grid_scrunch(arguments, ranges):
 
     # All_results is a list of tuples on the following form:
     # ((finals, par, rp, pp))
-    # Sort them on the pearson correlation pvalue, 'pp'
+    # Sort them on the pearson/spearman correlation pvalue, 'pp'
 
-    # Filter and pick the 20 with smalles pval
+    # Filter and pick the 20 with smallest pval
     all_sorted = sorted(all_results, key=itemgetter(3))
 
     # pick top 20
     top_hits = all_sorted[:20]
 
     # if top_hits is empty, return NaNs (created by default)
+    # this might occur of you send Py = zeros because you just want to calculate
+    # the final scores
     if top_hits == []:
         return Result() # all values are NaN
 
@@ -4786,19 +4789,21 @@ def _multi_func(paras, arguments):
     """
     all_hits = []
     # v. dangerous. should pass arguments in a dictionary to avoid this.
-    PYs = arguments[-2]
+    PYs = arguments[-3]
+    predictive = arguments[-1]
 
     for par in paras:
         finals = cost_function_scruncher(par, *arguments)
 
-        # XXX this one is easy to forget ... you don't want answers where the
-        # final values are ridiculously small
-        # this will only apply when calculating [RNAP] though. I guess.
-        if sum(finals) < 0.000000001:
-            continue
-
         # correlation
-        rp, pp = pearsonr(PYs, finals)
+        #rp, pp = pearsonr(PYs, finals)
+        rp, pp = spearmanr(PYs, finals)
+
+        # ignore those where the correlation is a nan
+        # they get a pvalue of 0 which mezzez things up
+        # ooopz, w
+        if not predictive and np.isnan(rp):
+            continue
 
         all_hits.append((finals, par, rp, pp))
 
@@ -4868,19 +4873,13 @@ def mini_scrunch(seqs, params, state_nr, y0, multi_range):
 def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
                             b, c, d):
     """
-    Seems there is 1 free nucleotide between RNADNA and dnd bubble. I can't
-    find any proof of that however. It might be there in the structural
-    studies. Maybe you just have to cite the others.
-
     Recall that the energies are in dinucleotide form. Thus ATG -> [0.4, 0.2]
-
-    See your notebook for how to calculate the exponential free energy stuff.
 
     Tip for the future; start at +1 also for nucleotides, so all arrays have the
     same length. Just have the first values as 0. Makes it much easier to
     understand the code later. The 0s are placeholders.
 
-    !!There is no RNA-DNA energy change before +9. FFS.
+    !!There is no RNA-DNA energy change before +10. FFS.
 
     Q: what do you get in? the keq, dna_dna etc?
 
@@ -4932,19 +4931,16 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
         #DNA_DNA = sum(dna_dna[:i+1]) # proving a point ...
         DNA_DNA = dna_dna[i+1] # the difference is the same as the last element
 
-        # index 7 is the same as x_10. k[7] is for x_10
-        if i < 7:
+        # index 8 is the same as x_11. k[8] is for x_11
+        if i < 8:
             #RNA_DNA = sum(rna_dna[:i])
             RNA_DNA = 0 #
         else:
-            # the 6 and the 7 are because of starting at +3, dinucleotides, and
-            # python indexing (reminder: start thinking like python with +0 for
-            # start)
-            RNA_DNA = sum(rna_dna[i-6:i+1]) - sum(rna_dna[i-7:i+1])
+            # the 7 and the 8 are because of starting at +3, dinucleotides, and
+            # python indexing 
+            RNA_DNA = sum(rna_dna[i-7:i+1]) - sum(rna_dna[i-8:i+1])
 
         expo = (b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
-
-        #expo = (d*KEQ)/RT
 
         rate = a*np.exp(-expo)
 
@@ -4952,8 +4948,63 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
 
     return k1
 
+def calculate_keq(RT, beg, end, d3, dna_dna, rna_dna, a, b, c, d,
+                  scrunching=True):
+    """
+    Recall that the energies are in dinucleotide form. Thus ATG -> [0.4, 0.2]
+
+    !!There is no RNA-DNA energy change before +10.
+
+    This function returns a list of keq_i values, where i in [beg, end]. The
+    dna_dna, rna_dna, and d3 values range from 0 to 20.
+
+    1234567891011
+    ATGCTGACGT A
+
+    ens = [z0(AT), z1(TG), z2(GC), z3(CT), z4(TG), z5(GA), z6(AC), z7(CG),
+    z8(GT), z9(TA)]
+
+    beg/end input is in 1-notation. Thus, i = 3 is ens[2]
+
+    """
+    keqs = np.zeros(end-beg) # array the size of the nr of keq asked for
+
+    # go from beg-1 to end-1 because the python index is one less than the +1 notation
+    # when the rna is 10 in length, it changes to 9 in post-translocated
+    # so that means i = 9
+    index = 0 # index for the keqs array
+    for i in range(beg-1, end-1):
+
+        KEQ = d3[i]
+
+        if scrunching:
+            DNA_DNA = dna_dna[i+1] # the difference is the same as the last element
+        else:
+            DNA_DNA = dna_dna[i+1] - dna_dna[i-12]
+
+        # when transcript is 10 (index 9) post-translocated has 1 less
+        # basepairing
+        if i < 9:
+            #RNA_DNA = sum(rna_dna[:i])
+            RNA_DNA = 0 #
+        else:
+            # the 7 and the 8 are because of starting at +3, dinucleotides, and
+            # python indexing 
+            RNA_DNA = -rna_dna[i-9]
+
+        expo = (b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
+
+        rate = a*np.exp(-expo)
+
+        keqs[index] = rate
+
+        index += 1
+
+    return keqs
+
 def cost_function_scruncher(start_values, y0, its_len, state_nr, ITSs, PYs,
-                            non_rnap, const_par=False, truth_table=False):
+                            non_rnap, predictive, const_par=False,
+                            truth_table=False):
     """
     k1 = exp(-(c2*rna_dna_i + c3*dna_dna_{i+1} + c4*Keq_{i-1}) * 1/RT)
 
@@ -5799,61 +5850,6 @@ def variable_corr():
 
     return fix
 
-def optimal_model_fixed_ladder(ITSs, testing, p_line, par):
-    """
-     In the first run, just get the optimal parameters for that submodel. In the
-     next run, use those optimal prameters together with random DNA and cross
-     validation of those parameters.
-     """
-
-    # Compare with the PY percentages in this notation
-    PYs = np.array([itr.PY for itr in ITSs])*0.01
-
-    # nr of nucleotides to consider
-    its_max = 21
-    its_range = range(3, its_max)
-
-    grid_size = 10
-
-    # initial grid
-    c1 = np.array([par['K']]) # insensitive to variation here
-    c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
-    c2 = np.array([0]) # insensitive to variation here
-    c3 = np.linspace(par['dd_min'], par['dd_max'], grid_size)
-    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
-
-    par_ranges = (c1, c2, c3, c4)
-
-    # use the optimal parameters froom the optimization
-    opt_par = get_optimal_params(PYs, its_range, ITSs, par_ranges)
-
-    # second round, optimal parameters only
-    par_ranges = opt_par
-
-    # second round, randomize cross validate like crazy
-    #randomize = 10
-    #retrofit = 10
-    randomize = 0
-    retrofit = 0
-
-    #run with optimal parameters
-    all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
-                                 randize=randomize, retrofit=retrofit)
-
-    # extract the specific results
-    results, rand_results, retrof_results = all_results
-
-    # ladder plot -- not printing parametes
-    ylim = -0.1
-    ymin=0
-    ymax=0.9
-    fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
-                                           retrof_results, randomize,
-                                           par_ranges, p_line, its_max, ylim,
-                                           ymin, ymax, testing,
-                                           print_params=True)
-    return fig_lad
-
 def get_optimal_params(PYs, its_range, ITSs, par_ranges,
                        opt_nucs='max'):
 
@@ -5918,16 +5914,19 @@ def three_param_control_A(ITSs, testing, p_line, par):
     rands = 20 # for cross-validating and random sequences
 
     if testing:
-        rands = 10
+        rands = 6
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
 
-    # Parameter ranges you want to test out
+    # This makes sense for the random DNA, but not for cross validation.
+    # why then is there cross validation error bars in plot A?
+    # it only makes sense in the case that these parameters are valid also for
+    # half the dataset. ... 
     c1 = np.array([par['K']]) # insensitive to variation here
-    c2 = np.array([0.5])
-    c3 = np.array([-0.5])
-    c4 = np.array([1])
+    c2 = np.array([0])
+    c3 = np.array([0.25])
+    c4 = np.array([-0.39])
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -5949,8 +5948,9 @@ def three_param_control_A(ITSs, testing, p_line, par):
     randomize = rands # you didn't randomize
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, randomize,
-                                           par_ranges, p_line, its_max, ymin,
-                                           ymax, testing, print_params=True)
+                                           par_ranges, p_line, its_max,
+                                           its_range, ymin, ymax, testing,
+                                           print_params=True)
 
     # clear the parameter axis -- you will add a new axis
     ax_lad[1].cla()
@@ -5959,20 +5959,21 @@ def three_param_control_A(ITSs, testing, p_line, par):
     grid_size = 15
 
     if testing:
-        grid_size = 12
+        grid_size = 10
 
     # Parameter ranges you want to test out
     c1 = np.array([par['K']]) # insensitive to variation here
-    c2 = np.linspace(par['rd_min'], par['rd_max'], grid_size)
-    c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size)
-    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size)
+    #c2 = np.array([0]) # insensitive to variation here
+    c2 = np.linspace(0, 1, grid_size)
+    c3 = np.linspace(0, 1, grid_size)
+    c4 = np.linspace(-1, 0, grid_size)
 
     par_ranges = (c1, c2, c3, c4)
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=0, retrofit=rands)
 
-    # Add the new ax-2 to ax_lad
+    # Add the new ax-2 to ax_ladder
     new_ax_two(ax_lad, all_results, its_max, par_ranges)
 
 
@@ -6002,6 +6003,7 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges):
 
     # extract the optimal parameters
     paramz_best = [r[1].params_best for r in sorted(results.items())]
+    debug()
 
     # extract the mean and std of the best cross-validated runs
     paramz_mean = [r[1].params_mean for r in sorted(retrof_results.items())]
@@ -6027,6 +6029,12 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges):
         ax.plot(incrX, best_par_vals, label=par2label[parameter],
                      linewidth=2, color=par2col[parameter])
 
+        #get the parameter values from pos 6 to 21
+        par_vals = [retrof_results[pos].params_best[parameter] for pos in range(6,21)]
+        mean = np.mean(par_vals)
+        std = np.std(par_vals)
+        print('{0}: {1:.2f} +/- {2:.2f}'.format(parameter, mean, std))
+
     # legend
     ax.legend(loc='lower right')
 
@@ -6051,6 +6059,8 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges):
     ax.text(0.03, 0.97, 'B', transform=ax.transAxes, fontsize=26,
             fontweight='bold', va='top')
 
+
+
 def three_param_AB(ITSs, testing, p_line, par):
     """
     Print three parameter model with parameter estimation values.
@@ -6066,10 +6076,12 @@ def three_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 10
+        grid_size = 15
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
+    #PYs = np.array([-np.log(itr.APR) for itr in ITSs])*0.01 # use APR instead
+    # or log (Fl/Ab), will give you the positive trend.
 
     # Parameter ranges you want to test out
     # free it up
@@ -6080,9 +6092,16 @@ def three_param_AB(ITSs, testing, p_line, par):
     #c4 = np.linspace(0, par['eq_max'], grid_size)
 
     #c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
+    #c2 = np.linspace(0, 1, grid_size)
     c2 = np.linspace(0, 0, 1)
     c3 = np.linspace(0, 1, grid_size)
-    c4 = np.linspace(-1, 0, grid_size)
+    c4 = np.linspace(0, 0, 1)
+    #c3 = np.linspace(0, 1, grid_size)
+    #c4 = np.linspace(-1, 0, grid_size)
+
+    #c2 = np.array([0]) # insensitive to variation here
+    #c3 = np.array([0.25]) # insensitive to variation here
+    #c4 = np.array([-0.5]) # insensitive to variation here
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6100,6 +6119,14 @@ def three_param_AB(ITSs, testing, p_line, par):
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
+
+    # print the mean and std of the estimated parameters
+    for param in ['c1', 'c2', 'c3', 'c4']:
+        #get the parameter values from pos 6 to 21
+        par_vals = [results[pos].params_best[param] for pos in range(6,21)]
+        mean = np.mean(par_vals)
+        std = np.std(par_vals)
+        print('{0}: {1:.2f} +/- {2:.2f}'.format(param, mean, std))
 
     # ladder plot
     ymin = -0.9 # correlation is always high
@@ -6161,19 +6188,11 @@ def predicted_vs_measured(ITSs):
 
     You ran, I think, with these parameters.
     params = (15, 0, 0.022, 0.24)
-
-    Hey, you did not. You'll need to get the parameters you ran with :S
-
-    OK, you get a decent correlation -- but now you need to change the K=20
-    value :S wtf is up with this? :S You need to get the correct parameters you
-    used for running the model and then apply it. The good news is that spearman
-    is between 0.4 and 0.6 and pearson depends more on the K value but is up to
-    0.68..! :)
     """
 
     # 2) Calculate the PY scores for them.
     # TODO update these parameters
-    params = (20, 0, -0.52, 0.94)
+    params = (1, 0, 0.25, -0.39)
     par_ranges = [np.array([p]) for p in params]
 
     its_range = range(3, 21)
@@ -6188,20 +6207,22 @@ def predicted_vs_measured(ITSs):
     # 2) Make ITS objects from the tested seqs
     test_obj = [ITS(seq + 'GAGTT', name) for name, seq in testseqs]
 
-    # 2) Run the testseqs and get the output
+    # 3) Run the testseqs and get the output
     fake_py = [0 for _ in range(len(test_obj))]
 
     test_results = scrunch_runner(fake_py, its_range, test_obj, par_ranges,
-                                  randize=randomize, retrofit=retrofit)
+                                  randize=randomize, retrofit=retrofit,
+                                  predictive=True)
 
     results, rand_results, retrof_results = test_results
 
     # add the output to the PY value
+    # it's not really the PY value ... it's the pp_15 or the [RNAP]
     for its, outp in zip(test_obj, results[15].finals):
-        its.PY = outp
+        its.score = outp
 
     # make a dictionary of promoter -> outp
-    pred_PY = dict((its.name, its.PY) for its in test_obj)
+    pred_PY = dict((its.name, its.score) for its in test_obj)
 
     # Get the PYs from the experiamant!
     #pred_file = 'prediction_experiment/my_summary_first_quant.csv'
@@ -6216,15 +6237,15 @@ def predicted_vs_measured(ITSs):
 
     ax.scatter(predicted, tested)
     plt.errorbar(predicted, tested, yerr=tested_std, fmt=None)
-    #plt.errorbar(predicted, tested, yerr=tested_std)
 
-    ax.set_xlabel('Model output [RNAP$_{final}$]')
+    ax.set_xlabel('PP_15')
     ax.set_ylabel('Productive yield')
 
     spearm = spearmanr(predicted, tested)
     pears = pearsonr(predicted, tested)
 
-    ax.set_title("Spearman: r: {0:.2f}, pval: {1:.2e}".format(*spearm))
+    ax.set_title("Spearman: r: {0:.2f}, pval: {1:.2e}\n"\
+                 "Pearson: r: {2:.2f}, pval: {3:.2e}".format(*(spearm+pears)))
 
     return fig
 
@@ -6262,17 +6283,28 @@ def get_new_exprimetal_py(pred_file):
 
 
 def get_global_params():
-    #global_params = {'K': 20,
-    global_params = {'K': 2,
-                     'dd_best': 0.2, # approximately
-                     'rd_best': 0.2, # approximately
-                     'eq_best': 0.6, # approximately
-                     'dd_min': 0.001,
-                     'dd_max': 1.4,
-                     'rd_min': 0.001, # this one goes pretty much to zero
-                     'rd_max': 1.4,
-                     'eq_min': 0.1,
-                     'eq_max': 1.7}
+    # for pp_n
+    global_params = {'K': 1,
+                     'dd_best': 0.25, # approximately
+                     'rd_best': 0.01, # approximately
+                     'eq_best': -0.39, # approximately
+                     'dd_min': 0,
+                     'dd_max': 1,
+                     'rd_min': 0, # this one goes pretty much to zero
+                     'rd_max': 1,
+                     'eq_min': -1,
+                     'eq_max': 0}
+    # for [RNAP]
+    #global_params = {'K': 1,
+                     #'dd_best': 0.2, # approximately
+                     #'rd_best': 0.2, # approximately
+                     #'eq_best': 0.6, # approximately
+                     #'dd_min': 0.001,
+                     #'dd_max': 1.4,
+                     #'rd_min': 0.001, # this one goes pretty much to zero
+                     #'rd_max': 1.4,
+                     #'eq_min': 0.1,
+                     #'eq_max': 1.7}
 
     return global_params
 
@@ -6390,14 +6422,14 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     #cross-reference
-    ladder_name = 'three_param_model_AB' + append
-    scatter_name = 'three_param_14_scatter' + append
-    fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
+    #ladder_name = 'three_param_model_AB' + append
+    #scatter_name = 'three_param_14_scatter' + append
+    #fig_ladder, fig_scatter = three_param_AB(ITSs, testing, p_line, global_params)
 
-    figs.append((fig_ladder, ladder_name))
-    figs.append((fig_scatter, scatter_name))
+    #figs.append((fig_ladder, ladder_name))
+    #figs.append((fig_scatter, scatter_name))
 
-    ## Figure 2.5 -> Three-parameter model with controls 
+    # Figure 2.5 -> Three-parameter model with controls 
     #ladder_nog_name = 'three_param_control_AB' + append
     #fig_nog_ladder, fig_nog_scatter = three_param_control_A(ITSs, testing,
                                                             #p_line,
@@ -6409,11 +6441,10 @@ def paper_figures(ITSs):
     #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
     #figs.append((fig_controversy, compare_name))
 
-    ### Figure 3 -> Optimal model model XXX Obsolete?
-    #fixed_lad_name = 'Optimal_model' + append
-    #fig_reduced_fixed = optimal_model_fixed_ladder(ITSs, testing, p_line,
-                                                   #global_params)
-    #figs.append((fig_reduced_fixed, fixed_lad_name))
+    ## Figure 3 -> The RNA DNA hybrid as a positive stabilizing force
+    rna_stable_name = 'RNA_stabilizing' + append
+    fig_rna_stable = rna_stable(ITSs, testing, p_line, global_params)
+    figs.append((fig_rna_stable, rna_stable_name))
 
     #Figure 4 -> Predicted VS actual PY
     #predicted_name = 'Predicted_vs_measured' + append
@@ -6455,6 +6486,24 @@ def paper_figures(ITSs):
     #fig_full_controversy = full_positive_RNADNA(ITSs, testing, p_line, global_params)
     #figs.append((fig_full_controversy, full_positive_name))
 
+    ### Figure 11 -> x-mers correlation; which x-mers are most important?
+    #x_mer_name = 'x_mers' + append
+    #fig_x_mer = xmer(ITSs, testing, p_line, global_params)
+    #figs.append((fig_x_mer, x_mer_name))
+    # RESULT your figure shows more or less what you wanted -- but should you
+    # include it?
+
+    ### Figure 12 -> the good old abortive probability vs
+    #x_mer_name = 'x_mers' + append
+    #fig_x_mer = xmer(ITSs, testing, p_line, global_params)
+    #figs.append((fig_x_mer, x_mer_name))
+    # RESULT your figure shows more or less what you wanted -- but should you
+    # include it?
+
+    ### Can you make a simple possion process where the probability to backtrack
+    #occurs so and so often? backtracking is not assumed to be fast; full length
+    #product shuold not take more than 3 seconds to be made. 
+
     # Save the figures
     for (fig, name) in figs:
         for fig_dir in fig_dirs:
@@ -6469,6 +6518,118 @@ def paper_figures(ITSs):
 
                 fig.savefig(os.path.join(odir, savename), transparent=True,
                             format=formt)
+
+def rna_stable(ITSs, testing, p_line, global_params):
+    """
+    Simply the accumulated DGRNA values
+    """
+
+    PYs = [i.PY for i in ITSs]
+
+    dgrna = []
+
+    for i in ITSs:
+        dgrna.append(cumulated_rna_hybrid_energy(i.rna_dna_di))
+
+    print spearmanr(PYs, dgrna)
+    print pearsonr(PYs, dgrna)
+
+    fig, ax = plt.subplots()
+
+    ax.scatter(dgrna, PYs)
+    ax.set_xlabel('PY')
+    ax.set_xlabel('Cumulated \Delta G_{RNA-DNA}')
+
+    return fig
+
+def cumulated_rna_hybrid_energy(rna_dna_en):
+    """
+    """
+    en = []
+    for i in range(18):
+        # index 8 is the same as x_11. k[8] is for x_11
+        if i < 8:
+            RNA_DNA = sum(rna_dna_en[:i])
+        else:
+            # the 7 and the 8 are because of starting at +3, dinucleotides, and
+            # python indexing 
+            RNA_DNA = sum(rna_dna_en[i-8:i])
+
+        en.append(RNA_DNA)
+
+    return sum(en)
+
+def xmer(ITSs, testing, p_line, global_params):
+    """
+    Get the Keq for x-mers and correlate with PY.
+
+    12345678
+    ATGCTGAC
+
+    [z0(AT), z1(TG), z2(GC), z3(CT), z4(TG), z5(GA), z6(AC)]
+    """
+
+    # 1 a function for 
+    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
+    a, b, c, d = 1, 0, 0.23, -0.36
+
+    # the keq, dnadna and rna_dna values must have the [0] at x-mer start and
+    # its_len for x-mer length. Example. 4-mer starting at +3
+    # keq = delta_keq[2:]
+    # its_len = 4
+    # But that's a problem because its_len is assumed to be the length from 1 to
+    # n. so if n is < 10, the rna-dna will not be calculated correctly. now,
+    # that doesn't matter so much, but still. can you solve this by passing a
+    # parameter which
+    # 
+    # the function below
+
+    PYs = [i.PY for i in ITSs]
+
+    x_mers = range(1,5)
+
+    all_ens = []
+    for x in x_mers:
+        x_energies = []
+        for beg in range(1,21-x):
+            end = beg + x
+            # stop when your x-mer has reached the end
+            if end > 20:
+                continue
+
+            # a column for the (beg, end) energy for each ITS -- this is the one
+            # you correlate with PY
+            its_energies = []
+
+            for its in ITSs:
+
+                d3 = its.keq_delta_di
+                dna_dna = its.dna_dna_di
+                rna_dna = its.rna_dna_di
+
+                keqs = calculate_keq(RT, beg, end, d3, dna_dna, rna_dna, a, b,
+                                     c, d, scrunching=True)
+
+                its_energies.append(sum(keqs))
+
+            x_energies.append(its_energies)
+
+        # now you can make a plot for this x_mer
+        bar_heights = [spearmanr(PYs, ens)[0] for ens in x_energies]
+
+        fig, ax = plt.subplots()
+        x_ax = range(2, len(bar_heights)+2)
+        ax.bar(x_ax, bar_heights)
+        ax.set_xlabel("Start-lenght of RNA for sum of keq")
+        ax.set_ylabel("Correlation coefficient")
+
+        ax.set_title("X-mer: {0}".format(x))
+
+        ax.set_xticks(x_ax)
+
+        plt.show()
+
+        #all_ens.append(x_energies)
 
 def full_positive_RNADNA(ITSs, testing, p_line, global_params):
     """
@@ -7597,6 +7758,12 @@ def compare_quantitations():
 def main():
     ITSs = ReadAndFixData() # read raw data
 
+    #pys = [i.PY for i in ITSs]
+    #aprs = [i.APR for i in ITSs]
+    #print spearmanr(pys, aprs)
+    #print pearsonr(pys, aprs)
+    #debug()
+
     #compare_quantitations()
 
     #third_report_figures(ITSs)
@@ -7631,30 +7798,6 @@ def main():
     # XXX Check the DG400 series with the new model
     # You did this before; how did you do it?
     #DG400_verifier(ITSs)
-    # RESULT your old seqs are not so robust. I want you to get models sets
-    # Score with the correlation on +12, +12, +13, +14, +15
-    # again. Then I want you to test all 20 of them on the 5 second-highest
-    # parameter values combinations. and choose the ones that give the best
-    # across all four. How should you rank that? The min and max values are one
-    # rank. Another rank is the linearity of the values. Get the pearson
-    # correlation with linspace from min to max. First do a test-run with your
-    # alread-generated values and then just apply that to the full-out version.
-    # Question: what should be my default parameters? Max is at 14, but that's
-    # out of touch with the rest of the values. I think you should go for the
-    # average from +11 to + 15.
-
-    # XXX Generate same-TR, variable DNA-DNA variants to test S-shaped function
-    # of DNA-DNA energy. RESULT you did it with random; now do it within the
-    # candidate_its function. Give Hsu sequences without three Cs in the
-    # beginning (20) and sequences for testing if low DNA alone is detrimental
-    # to abortive initiation nonlinearly.
-    # RESULT it seems that dna-dna is just as sensitive to TR values as the
-    # other way around. The odd thing is that there was no selection on it.
-    # Maybe there was some in vivo selection that I don't understand. Maybe in
-    # vitro it won't matter. This is a though one. Remember, with low TR you can
-    # have high . XXX I've now checked the sequenced I've sent to hsu and they
-    # look OK. I think you should just change that one C to something else and
-    # you're good to go. What to change it to?
 
     #s_shaped(ITSs)
 
@@ -7667,13 +7810,6 @@ def main():
     # XXX parameter-correlations
     # Kew-RD, Keq-DD, RD-DD
     #variable_corr()
-
-    # RESULT now you've got those figures. You'll need to let it run for a
-    # while witha huge grid, with random and with retrofitting. Then what? Is
-    # that going to be it? What more models must be included?
-    # Maybe you can rewrite the biophysics...? And make a latex-table for the
-    # Delta G energies. Einstein calling: add the 'equation' dir to the github
-    # repo ...
 
     # the naive exp-fitting models
     #fitting_models(lizt, ITSs)
@@ -7711,7 +7847,7 @@ def main():
     # Is there any covariance between DPKM and ribosomal gene for the energy
     # terms you've found? I suggest using only 1-promoter genes
 
-    #new_AP(lizt, ITSs)
+    #new_AP(ITSs)
     # RESULT: variance of AP correlates with variance of energy
     # Does that mean that variance of AP correlates with PY? Yes, but
     # weakly and negatively negatively.
