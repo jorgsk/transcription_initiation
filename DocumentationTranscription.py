@@ -4403,7 +4403,8 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
     after (CBP or [RNAP]). non_rnap will not calculate the [RNAP] concentration
     but will instead calculate the cumulative sum of Keq at the its_ranges.
 
-    use non_rnap to not use diffeq model.
+    use non_rnap to NOTE use the differential equation model, but instead only
+    use the sum of the equilibrium constants Keq to correlate with PY.
 
     use predictive if not sending in py values
     """
@@ -4568,6 +4569,7 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
     # NO RETROFIT AND NO RANDOMIZE
     else:
         #go from ITS object to dict to appease the impotent pickle
+        # maybe you didn't have to do that. that really sucks. now.
         ITS_variables = get_its_variables(ITSs)
 
         arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap,
@@ -4818,13 +4820,20 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
     # -> (2,3) = (0.5)
     k1 = np.zeros(its_len-2)
 
+    # for writing to file the Delta G values
+    keq_array = []
+    dnadna_array = []
+    rnadna_array = []
+
     for i in range(0, its_len-2):
 
         KEQ = keq[i]
+        keq_array.append(KEQ)
 
         #DNA_DNA = sum(dna_dna[:i+1+1]) - sum(dna_dna[:i+1]) #+1 for python
         #DNA_DNA = sum(dna_dna[:i+1]) # proving a point ...
         DNA_DNA = dna_dna[i+1] # the difference is the same as the last element
+        dnadna_array.append(DNA_DNA)
 
         # index 8 is the same as x_11. k[8] is for x_11
         if i < 8:
@@ -4834,6 +4843,7 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
             # the 7 and the 8 are because of starting at +3, dinucleotides, and
             # python indexing 
             RNA_DNA = sum(rna_dna[i-7:i+1]) - sum(rna_dna[i-8:i+1])
+        rnadna_array.append(RNA_DNA)
 
         expo = (b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
 
@@ -4841,7 +4851,7 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
 
         k1[i] = rate
 
-    return k1
+    return k1, (rnadna_array, dnadna_array, keq_array)
 
 def calculate_keq(RT, beg, end, d3, dna_dna, rna_dna, a, b, c, d,
                   scrunching=True):
@@ -4897,7 +4907,7 @@ def calculate_keq(RT, beg, end, d3, dna_dna, rna_dna, a, b, c, d,
 
     return keqs
 
-def cost_function_scruncher(start_values, y0, its_len, state_nr, ITSs, PYs,
+def cost_function_scruncher(start_values, y0, its_len, state_nr, ITS_dicts, PYs,
                             non_rnap, predictive, const_par=False,
                             truth_table=False):
     """
@@ -4907,14 +4917,16 @@ def cost_function_scruncher(start_values, y0, its_len, state_nr, ITSs, PYs,
     When the rna-dna reaches length 9, the you must subtract the hybrid for
     each step forward. The hybrid oscillates between a 8bp and a
     9bp hybrid during translocation.
-
     """
     # get the tuning parameters and the rna-dna and k1, kminus1 values
     # RT is the gas constant * temperature
     RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
     finals = []
 
-    for its_dict in ITSs:
+    outp_file = 'deltaG.txt'
+    outp_handle = open(outp_file, 'wb')
+
+    for its_dict in ITS_dicts:
 
         # must shift by minus 1 ('GATTA' example: GA, AT, TT, TA -> len 5, but 4
         # relevant dinucleotides)
@@ -4929,8 +4941,22 @@ def cost_function_scruncher(start_values, y0, its_len, state_nr, ITSs, PYs,
         (a, b, c, d) = start_values
 
         # equilibrium constants at each position
-        k1 = calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna,
-                                     a, b, c, d)
+        k1, entup = calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna,
+                                            a, b, c, d)
+
+        # extract the individual free energy values 
+        # these are different from above because they are the selected energies
+        # that participate in Keq_i. See calc_k1_diff function for details.
+        (rnadna_array, dnadna_array, keq_array) = entup
+        if its_len == 20:
+            outp_handle.write('placeholder\n')
+            for i in range(len(rnadna_array)):
+                rd = str(rnadna_array[i])
+                dd = str(dnadna_array[i])
+                d3 = str(keq_array[i])
+                inx = str(i + 3)
+                line = '\t'.join([inx, dd, rd, d3])
+                outp_handle.write(line + '\n')
 
         # if not calculating [RNAP], simply return the sum of k1
         if non_rnap:
@@ -4956,6 +4982,8 @@ def cost_function_scruncher(start_values, y0, its_len, state_nr, ITSs, PYs,
 
         # finals are the values which will be correlated with PY
         finals.append(output)
+
+    outp_handle.close()
 
     return np.array(finals)
 
@@ -5992,7 +6020,7 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 15
+        grid_size = 10
 
     # Compare with the PY percentages in this notation
     PYs = np.array([itr.PY for itr in ITSs])*0.01
@@ -6014,9 +6042,9 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     c3 = np.linspace(0, 1, grid_size)
     c4 = np.linspace(-1, 0, grid_size)
 
-    #c2 = np.array([0]) # insensitive to variation here
-    #c3 = np.array([0.25]) # insensitive to variation here
-    #c4 = np.array([-0.5]) # insensitive to variation here
+    c2 = np.array([0]) # 
+    c3 = np.array([0.25]) #
+    c4 = np.array([-0.5]) #
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6024,13 +6052,17 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     #if testing:
         #its_max = 16
 
-    its_range = range(3, its_max)
+    #its_range = range(3, its_max)
+    its_range = [20]
     #its_range = [5, 10, 15, 20]
     #its_range = [10, 12, 15, 18, 20]
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=rands, retrofit=rands)
                                  #randize=rands, retrofit=rands, non_rnap=False)
+
+    #a hack for just returning nothing so that you can modify the deltaG.txt file
+    return 1, 2
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
@@ -6353,11 +6385,9 @@ def equilibrium_vs_py(ITSs, testing, global_params):
 
     return fig
 
-
 def paper_figures(ITSs):
     """
-    Update malaga. When using only Keq, getting negative correlations suddenly.
-    As well, separmanr gives better correlation. Why the negative correlation?
+    The figures you want to include in the paper.
 
     """
     testing = True  # if testing, run everything fast
@@ -7582,6 +7612,29 @@ def compare_quantitations():
     plt.title(header)
     plt.show()
 
+def outp_write(ITSs):
+    """
+    """
+    infile = 'deltaG.txt'
+    outfile = 'DG.txt'
+
+    out_handle = open(outfile, 'wb')
+
+    for line in open(infile, 'rb'):
+
+        if line.startswith('placeholder'):
+            its_obj = ITSs.pop(0)
+            name, py = its_obj.name, its_obj.PY
+
+            new_line = 'ITS_variant:{0}\nPY:{1}'.format(name, py)
+
+            out_handle.write(new_line + '\n')
+        else:
+            out_handle.write(line)
+
+    out_handle.close()
+    debug()
+
 def main():
     ITSs = ReadAndFixData() # read raw data
 
@@ -7611,6 +7664,9 @@ def main():
     #ratio_issue(ITSs)
 
     paper_figures(ITSs)
+    # write the its and py to your delta g output file. it's a horrible hack
+    # that will come back to haunt you some day.
+    outp_write(ITSs)
 
     #selection_pressure(ITSs)
 
