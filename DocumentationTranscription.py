@@ -6037,32 +6037,31 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     #c4 = np.linspace(0, par['eq_max'], grid_size)
 
     #c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
-    c2 = np.linspace(0, 1, grid_size)
+    c2 = np.linspace(0, 2, grid_size)
     #c2 = np.linspace(0, 0, 1)
-    c3 = np.linspace(0, 1, grid_size)
-    c4 = np.linspace(-1, 0, grid_size)
+    c3 = np.linspace(0, 2, grid_size)
+    c4 = np.linspace(-2, 0, grid_size)
 
-    c2 = np.array([0]) # 
-    c3 = np.array([0.25]) #
-    c4 = np.array([-0.5]) #
+    #c2 = np.array([0]) # 
+    #c3 = np.array([0.25]) #
+    #c4 = np.array([-0.5]) #
 
     par_ranges = (c1, c2, c3, c4)
 
     its_max = 21
-    #if testing:
-        #its_max = 16
+    if testing:
+        its_max = 15
 
-    #its_range = range(3, its_max)
-    its_range = [20]
+    its_range = range(3, its_max)
+    #its_range = [20]
     #its_range = [5, 10, 15, 20]
     #its_range = [10, 12, 15, 18, 20]
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=rands, retrofit=rands)
-                                 #randize=rands, retrofit=rands, non_rnap=False)
 
     #a hack for just returning nothing so that you can modify the deltaG.txt file
-    return 1, 2
+    #return 1, 2
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
@@ -6074,7 +6073,7 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     # print the mean and std of the estimated parameters
     for param in ['c1', 'c2', 'c3', 'c4']:
         #get the parameter values from pos 6 to 21
-        par_vals = [results[pos].params_best[param] for pos in range(6,21)]
+        par_vals = [results[pos].params_best[param] for pos in range(6,its_max)]
         if param == 'c2':
             mean = np.mean(par_vals[8:])
             std = np.std(par_vals[8:])
@@ -6083,6 +6082,8 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
             std = np.std(par_vals)
 
         print('{0}: {1:.2f} +/- {2:.2f}'.format(param, mean, std))
+
+    debug()
 
     # ladder plot
     ymin = -0.9 # correlation is always high
@@ -6094,7 +6095,7 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
                                            its_range, ymin,
                                            ymax, testing, print_params=True)
 
-    maxnuc = 20
+    maxnuc = its_max
     if not scalad:
         # where to make the scatter plot
         # Without scatter + ladder
@@ -6242,6 +6243,8 @@ def predicted_vs_measured(ITSs):
 
     ax.set_title("Spearman: r: {0:.2f}, pval: {1:.2e}\n"\
                  "Pearson: r: {2:.2f}, pval: {3:.2e}".format(*(spearm+pears)))
+
+    debug()
 
     return fig
 
@@ -6437,9 +6440,9 @@ def paper_figures(ITSs):
     #figs.append((fig_nog_ladder, ladder_nog_name))
 
     ## Figure 2.7 -> Compare two and three parameter models
-    compare_name = 'compare_two_three_AB' + append
-    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    figs.append((fig_controversy, compare_name))
+    #compare_name = 'compare_two_three_AB' + append
+    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    #figs.append((fig_controversy, compare_name))
 
     ## Figure 3 -> The RNA DNA hybrid as a positive stabilizing force
     #rna_stable_name = 'RNA_stabilizing' + append
@@ -6447,9 +6450,6 @@ def paper_figures(ITSs):
     #figs.append((fig_rna_stable, rna_stable_name))
 
     #Figure 4 -> Predicted VS actual PY
-    #predicted_name = 'Predicted_vs_measured' + append
-    #fig_predicted = predicted_vs_measured(ITSs)
-    #figs.append((fig_predicted, predicted_name))
 
     ## Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
@@ -7666,7 +7666,7 @@ def main():
     paper_figures(ITSs)
     # write the its and py to your delta g output file. it's a horrible hack
     # that will come back to haunt you some day.
-    outp_write(ITSs)
+    #outp_write(ITSs)
 
     #selection_pressure(ITSs)
 
