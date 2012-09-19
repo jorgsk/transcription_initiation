@@ -4923,8 +4923,11 @@ def cost_function_scruncher(start_values, y0, its_len, state_nr, ITS_dicts, PYs,
     RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
     finals = []
 
-    outp_file = 'deltaG.txt'
-    outp_handle = open(outp_file, 'wb')
+    #outp_file = 'deltaG.txt'
+    #outp_handle = open(outp_file, 'wb')
+
+    #outp_file_keq = 'Keq.txt'
+    #outp_handle_keq = open(outp_file_keq, 'wb')
 
     for its_dict in ITS_dicts:
 
@@ -4944,19 +4947,31 @@ def cost_function_scruncher(start_values, y0, its_len, state_nr, ITS_dicts, PYs,
         k1, entup = calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna,
                                             a, b, c, d)
 
+        #XXX here follow two hacks: writing out keq and DG variables. if you
+        #uncomment this, you must be in control of what parameters you use as
+        #input to make sure they match what you want to write to file
+
         # extract the individual free energy values 
         # these are different from above because they are the selected energies
         # that participate in Keq_i. See calc_k1_diff function for details.
-        (rnadna_array, dnadna_array, keq_array) = entup
-        if its_len == 20:
-            outp_handle.write('placeholder\n')
-            for i in range(len(rnadna_array)):
-                rd = str(rnadna_array[i])
-                dd = str(dnadna_array[i])
-                d3 = str(keq_array[i])
-                inx = str(i + 3)
-                line = '\t'.join([inx, dd, rd, d3])
-                outp_handle.write(line + '\n')
+        #(rnadna_array, dnadna_array, keq_array) = entup
+        #if its_len == 20:
+            #outp_handle.write('placeholder\n')
+            #for i in range(len(rnadna_array)):
+                #rd = str(rnadna_array[i])
+                #dd = str(dnadna_array[i])
+                #d3 = str(keq_array[i])
+                #inx = str(i + 3)
+                #line = '\t'.join([inx, dd, rd, d3])
+                #outp_handle.write(line + '\n')
+
+        # write the Keq values to file
+        # this is bad practise, but I don't see how else you can do it without a
+        # large re-haul of the code.
+        #if its_len == 20:
+            #outp_handle_keq.write('placeholder\n')
+            #keqs = '\t'.join([str(keq) for keq in k1])
+            #outp_handle_keq.write(keqs + '\n')
 
         # if not calculating [RNAP], simply return the sum of k1
         if non_rnap:
@@ -4983,7 +4998,8 @@ def cost_function_scruncher(start_values, y0, its_len, state_nr, ITS_dicts, PYs,
         # finals are the values which will be correlated with PY
         finals.append(output)
 
-    outp_handle.close()
+    #outp_handle_keq.close()
+    #outp_handle.close()
 
     return np.array(finals)
 
@@ -6184,6 +6200,7 @@ def predicted_vs_measured(ITSs):
 
     You ran, I think, with these parameters.
     params = (15, 0, 0.022, 0.24)
+
     """
 
     # 2) Calculate the PY scores for them.
@@ -6205,7 +6222,9 @@ def predicted_vs_measured(ITSs):
 
     # 3) Run the testseqs and get the output
     fake_py = [0 for _ in range(len(test_obj))]
+    #fake_py = np.array([itr.PY for itr in ITSs])*0.01
 
+    #test_results = scrunch_runner(fake_py, its_range, ITSs, par_ranges,
     test_results = scrunch_runner(fake_py, its_range, test_obj, par_ranges,
                                   randize=randomize, retrofit=retrofit,
                                   predictive=True)
@@ -6437,9 +6456,9 @@ def paper_figures(ITSs):
     #figs.append((fig_nog_ladder, ladder_nog_name))
 
     ## Figure 2.7 -> Compare two and three parameter models
-    compare_name = 'compare_two_three_AB' + append
-    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    figs.append((fig_controversy, compare_name))
+    #compare_name = 'compare_two_three_AB' + append
+    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    #figs.append((fig_controversy, compare_name))
 
     ## Figure 3 -> The RNA DNA hybrid as a positive stabilizing force
     #rna_stable_name = 'RNA_stabilizing' + append
@@ -7635,23 +7654,171 @@ def outp_write(ITSs):
     out_handle.close()
     debug()
 
+def keq_outp_write(ITSs):
+    """
+    """
+    infile = 'Keq.txt'
+    outfile = 'Keq_data_and_PY.txt'
+
+    out_handle = open(outfile, 'wb')
+
+    for line in open(infile, 'rb'):
+
+        if line.startswith('placeholder'):
+            its_obj = ITSs.pop(0)
+            name, py = its_obj.name, its_obj.PY
+
+            new_line = 'ITS_variant:{0}\nPY:{1}'.format(name, py)
+
+            out_handle.write(new_line + '\n')
+        else:
+            out_handle.write(line)
+
+    out_handle.close()
+
+def abortive_initiation_fromwhere(ITSs):
+    """
+    Three different models of where abortive initiation occurs from:
+
+        1) Pre
+        2) Pre and Post
+        3) Post
+
+    These models are tested against 5 hypothetical sequences which have the
+    following sum of Keq:
+
+    Very high
+    high
+    medium
+    low
+    very low
+
+    These sums can be obtained in two ways: varying k1 or k2 while keeping the
+    other constant. Thus I get 6 output sets.
+
+    What is Keq? In my calculations it varies from 0.49 to 2.72. Incidentally
+    this is within the same range as obtained by Hein. et al, which reflects
+    that it's mostly the dinucleotide making its impact.
+
+    I believe that reverse-translocation plays a much larger role during
+    scrunching than during normal RNAP transcription elongation. Mean is 1.5.
+
+    1) Get something simple working.
+
+    You need to easily define the abortive probabilities
+    [0.1 for i in range(10)]
+
+    The k1 and k2 (one constant, the other between some high/low to achieve
+    mean values between 0.5 and 2.5).
+    """
+
+    # name, py, and keq of ITS
+    its_info = keq_reader()
+
+    # how long the sequence should be (constructed ones)
+    seq_len = 10
+
+    # the number of sequences
+    nr_seqs = 5
+
+    # "rate" of backtracing
+    abortive_probability = [0.1 for _ in range(seq_len)]
+
+    # "rate" of nucleotide incorporation
+    forward_rates = [1 for _ in range(seq_len)]
+
+    # the keq values for the ITS variants
+    keqs = [d[1] for d in its_info.values()]
+
+    model_types = ['Pre', 'Pre_and_Post', 'Post']
+
+    variator_coefficient = ['k1', 'k2']
+
+    tim = 1
+
+    y0 = [1 for _ in range(nr_seqs)]
+
+    for model_type in model_types:
+
+        for variator in variator_coefficient:
+
+            # define the values for k1 and k2
+            if variator == 'k1':
+                k2 = 1
+            elif variator == 'k2':
+                k1 = 1
+            # evaluate k1/k2 based on keq = k1/k2
+
+            # construct the matrix
+            # to matrices; one with keq and one with k1 and k2
+
+            # keq matrix
+            A = keq_matrix(abortive_probability, forward_rates, its_info,
+                           model_type)
+
+            # using the x(t) = e^{A*t}*y(0) solution 
+            soln = dot(scipy.linalg.expm(A*tim), y0)
+
+
+def keq_matrix(abortive_probability, forward_rates, its_info, model_type):
+    """
+    Return matrix of equilibrium process depending on model type
+    """
+
+def keq_reader():
+    """
+    read the keq_data.csv file
+    """
+
+    infile = "Keq_data_and_PY.txt"
+
+    its_info = {}
+
+    #ITS_variant:DG163a
+    #PY:3.4
+    #0.662700068357
+
+    inf_handle = open(infile, 'rb')
+
+    line1 = inf_handle.next()
+
+    its_name = line1.split(':')[1].rstrip()
+
+    info = []
+
+    # parse the file ...
+    for line in inf_handle:
+        if not line.startswith('ITS_variant'):
+            if line.startswith('PY'):
+                PY = line.split(':')[1].rstrip()
+                info.append(PY)
+            else:
+                keqs = line.split()
+                info.append(keqs)
+        else:
+            its_info[its_name] = info
+
+            its_name = line.split(':')[1].rstrip()
+            info = []
+
+    pys = [float(g[0]) for g in its_info.values()]
+
+    keq_sum = [sum([float(i) for i in g[1]]) for g in its_info.values()]
+
+    print spearmanr(pys, keq_sum)
+
+    return its_info
+
+
 def main():
     ITSs = ReadAndFixData() # read raw data
 
-    #pys = [i.PY for i in ITSs]
-    #aprs = [i.APR for i in ITSs]
-    #oneoverAPR = 1/np.array(aprs)
-    #plt.scatter(pys, oneoverAPR)
-    #plt.xlabel('PY')
-    #plt.ylabel('1/APR')
-    #print spearmanr(pys, aprs)
-    #print pearsonr(pys, aprs)
+    abortive_initiation_fromwhere(ITSs)
 
     #compare_quantitations()
 
     #third_report_figures(ITSs)
 
-    #print np.median([i.msat for i in ITSs])
     #debug()
 
     #genome_wide()
@@ -7663,10 +7830,12 @@ def main():
     # Compare the ratio in the new to the old
     #ratio_issue(ITSs)
 
-    paper_figures(ITSs)
+    #paper_figures(ITSs)
+
     # write the its and py to your delta g output file. it's a horrible hack
-    # that will come back to haunt you some day.
-    outp_write(ITSs)
+    # that will come back to haunt you some day. you add its name and py.
+    #outp_write(ITSs)
+    #keq_outp_write(ITSs) #XXX equally horrible, a keq-write hack
 
     #selection_pressure(ITSs)
 
