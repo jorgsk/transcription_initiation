@@ -992,7 +992,7 @@ def new_ladder(lizt):
 
     ax.set_xticks(range(3,21))
     ax.set_xticklabels(xticklabels)
-    ax.set_xlabel("RNA length $n$ used to calculate $pp_n$", size=26)
+    ax.set_xlabel("RNA length $n$ used to calculate $SE_n$", size=26)
     ax.set_ylabel("Correlation coefficient, $r$", size=26)
 
     if pline == 'yes':
@@ -3672,7 +3672,7 @@ def print_model_family2(resultz, p_line, max_its, ymin):
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,21)
 
-        ax.set_xlabel("RNA length $n$ used to calculate $pp_n$", size=10)
+        ax.set_xlabel("RNA length $n$ used to calculate $SE_n$", size=10)
 
         for l in ax.get_xticklabels():
             l.set_fontsize(6)
@@ -3797,7 +3797,7 @@ def print_model_family(resultz, p_line, max_its, ymin):
             ax.set_xlim(3,21)
 
             if row_nr == 1:
-                ax.set_xlabel("RNA length $n$ used to calculate $pp_n$", size=8)
+                ax.set_xlabel("RNA length $n$ used to calculate $SE_n$", size=8)
 
             for l in ax.get_xticklabels():
                 l.set_fontsize(5)
@@ -3993,8 +3993,8 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
     ax.scatter(finals, PYs, color= 'k')
     ax.errorbar(finals, PYs, yerr=PY_std, fmt=None, color= 'k')
 
-    ax.set_ylabel("PY", size=15)
-    ax.set_xlabel("$pp_{20}$", size=15)
+    ax.set_ylabel("PY", size=20)
+    ax.set_xlabel("$SE_{20}$", size=20)
 
     # awkward way of setting the tick sizes
     for l in ax.get_xticklabels():
@@ -4054,7 +4054,7 @@ def parameter_relationship(results, optim, randomize, par_ranges):
     ax.set_xticks(x_range)
     ax.set_xticklabels(xticklabels)
     #ax.set_xlim(3,21)
-    ax.set_xlabel("RNA length $n$ used to calculate $pp_n$", size=20)
+    ax.set_xlabel("RNA length $n$ used to calculate $SE_n$", size=20)
 
 def print_scrunch_ladder_compare(results, rand_results, retrof_results,
                                  randomize, par_ranges, p_line, its_max, ymin,
@@ -4141,7 +4141,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
         ax.set_xticks(range(3,its_max))
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,its_max)
-        ax.set_xlabel("RNA length $n$ used to calculate $pp_n$", size=23)
+        ax.set_xlabel("RNA length $n$ used to calculate $SE_n$", size=23)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
@@ -4325,7 +4325,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
         ax.set_xticks(range(3,its_max))
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,its_max)
-        ax.set_xlabel("RNA length $n$ used to calculate $pp_n$", size=23)
+        ax.set_xlabel("RNA length $n$ used to calculate $SE_n$", size=23)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
@@ -6003,7 +6003,7 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges, printB):
     ax.set_xticks(range(3,its_max))
     ax.set_xticklabels(xticklabels)
     ax.set_xlim(3,its_max)
-    ax.set_xlabel("RNA length $n$ used to calculate $pp_n$", size=23)
+    ax.set_xlabel("RNA length $n$ used to calculate $SE_n$", size=23)
 
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
@@ -6053,56 +6053,56 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     #c4 = np.linspace(0, par['eq_max'], grid_size)
 
     #c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
-    c2 = np.linspace(0, 1, grid_size)
+    c2 = np.linspace(0, 2, grid_size)
     #c2 = np.linspace(0, 0, 1)
-    c3 = np.linspace(0, 1, grid_size)
-    c4 = np.linspace(-1, 0, grid_size)
+    c3 = np.linspace(0, 2, grid_size)
+    c4 = np.linspace(-2, 0, grid_size)
 
-    c2 = np.array([0]) # 
-    c3 = np.array([0.25]) #
-    c4 = np.array([-0.5]) #
+    #c2 = np.array([0]) # 
+    #c3 = np.array([0.25]) #
+    #c4 = np.array([-0.5]) #
 
     par_ranges = (c1, c2, c3, c4)
 
     its_max = 21
-    #if testing:
-        #its_max = 16
+    if testing:
+        its_max = 15
 
-    #its_range = range(3, its_max)
-    its_range = [20]
+    its_range = range(3, its_max)
+    its_range = [15]
     #its_range = [5, 10, 15, 20]
     #its_range = [10, 12, 15, 18, 20]
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=rands, retrofit=rands)
-                                 #randize=rands, retrofit=rands, non_rnap=False)
 
     #a hack for just returning nothing so that you can modify the deltaG.txt file
-    return 1, 2
+    #return 1, 2
 
     # extract the specific results
     results, rand_results, retrof_results = all_results
 
-    # Make a regression model for pp_n and rna-dna
+    # Make a regression model for SE_n and rna-dna
     # RESULT no effect seen
     #linear_model(ITSs, results, PYs)
 
+    # XXX pringing params
     # print the mean and std of the estimated parameters
-    for param in ['c1', 'c2', 'c3', 'c4']:
-        #get the parameter values from pos 6 to 21
-        par_vals = [results[pos].params_best[param] for pos in range(6,21)]
-        if param == 'c2':
-            mean = np.mean(par_vals[8:])
-            std = np.std(par_vals[8:])
-        else:
-            mean = np.mean(par_vals)
-            std = np.std(par_vals)
+    #for param in ['c1', 'c2', 'c3', 'c4']:
+        ##get the parameter values from pos 6 to 21
+        #par_vals = [results[pos].params_best[param] for pos in range(6,its_max)]
+        #if param == 'c2':
+            #mean = np.mean(par_vals[8:])
+            #std = np.std(par_vals[8:])
+        #else:
+            #mean = np.mean(par_vals)
+            #std = np.std(par_vals)
 
-        print('{0}: {1:.2f} +/- {2:.2f}'.format(param, mean, std))
+        #print('{0}: {1:.2f} +/- {2:.2f}'.format(param, mean, std))
 
     # ladder plot
-    ymin = -0.9 # correlation is always high
-    ymax = 0.9 # correlation is always high
+    ymin = -0.3 # correlation is always high
+    ymax = 1.0 # correlation is always high
     randomize = rands # you didn't randomize
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, randomize,
@@ -6110,7 +6110,7 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
                                            its_range, ymin,
                                            ymax, testing, print_params=True)
 
-    maxnuc = 20
+    maxnuc = its_max
     if not scalad:
         # where to make the scatter plot
         # Without scatter + ladder
@@ -6153,8 +6153,6 @@ def linear_model(ITSs, results, PYs):
     print results.summary()
 
     debug()
-
-
 
 
 def RNAP_2_PY(ITSs, concentrations, params=(20, 0, 0.022, 0.24), its_len=15):
@@ -6203,6 +6201,9 @@ def predicted_vs_measured(ITSs):
 
     """
 
+    # add a polynomial or sigmoid fit
+    fit_function = True
+
     # 2) Calculate the PY scores for them.
     # TODO update these parameters
     params = (1, 0, 0.25, -0.39)
@@ -6220,6 +6221,9 @@ def predicted_vs_measured(ITSs):
     # 2) Make ITS objects from the tested seqs
     test_obj = [ITS(seq + 'GAGTT', name) for name, seq in testseqs]
 
+    for o in test_obj:
+        print o.sequence
+
     # 3) Run the testseqs and get the output
     fake_py = [0 for _ in range(len(test_obj))]
     #fake_py = np.array([itr.PY for itr in ITSs])*0.01
@@ -6231,38 +6235,96 @@ def predicted_vs_measured(ITSs):
 
     results, rand_results, retrof_results = test_results
 
-    # add the output to the PY value
-    # it's not really the PY value ... it's the pp_15 or the [RNAP]
+    # add the SE_15 (or [RNAP])
     for its, outp in zip(test_obj, results[15].finals):
         its.score = outp
 
     # make a dictionary of promoter -> outp
-    pred_PY = dict((its.name, its.score) for its in test_obj)
+    pred_PY = dict((its.name, (its.score, its.sequence)) for its in test_obj)
 
     # Get the PYs from the experiamant!
     #pred_file = 'prediction_experiment/my_summary_first_quant.csv'
     pred_file = 'prediction_experiment/Second_quantification/summary_second_quant.csv'
     tested_PY = get_new_exprimetal_py(pred_file)
 
-    predicted, tested = zip(*[(pred_PY[pr], tested_PY[pr].PY) for pr in pred_PY])
+    predicted, tested = zip(*[(pred_PY[pr][0], tested_PY[pr].PY) for pr in pred_PY])
     # get standard deviation
     tested_std = [tested_PY[pr].PY_std for pr in pred_PY]
+
+    # write all of this to an output file
+    write_py_SE15(tested_PY, pred_PY)
 
     fig, ax = plt.subplots()
 
     ax.scatter(predicted, tested)
     plt.errorbar(predicted, tested, yerr=tested_std, fmt=None)
 
-    ax.set_xlabel('PP_15')
+    ax.set_xlabel('$SE_{15}$')
     ax.set_ylabel('Productive yield')
 
-    spearm = spearmanr(predicted, tested)
-    pears = pearsonr(predicted, tested)
+    #spearm = spearmanr(predicted, tested)
+    #pears = pearsonr(predicted, tested)
+    #ax.set_title('r = {0:.2f}, p-value = {1:.2e}'.format(*spearm))
 
-    ax.set_title("Spearman: r: {0:.2f}, pval: {1:.2e}\n"\
-                 "Pearson: r: {2:.2f}, pval: {3:.2e}".format(*(spearm+pears)))
+    if fit_function:
+        add_fitted_function(ax, predicted, tested)
 
     return fig
+
+def write_py_SE15(tested_PY, pred_PY):
+
+    outp = open('output_seqs/seq_PY_SE15.csv', 'wb')
+
+    for dgxx, (se15, sequence) in pred_PY.items():
+        i = tested_PY[dgxx]
+        seq = sequence[:15]
+
+        outp.write('\t'.join([dgxx, seq, str(se15), str(i.PY)]) + '\n')
+
+    outp.close()
+
+def add_fitted_function(ax, predicted, tested):
+    """
+    Add a sigmoid fit to the plot
+    """
+    #from scipy.odr import odrpack as odr
+    #from scipy.odr import models
+
+    def sigmoid_function(B, x):
+        """
+        B is the parameters and x is the SE_15
+        """
+
+        #return B[0]/(1+np.exp(-x))
+        #return B[0]/(B[1]+np.exp(-x))
+        return B[0]/(B[1]+B[2]*np.exp(-x))
+
+    def sigm_error(B, x, y):
+        """
+        """
+        return y - sigmoid_function(B, x)
+
+    B0 = [1, 1, 1]
+    x = np.array(predicted)
+    y = np.array(tested)
+
+    # Normal least squares
+    fit = optimize.leastsq(sigm_error, B0, args=(x, y))
+    outp_args = fit[0]
+    fit_vals = [sigmoid_function(outp_args, x_val) for x_val in x]
+    # sort by increasing x-value
+    (sort_x, sort_fit) = zip(*sorted(zip(x, fit_vals)))
+
+    # odd_ least squares
+    #my_model = odr.Model(sigmoid_function)
+    #my_data = odr.Data(x,y)
+    #my_odr = odr.ODR(my_data, my_model, beta0=B0)
+    ## fit type 2 for least squares
+    #my_odr.set_job(fit_type=2)
+    #fit = my_odr.run()
+    # XXX I didn't get a nice fit this way, but keep code just in case
+
+    ax.plot(sort_x, sort_fit)
 
 def get_new_exprimetal_py(pred_file):
     """
@@ -6298,7 +6360,7 @@ def get_new_exprimetal_py(pred_file):
 
 
 def get_global_params():
-    # for pp_n
+    # for SE_n
     global_params = {'K': 1,
                      'dd_best': 0.25, # approximately
                      'rd_best': 0.01, # approximately
@@ -6466,9 +6528,9 @@ def paper_figures(ITSs):
     #figs.append((fig_rna_stable, rna_stable_name))
 
     #Figure 4 -> Predicted VS actual PY
-    #predicted_name = 'Predicted_vs_measured' + append
-    #fig_predicted = predicted_vs_measured(ITSs)
-    #figs.append((fig_predicted, predicted_name))
+    evaluation_name = 'Predicted_vs_measured' + append
+    fig_evaluation = predicted_vs_measured(ITSs)
+    figs.append((fig_evaluation, evaluation_name))
 
     ## Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
@@ -6675,22 +6737,24 @@ def compare_two_three(ITSs, testing, p_line, par):
     c4 = np.linspace(-1, 0, grid_size)
 
     # define the ranges for the two minimal models
+    zero = np.array([0])
+    one_param = (c1, zero, zero, c4)
+    two_param = (c1, zero, c3, c4)
     three_param = (c1, c2, c3, c4)
-    two_param_A = (c1, np.array([0]), c3, c4)
-    two_param_B = (c1, c2, np.array([0]), c4)
-    two_param_C = (c1, c2, c3, np.array([0]))
 
     # use the optimal parameters from the optimization
     # XXX at the moment you will use the 
     #two = get_optimal_params(PYs, its_range, ITSs, two_param, optim, t)
-    name2A = 'Equilibrium constant without RNA-DNA hybrid'
-    name2B = 'Equilibrium constant without DNA bubble'
-    name2C = "Equilibrium constant without 3' dinucleotide"
-    #three = get_optimal_params(PYs, its_range, ITSs, three_param, optim, t)
-    name3 = 'Original'
 
-    collection = [(two_param_A, name2A), (two_param_B, name2B),
-                  (three_param, name3), (two_param_C, name2C)]
+    #Building up slowly
+    name1 = '$\Delta G_{3D}$'
+    name2 = '$\Delta G_{3D} + \Delta G_{DNA-DNA}$'
+    name3 = '$\Delta G_{3D} + \Delta G_{DNA-DNA}$ + \Delta G_{RNA-DNA}'
+    #three = get_optimal_params(PYs, its_range, ITSs, three_param, optim, t)
+
+    collection = [(one_param, name1),
+                  (two_param, name2),
+                  (three_param, name3)]
 
     # collect the results
     resulter = {}
@@ -6706,14 +6770,14 @@ def compare_two_three(ITSs, testing, p_line, par):
         # store result with name
         resulter[name] = results
 
-    ymin = -0.4 # correlation is always high
-    ymax = 0.9 # correlation is always high
+    ymin = -0.2 # correlation is always high
+    ymax = 1.0 # correlation is always high
 
     #fig, axes = plt.subplots(1,2)
     fig, ax = plt.subplots()
 
     # plot them 
-    colors = ['b', 'g', 'c', 'k']
+    colors = ['b', 'g', 'c', 'k', 'r']
     for name, results in resulter.items():
         color = colors.pop()
         compare_plot(ax, name, results, color, its_max, p_line, ymin, ymax)
@@ -6760,7 +6824,7 @@ def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
     ax.set_xticks(range(3,its_max))
     ax.set_xticklabels(xticklabels)
     ax.set_xlim(3,its_max)
-    ax.set_xlabel("RNA length $n$ used to calculate $pp_n$", size=23)
+    ax.set_xlabel("RNA length $n$ used to calculate $SE_n$", size=23)
 
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
@@ -7652,7 +7716,6 @@ def outp_write(ITSs):
             out_handle.write(line)
 
     out_handle.close()
-    debug()
 
 def keq_outp_write(ITSs):
     """
