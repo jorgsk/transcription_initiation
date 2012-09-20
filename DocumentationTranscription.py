@@ -10,6 +10,8 @@ import random
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+
+
 import scipy.stats
 from scipy import optimize
 from scipy.stats import spearmanr, pearsonr
@@ -71,6 +73,15 @@ fig_dir1 = os.path.join(here, 'figures')
 fig_dir2 = '/home/jorgsk/Dropbox/The-Tome/my_papers/rna-dna-paper/figures'
 
 fig_dirs = (fig_dir1, fig_dir2)
+
+class AutoVivification(dict):
+    """Implementation of perl's autovivification feature."""
+    def __getitem__(self, item):
+        try:
+            return dict.__getitem__(self, item)
+        except KeyError:
+            value = self[item] = type(self)()
+            return value
 
 def welchs_approximate_ttest(n1, mean1, sem1, n2, mean2, sem2, alpha):
     """
@@ -7773,56 +7784,198 @@ def abortive_initiation_fromwhere(ITSs):
 
     The k1 and k2 (one constant, the other between some high/low to achieve
     mean values between 0.5 and 2.5).
+
+    You should vary the Keq values and see how it varies the variability. Think
+    hard about your benchmarks.
+
+    The problem is the following parameters:
+
+        backtracking rate
+        forward rate (k3)
+        time of simulation (t)
+
+    when you vary them, your conclusions may vary. further, those parameters are
+    not constant at all; they probably depend on scrunching. but what you
+    actually wanted to find out is if there is some kind of mechanistic problem
+    with having abortive initiation happening from the post-state.
     """
 
     # name, py, and keq of ITS
     its_info = keq_reader()
 
-    # how long the sequence should be (constructed ones)
-    seq_len = 10
+    # the length of 'full length RNA' -- assuming promoter escape happens once
+    # RNA has reached this length
+    rna_max = 12
 
-    # the number of sequences
-    nr_seqs = 5
+    # if rna_max is 12, there are 10 k3 nucleotide incorporation reactions
+    # Before each nucleotide incorporation state there are _2_ post/pre states.
+    # Thus, there are len(k3)*2 post/pre states. Then there are additionally 2
+    # FL + A states.
+    state_nr = (rna_max-2)*2 + 2
 
-    # "rate" of backtracing
-    abortive_probability = [0.1 for _ in range(seq_len)]
+    model_types = ['Pre', 'Pre_and_Post', 'Post']
+    variator_coefficient = ['k1']
+    y0 = [1] + [0 for _ in range(state_nr-1)]
 
-    # "rate" of nucleotide incorporation
-    k3 = [1 for _ in range(seq_len)]
+    # I will vary the three parameters and store the fold and std output
+    outp_fold = dict((m_type, []) for m_type in model_types)
+    outp_std = dict((m_type, []) for m_type in model_types)
 
-    # the keq values for the ITS variants
-    keqs = [d[1] for d in its_info.values()]
+    # the three nettlesome parameters
+    b_rate = 0.1 # vary from 0.05 to 0.5
+    time = 15 # vary from 1 to 100
+    k3_coeff = 1 # vary from 0.5 to 1.5
+
+    #b_rates = (0.5-0.05)*np.random.rand(100) + 0.05
+    #times = (100-1)*np.random.rand(100) + 1
+    #k3_coeffs = (1.5 - 0.5)*np.random.rand(10) + 0.5
+
+    b_rates = (0.5-0.05)*np.random.rand(10) + 0.05
+    times = (100-1)*np.random.rand(10) + 1
+    #k3_coeffs = (1.5 - 0.5)*np.random.rand(1) + 0.5
+    k3_coeffs = [1]
+
+    for b_rate in b_rates:
+        for time in times:
+            for k3_coeff in k3_coeffs:
+
+                #  "rate" of backtracking, separate for prE and posT translational states
+                aT_original = [b_rate for _ in range(rna_max-2)]
+                #aE_original = [b_rate + b_rate*0.3 for _ in range(rna_max-2)]
+                aE_original = [b_rate for _ in range(rna_max-2)]
+
+                # "rate" of nucleotide incorporation
+                k3 = [k3_coeff for _ in range(rna_max-2)]
+
+                its2py = model_evaluator(model_types, aT_original, aE_original, time,
+                                         variator_coefficient, its_info, state_nr, k3, y0)
+
+                # Benchmark in X ways:
+                    # 1) the correlation with the actual PY values
+                    # 2) The min max ratio compared to actual PY
+                    # 3) the distance vector with the actual py (parameter sensitive)
+
+                # get the names and the PY in the order of those names
+                its_names = its_info.keys()
+                PY = [float(its_info[name][0]) for name in its_names]
+
+                for mod_type, variator_dict in its2py.items():
+                    for variator, its_pydict in variator_dict.items():
+
+                        # extract PY from model
+                        new_PY = [its_pydict[name]*100 for name in its_names]
+
+                        # correlation
+                        cor, pval = pearsonr(PY, new_PY)
+
+                        minval = min(new_PY)
+                        maxval = max(new_PY)
+                        fold = maxval/minval
+                        std = np.std(new_PY)
+
+                        outp_fold[mod_type].append(fold)
+                        outp_std[mod_type].append(std)
+
+                        #print('Mode: {0} + {1}'.format(mod_type, variator))
+                        #print('Correlation: {0:.2f}'.format(cor))
+                        #print('Min: {0:.3f}\nMax: {1:.3f}\nFold: {2:.3f}\nStd: {3:.3f}'\
+                              #.format(minval, maxval, fold, std))
+                        #print('')
+
+    # Print the output
+    fig1, ax1 = plt.subplots()
 
     model_types = ['Pre', 'Pre_and_Post', 'Post']
 
-    variator_coefficient = ['k1', 'k2']
+    for mtype in model_types:
+        ax1.plot(outp_fold[mtype], label = mtype)
 
-    tim = 1
+    ax1.set_title('PY fold (max/min) for the different structures')
+    ax1.legend()
 
-    y0 = [1 for _ in range(nr_seqs)]
+    fig2, ax2 = plt.subplots()
+
+    model_types = ['Pre', 'Pre_and_Post', 'Post']
+
+    for mtype in model_types:
+        ax2.plot(outp_std[mtype], label = mtype)
+
+    ax2.set_title('Standard deviation of PY for the different structures')
+    ax2.legend()
+
+    plt.ion()
+
+    plt.show()
+
+
+def model_evaluator(model_types, aT_original, aE_original, time,
+                    variator_coefficient, its_info, state_nr, k3, y0):
+
+    its2py = AutoVivification()
 
     for model_type in model_types:
 
+        if model_type == 'Pre':
+            aT = [0 for _ in aT_original] # no aborive from PosT
+            aE = aE_original
+
+        elif model_type == 'Pre_and_Post':
+            aT = aT_original
+            aE = aE_original
+
+        elif model_type == 'Post':
+            aE = [0 for _ in aE_original] # no abortive from PrE
+            aT = aT_original
+
         for variator in variator_coefficient:
 
-            # evaluate k1/k2 based on keq = k1/k2
-            # if variator is k1, then k2 is = 1 and k1 varies
-            k1, k2 = rates_from_keq(keqs, variator)
+            # Make a matrix for each of the ITS variants; solve the model; and
+            # get the PY output from the two last states
+            for its_name, (PY, keqs) in its_info.items():
 
-            # keq matrix
-            A = keq_matrix(abortive_probability, k3, its_info,
-                           model_type)
+                # evaluate k1/k2 based on keq = k1/k2
+                # if variator is k1, then k2 is = 1 and k1 varies
+                k1, k2 = rates_from_keq(keqs, variator)
 
-            # using the x(t) = e^{A*t}*y(0) solution 
-            soln = dot(scipy.linalg.expm(A*tim), y0)
+                # keq matrix
+                A = keq_matrix(state_nr, aT, aE, k1, k2, k3)
+
+                # using the x(t) = e^{A*t}*y(0) solution 
+                soln = dot(scipy.linalg.expm(A*time), y0)
+
+                # get abortive and full length
+                fl, ab = soln[-2:]
+
+                its2py[model_type][variator][its_name] = (fl)/(fl + ab)
+
+    return its2py
+
+
+
 
 def rates_from_keq(keqs, variator):
     """
+    Evaluate k1/k2 based on keq = k1/k2
+    if variator is k1, then k2 is = 1 and k1 varies
     """
 
-def keq_matrix(abortive_probability, forward_rates, its_info, model_type):
+    if variator == 'k1':
+        k2 = [1 for _ in range(len(keqs))]
+        k1 = [float(keq) for keq in keqs] # dividing keqs by 1 is keqs
+
+    if variator == 'k2':
+        k1 = [1 for _ in range(len(keqs))]
+        k2 = [1/float(keq) for keq in keqs]
+
+    return k1, k2
+
+def keq_matrix(state_nr, aT, aE, k1, k2, k3):
     """
     Return matrix of equilibrium process depending on model type
+
+    Sequence = GACTA
+
+    there are (len(seq)*2 - 2) post/pre states + 2 F/A states
 
     Pre1  Post1 Pre2  Post2
      # <->  # -> # <-> # -> F
@@ -7834,20 +7987,117 @@ def keq_matrix(abortive_probability, forward_rates, its_info, model_type):
 
     Vector = [Pre1, Post1, Pre2, Post2, F, A]
 
-    Matrix = 
+    Matrix =
     [
 
-    [-(k11 + aE1), k21,        0, 0, 0, 0],
-    [k11, - (k21 + k31 + aT1), 0, 0, 0, 0],
+    [-(k11 + aE1), k21,        0, 0, 0, 0, 0, 0],
+    [k11, - (k21 + k31 + aT1), 0, 0, 0, 0, 0, 0],
 
-    [0, k31, - (k12 + aE2),     k22, 0, 0],
-    [0, 0, k12, -(k22 + aT2 + k32),  0, 0],
+    [0, k31, - (k12 + aE2),     k22, 0, 0, 0, 0],
+    [0, 0, k12, -(k22 + k32 + aT2),  0, 0, 0, 0],
 
-    [0, 0, 0,                   k32, 0, 0],
-    [aE1, aT1, aE2, aT2,             0, 0]
+    [0, 0, 0, k32, - (k13 + aE3),    k23,  0, 0], # This is extrapolated
+    [0, 0, 0, 0, k13, -(k23 + k33 + aT3),  0, 0], #
+
+    [0, 0, 0,                   0, 0, k33, 0, 0],
+    [aE1, aT1, aE2, aT2, aE3, aT3,         0, 0]
 
     ]
+
+    ['-(k11 + aE1)',       'k21', 0, 0, 0, 0, 0, 0],
+    ['k11', '-(k21 + k31 + aT1)', 0, 0, 0, 0, 0, 0],
+
+    [0, 'k31',  '-(k12 + aE2)', 'k22', 0, 0, 0, 0],
+    [0, 0, 'k12', '-(k22 + k32 + aT2)', 0, 0, 0, 0],
+
+    [0, 0, 0, 'k32',   '-(k13 + aE3)', 'k23', 0, 0],
+    [0, 0, 0, 0, 'k13', '-(k23 + k33 + aT3)', 0, 0],
+
+    [0, 0, 0, 0, 0, 'k33', 0, 0],
+    ['aE1', 'aT1', 'aE2', 'aT2', 'aE3', 'aT3', 0, 0]]
+
+    For
     """
+
+    matrix = []
+
+    # XXX testing! Write out the above matrix. Make mock values
+    #k1 = ['k1'+str(i) for i in range(1,4)]
+    #k2 = ['k2'+str(i) for i in range(1,4)]
+    #k3 = ['k3'+str(i) for i in range(1,4)]
+    #aE = ['aE'+str(i) for i in range(1,4)]
+    #aT = ['aT'+str(i) for i in range(1,4)]
+
+    # make the first rows since it is different. Also make the second row; it is
+    # not different, but since you do two rows at a time it is convenient
+    pre1 =  [-(k1[0] + aE[0]), k2[0]]         + [0 for _ in range(state_nr-2)]
+    post1 = [k1[0], -(k2[0] + k3[0] + aT[0])] + [0 for _ in range(state_nr-2)]
+
+    # XXX for testing
+    #pre1 =  ['-('+k1[0] + ' + ' + aE[0]+')', k2[0]]         + [0 for _ in range(state_nr-2)]
+    #post1 = [k1[0], '-('+k2[0] + ' + ' + k3[0] + ' + ' + aT[0] +')'] + [0 for _ in range(state_nr-2)]
+
+    matrix.append(pre1)
+    matrix.append(post1)
+
+    # there are len(k3)*2 post + pre states. You make post+ pre for each
+    # iteration. Skip the first since you've already made it -> start with 1
+    # instead of 0
+    for pp_nr in range(1, len(k3)):
+
+        # fill up the row for pre-translocated
+        pre = []
+        post = []
+
+        # count row from 1 and up; easier arithmetic
+        for col_nr in range(1,state_nr+1):
+
+            # zero before post_pre nr and state_nr are the same
+            if col_nr < pp_nr*2:
+                pre.append(0)
+                post.append(0)
+
+            elif col_nr == pp_nr*2:
+                pre.append(k3[pp_nr-1])
+                post.append(0)
+
+            elif col_nr == pp_nr*2+1:
+                pre.append(-(k1[pp_nr] + aE[pp_nr]))
+                #pre.append('-('+k1[pp_nr] + ' + ' + aE[pp_nr] + ')') # XXX
+                post.append(k1[pp_nr])
+
+            elif col_nr == pp_nr*2+2:
+                pre.append(k2[pp_nr])
+                post.append(-(k2[pp_nr] + k3[pp_nr] + aT[pp_nr]))
+                #post.append('-('+k2[pp_nr] + ' + ' + k3[pp_nr] + ' + ' + aT[pp_nr] + ')')
+                # XXX
+
+            # zero after this
+            else:
+                pre.append(0)
+                post.append(0)
+
+        matrix.append(pre)
+        matrix.append(post)
+
+    #Add the two last rows
+    fl_row = [0 for _ in range(state_nr-3)] + [k3[-1], 0, 0]
+    matrix.append(fl_row)
+
+    ab_row = []
+    for (aE_val, aT_val) in zip(aE, aT):
+        ab_row.append(aE_val)
+        ab_row.append(aT_val)
+
+    # two last zeros
+    ab_row.append(0)
+    ab_row.append(0)
+
+    matrix.append(ab_row)
+
+    # return a np.array 
+    return np.array(matrix)
+
 
 def keq_reader():
     """
