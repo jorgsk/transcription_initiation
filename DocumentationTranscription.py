@@ -7788,7 +7788,7 @@ def abortive_initiation_fromwhere(ITSs):
     abortive_probability = [0.1 for _ in range(seq_len)]
 
     # "rate" of nucleotide incorporation
-    forward_rates = [1 for _ in range(seq_len)]
+    k3 = [1 for _ in range(seq_len)]
 
     # the keq values for the ITS variants
     keqs = [d[1] for d in its_info.values()]
@@ -7805,27 +7805,48 @@ def abortive_initiation_fromwhere(ITSs):
 
         for variator in variator_coefficient:
 
-            # define the values for k1 and k2
-            if variator == 'k1':
-                k2 = 1
-            elif variator == 'k2':
-                k1 = 1
             # evaluate k1/k2 based on keq = k1/k2
-
-            # construct the matrix
-            # to matrices; one with keq and one with k1 and k2
+            # if variator is k1, then k2 is = 1 and k1 varies
+            k1, k2 = rates_from_keq(keqs, variator)
 
             # keq matrix
-            A = keq_matrix(abortive_probability, forward_rates, its_info,
+            A = keq_matrix(abortive_probability, k3, its_info,
                            model_type)
 
             # using the x(t) = e^{A*t}*y(0) solution 
             soln = dot(scipy.linalg.expm(A*tim), y0)
 
+def rates_from_keq(keqs, variator):
+    """
+    """
 
 def keq_matrix(abortive_probability, forward_rates, its_info, model_type):
     """
     Return matrix of equilibrium process depending on model type
+
+    Pre1  Post1 Pre2  Post2
+     # <->  # -> # <-> # -> F
+     |      |    |     |
+     A      A    A     A
+
+    F = full length
+    A = abortive
+
+    Vector = [Pre1, Post1, Pre2, Post2, F, A]
+
+    Matrix = 
+    [
+
+    [-(k11 + aE1), k21,        0, 0, 0, 0],
+    [k11, - (k21 + k31 + aT1), 0, 0, 0, 0],
+
+    [0, k31, - (k12 + aE2),     k22, 0, 0],
+    [0, 0, k12, -(k22 + aT2 + k32),  0, 0],
+
+    [0, 0, 0,                   k32, 0, 0],
+    [aE1, aT1, aE2, aT2,             0, 0]
+
+    ]
     """
 
 def keq_reader():
