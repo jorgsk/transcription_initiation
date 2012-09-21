@@ -27,6 +27,7 @@ import Workhouse
 import Filereader
 import Models
 from glob import glob
+import time
 
 from operator import itemgetter
 
@@ -6662,7 +6663,6 @@ def xmer(ITSs, testing, p_line, global_params):
 
     x_mers = range(1,5)
 
-    all_ens = []
     for x in x_mers:
         x_energies = []
         for beg in range(1,21-x):
@@ -7798,6 +7798,12 @@ def abortive_initiation_fromwhere(ITSs):
     not constant at all; they probably depend on scrunching. but what you
     actually wanted to find out is if there is some kind of mechanistic problem
     with having abortive initiation happening from the post-state.
+
+    RESULT you have not varied them, and overall the backtracking from pre has
+    got the best results, hands down.
+
+    Now you need to finish the three models. Then you need to summarize your
+    arguments. You spent 3 whole days doing this.
     """
 
     # name, py, and keq of ITS
@@ -7814,101 +7820,165 @@ def abortive_initiation_fromwhere(ITSs):
     state_nr = (rna_max-2)*2 + 2
 
     model_types = ['Pre', 'Pre_and_Post', 'Post']
-    variator_coefficient = ['k1']
-    y0 = [1] + [0 for _ in range(state_nr-1)]
+    variator_coefficients = ['k1']
+    #variator_coefficients = ['k2'] # k2 gives smaller values but same pattern
 
-    # I will vary the three parameters and store the fold and std output
-    outp_fold = dict((m_type, []) for m_type in model_types)
-    outp_std = dict((m_type, []) for m_type in model_types)
+    y0 = [1] + [0 for _ in range(state_nr-1)]
 
     # the three nettlesome parameters
     b_rate = 0.1 # vary from 0.05 to 0.5
-    time = 15 # vary from 1 to 100
+    t = 15 # vary from 1 to 100
     k3_coeff = 1 # vary from 0.5 to 1.5
 
     #b_rates = (0.5-0.05)*np.random.rand(100) + 0.05
     #times = (100-1)*np.random.rand(100) + 1
     #k3_coeffs = (1.5 - 0.5)*np.random.rand(10) + 0.5
 
-    b_rates = (0.5-0.05)*np.random.rand(10) + 0.05
-    times = (100-1)*np.random.rand(10) + 1
-    #k3_coeffs = (1.5 - 0.5)*np.random.rand(1) + 0.5
-    k3_coeffs = [1]
+    b_rates = (0.5-0.05)*np.random.rand(50) + 0.05
+    times = (100-1)*np.random.rand(50) + 1
+    k3_coeffs = (1.5 - 0.5)*np.random.rand(5) + 0.5
+    #k3_coeffs = [1]
+
+    t1 = time.time()
+
+    # create the parameter space
+    parameter_space = []
 
     for b_rate in b_rates:
-        for time in times:
+        for t in times:
             for k3_coeff in k3_coeffs:
 
-                #  "rate" of backtracking, separate for prE and posT translational states
-                aT_original = [b_rate for _ in range(rna_max-2)]
-                #aE_original = [b_rate + b_rate*0.3 for _ in range(rna_max-2)]
-                aE_original = [b_rate for _ in range(rna_max-2)]
+                parameter_space.append((b_rate, t, k3_coeff))
 
-                # "rate" of nucleotide incorporation
-                k3 = [k3_coeff for _ in range(rna_max-2)]
 
-                its2py = model_evaluator(model_types, aT_original, aE_original, time,
-                                         variator_coefficient, its_info, state_nr, k3, y0)
+    # divide the parameter space into 3
+    nr_cpu = 4
+    ss = int(len(parameter_space)/float(nr_cpu)) # subspace size
+    subspaces = [parameter_space[i*ss:i*ss+ss] for i in range(nr_cpu)]
 
-                # Benchmark in X ways:
-                    # 1) the correlation with the actual PY values
-                    # 2) The min max ratio compared to actual PY
-                    # 3) the distance vector with the actual py (parameter sensitive)
+    # make a multiprocessing pool
+    my_pool = multiprocessing.Pool(nr_cpu)
 
-                # get the names and the PY in the order of those names
-                its_names = its_info.keys()
-                PY = [float(its_info[name][0]) for name in its_names]
+    results = []
+    # 
+    for param_subspace in subspaces:
+        arguments = (param_subspace, model_types, rna_max, variator_coefficients,
+                     its_info, state_nr, y0)
 
-                for mod_type, variator_dict in its2py.items():
-                    for variator, its_pydict in variator_dict.items():
+        results.append(my_pool.apply_async(model_launcher, (arguments)))
 
-                        # extract PY from model
-                        new_PY = [its_pydict[name]*100 for name in its_names]
+        #results = model_launcher(*arguments)
 
-                        # correlation
-                        cor, pval = pearsonr(PY, new_PY)
+    my_pool.close()
+    my_pool.join()
 
-                        minval = min(new_PY)
-                        maxval = max(new_PY)
-                        fold = maxval/minval
-                        std = np.std(new_PY)
+    # gather the output
+    all_results = [r.get() for r in results]
 
-                        outp_fold[mod_type].append(fold)
-                        outp_std[mod_type].append(std)
+    # separate fold from std
+    outp_folds, outp_stds = zip(*all_results)
 
-                        #print('Mode: {0} + {1}'.format(mod_type, variator))
-                        #print('Correlation: {0:.2f}'.format(cor))
-                        #print('Min: {0:.3f}\nMax: {1:.3f}\nFold: {2:.3f}\nStd: {3:.3f}'\
-                              #.format(minval, maxval, fold, std))
-                        #print('')
+    print time.time() - t1
 
     # Print the output
     fig1, ax1 = plt.subplots()
 
-    model_types = ['Pre', 'Pre_and_Post', 'Post']
+    mean_fold = {}
+    mean_std = {}
 
     for mtype in model_types:
-        ax1.plot(outp_fold[mtype], label = mtype)
+        # sum up all the cpu_nr different dictionaries and flatten to 1 list
+        mtype_folds = sum([subfold[mtype] for subfold in outp_folds], [])
+        ax1.plot(mtype_folds, label = mtype)
+
+        mean_fold[mtype] = np.mean(mtype_folds)
 
     ax1.set_title('PY fold (max/min) for the different structures')
     ax1.legend()
 
     fig2, ax2 = plt.subplots()
 
-    model_types = ['Pre', 'Pre_and_Post', 'Post']
-
     for mtype in model_types:
-        ax2.plot(outp_std[mtype], label = mtype)
+        mtype_stds = sum([substd[mtype] for substd in outp_stds], [])
+        ax2.plot(mtype_stds, label = mtype)
+
+        mean_std[mtype] = np.mean(mtype_stds)
 
     ax2.set_title('Standard deviation of PY for the different structures')
     ax2.legend()
+
+    print('Variating: {0}'.format(variator_coefficients))
+
+    for mtype in model_types:
+        print ('Mean max/min fold difference of PY values for {0}: {1:.2f}'\
+               .format(mtype, mean_fold[mtype]))
+
+    for mtype in model_types:
+        print ('Mean std of PY values for {0}: {1:.2f}'\
+               .format(mtype, mean_std[mtype]))
+
+    print('')
 
     plt.ion()
 
     plt.show()
 
 
-def model_evaluator(model_types, aT_original, aE_original, time,
+    debug()
+
+
+def model_launcher(parameter_spaces, model_types, rna_max, variator_coefficient,
+                  its_info, state_nr, y0):
+
+    # I will vary the three parameters and store the fold and std output
+    outp_fold = dict((m_type, []) for m_type in model_types)
+    outp_std = dict((m_type, []) for m_type in model_types)
+
+
+    for (b_rate, t, k3_coeff) in parameter_spaces:
+
+        #  "rate" of backtracking, separate for prE and posT translational states
+        aT_original = [b_rate for _ in range(rna_max-2)]
+        #aE_original = [b_rate + b_rate*0.3 for _ in range(rna_max-2)]
+        aE_original = [b_rate for _ in range(rna_max-2)]
+
+        # "rate" of nucleotide incorporation
+        k3 = [k3_coeff for _ in range(rna_max-2)]
+
+        its2py = model_evaluator(model_types, aT_original, aE_original,
+                                 t, variator_coefficient, its_info,
+                                 state_nr, k3, y0)
+
+        # Benchmark in X ways:
+            # 1) the correlation with the actual PY values
+            # 2) The min max ratio compared to actual PY
+            # 3) the distance vector with the actual py (parameter sensitive)
+
+        # get the names and the PY in the order of those names
+        its_names = its_info.keys()
+        PY = [float(its_info[name][0]) for name in its_names]
+
+        for mod_type, variator_dict in its2py.items():
+            for variator, its_pydict in variator_dict.items():
+
+                # extract PY from model
+                new_PY = [its_pydict[name]*100 for name in its_names]
+
+                # correlation
+                cor, pval = pearsonr(PY, new_PY)
+
+                minval = min(new_PY)
+                maxval = max(new_PY)
+                fold = maxval/minval
+                std = np.std(new_PY)
+
+                outp_fold[mod_type].append(fold)
+                outp_std[mod_type].append(std)
+
+    return (outp_fold, outp_std)
+
+
+def model_evaluator(model_types, aT_original, aE_original, t,
                     variator_coefficient, its_info, state_nr, k3, y0):
 
     its2py = AutoVivification()
@@ -7941,7 +8011,7 @@ def model_evaluator(model_types, aT_original, aE_original, time,
                 A = keq_matrix(state_nr, aT, aE, k1, k2, k3)
 
                 # using the x(t) = e^{A*t}*y(0) solution 
-                soln = dot(scipy.linalg.expm(A*time), y0)
+                soln = dot(scipy.linalg.expm(A*t,q=3), y0)
 
                 # get abortive and full length
                 fl, ab = soln[-2:]
