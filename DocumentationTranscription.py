@@ -6540,9 +6540,9 @@ def paper_figures(ITSs):
     #figs.append((fig_rna_stable, rna_stable_name))
 
     #Figure 4 -> Predicted VS actual PY
-    evaluation_name = 'Predicted_vs_measured' + append
-    fig_evaluation = predicted_vs_measured(ITSs)
-    figs.append((fig_evaluation, evaluation_name))
+    #evaluation_name = 'Predicted_vs_measured' + append
+    #fig_evaluation = predicted_vs_measured(ITSs)
+    #figs.append((fig_evaluation, evaluation_name))
 
     ## Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
@@ -7834,8 +7834,8 @@ def abortive_initiation_fromwhere(ITSs):
     #times = (100-1)*np.random.rand(100) + 1
     #k3_coeffs = (1.5 - 0.5)*np.random.rand(10) + 0.5
 
-    b_rates = (0.5-0.05)*np.random.rand(50) + 0.05
-    times = (100-1)*np.random.rand(50) + 1
+    b_rates = (0.5-0.05)*np.random.rand(30) + 0.05
+    times = (100-1)*np.random.rand(30) + 1
     k3_coeffs = (1.5 - 0.5)*np.random.rand(5) + 0.5
     #k3_coeffs = [1]
 
@@ -7883,8 +7883,13 @@ def abortive_initiation_fromwhere(ITSs):
     # Print the output
     fig1, ax1 = plt.subplots()
 
+    # for the mean
     mean_fold = {}
     mean_std = {}
+
+    # for keeping all folds and stds
+    all_folds = {}
+    all_std = {}
 
     for mtype in model_types:
         # sum up all the cpu_nr different dictionaries and flatten to 1 list
@@ -7892,6 +7897,7 @@ def abortive_initiation_fromwhere(ITSs):
         ax1.plot(mtype_folds, label = mtype)
 
         mean_fold[mtype] = np.mean(mtype_folds)
+        all_folds[mtype] = np.array(mtype_folds)
 
     ax1.set_title('PY fold (max/min) for the different structures')
     ax1.legend()
@@ -7903,6 +7909,8 @@ def abortive_initiation_fromwhere(ITSs):
         ax2.plot(mtype_stds, label = mtype)
 
         mean_std[mtype] = np.mean(mtype_stds)
+
+        all_std[mtype] = np.array(mtype_stds)
 
     ax2.set_title('Standard deviation of PY for the different structures')
     ax2.legend()
@@ -7917,14 +7925,38 @@ def abortive_initiation_fromwhere(ITSs):
         print ('Mean std of PY values for {0}: {1:.2f}'\
                .format(mtype, mean_std[mtype]))
 
+    # Print how often Pre is higher than pre_and_post and post
+    pre_gr_than_post_fold = all_folds['Pre'] > all_folds['Post']
+    pgtpf_pcnt = sum([1 for i in pre_gr_than_post_fold if i ==
+                      True])/len(all_folds['Pre'])
+
+    print('Percentage folds with Pre > Post: {0:.2f}'.format(pgtpf_pcnt))
+
+    pre_gr_than_prepost_fold = all_folds['Pre'] > all_folds['Pre_and_Post']
+    pgtppf_pcnt = sum([1 for i in pre_gr_than_prepost_fold if i ==
+                      True])/len(all_folds['Pre'])
+    print('Percentage folds with Pre > Pre_and_Post: {0:.2f}'.format(pgtppf_pcnt))
+
+    pre_gr_than_post_std = all_std['Pre'] > all_std['Post']
+
+    pgtps_pcnt = sum([1 for i in pre_gr_than_post_std if i ==
+                      True])/len(all_folds['Pre'])
+
+    print('Percentage std with Pre > Post: {0:.2f}'.format(pgtps_pcnt))
+
+    pre_gr_than_prepost_std = all_std['Pre'] > all_std['Pre_and_Post']
+    pgtpps_pcnt = sum([1 for i in pre_gr_than_prepost_std if i ==
+                      True])/len(all_folds['Pre'])
+
+    print('Percentage std with Pre > Pre_and_Post: {0:.2f}'.format(pgtpps_pcnt))
+
     print('')
+
+    debug()
 
     plt.ion()
 
     plt.show()
-
-
-    debug()
 
 
 def model_launcher(parameter_spaces, model_types, rna_max, variator_coefficient,
