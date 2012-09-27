@@ -6065,14 +6065,14 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     #c4 = np.linspace(0, par['eq_max'], grid_size)
 
     #c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
-    c2 = np.linspace(0, 2, grid_size)
-    #c2 = np.linspace(0, 0, 1)
-    c3 = np.linspace(0, 2, grid_size)
-    c4 = np.linspace(-2, 0, grid_size)
+    #c2 = np.linspace(0, 2, grid_size)
+    ##c2 = np.linspace(0, 0, 1)
+    #c3 = np.linspace(0, 2, grid_size)
+    #c4 = np.linspace(-2, 0, grid_size)
 
-    #c2 = np.array([0]) # 
-    #c3 = np.array([0.25]) #
-    #c4 = np.array([-0.5]) #
+    c2 = np.array([0]) # 
+    c3 = np.array([0.25]) #
+    c4 = np.array([-0.39]) #
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6081,8 +6081,8 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
         its_max = 15
 
     its_range = range(3, its_max)
-    its_range = [15]
-    #its_range = [5, 10, 15, 20]
+    #its_range = [15]
+    its_range = [5, 10, 15, 20]
     #its_range = [10, 12, 15, 18, 20]
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
@@ -6509,11 +6509,11 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     #cross-reference. Return either one or two figures.
-    #ladder_name = 'three_param_model_AB' + append
-    #scatter_name = 'three_param_14_scatter' + append
-    #scatterladder = True
-    #fig_back = three_param_AB(ITSs, testing, p_line, global_params,
-                              #scalad=scatterladder)
+    ladder_name = 'three_param_model_AB' + append
+    scatter_name = 'three_param_14_scatter' + append
+    scatterladder = True
+    fig_back = three_param_AB(ITSs, testing, p_line, global_params,
+                              scalad=scatterladder)
     #if scatterladder:
         #fig_ladder = fig_back
     #else:
