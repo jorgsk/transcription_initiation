@@ -6100,7 +6100,6 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     #c3 = np.linspace(-par['dd_max'], 0, grid_size)
     #c4 = np.linspace(0, par['eq_max'], grid_size)
 
-    #c2 = np.linspace(-par['rd_max'], par['rd_max'], grid_size)
     #c2 = np.linspace(0, 1, grid_size)
     #c2 = np.linspace(0, 0, 1)
     #c3 = np.linspace(0, 1, grid_size)
