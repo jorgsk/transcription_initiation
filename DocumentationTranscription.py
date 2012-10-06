@@ -6509,11 +6509,11 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     #cross-reference. Return either one or two figures.
-    ladder_name = 'three_param_model_AB' + append
-    scatter_name = 'three_param_14_scatter' + append
-    scatterladder = True
-    fig_back = three_param_AB(ITSs, testing, p_line, global_params,
-                              scalad=scatterladder)
+    #ladder_name = 'three_param_model_AB' + append
+    #scatter_name = 'three_param_14_scatter' + append
+    #scatterladder = True
+    #fig_back = three_param_AB(ITSs, testing, p_line, global_params,
+                              #scalad=scatterladder)
     #if scatterladder:
         #fig_ladder = fig_back
     #else:
@@ -6530,9 +6530,9 @@ def paper_figures(ITSs):
     #figs.append((fig_nog_ladder, ladder_nog_name))
 
     ## Figure 2.7 -> Compare two and three parameter models
-    #compare_name = 'compare_two_three_AB' + append
-    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    #figs.append((fig_controversy, compare_name))
+    compare_name = 'compare_two_three_AB' + append
+    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    figs.append((fig_controversy, compare_name))
 
     ## Figure 3 -> The RNA DNA hybrid as a positive stabilizing force
     #rna_stable_name = 'RNA_stabilizing' + append
@@ -6707,10 +6707,6 @@ def xmer(ITSs, testing, p_line, global_params):
 
 def compare_two_three(ITSs, testing, p_line, par):
     """
-    Plot A: two-parameter without RNA-DNA
-    Plot B: two-parameter without DNA-DNA
-
-    Shows the effect of leaving out either of these two components in the model.
 
     What does this mean?
     exp(dna-dna): GC-rich -> low rate. AT-rich -> high rate
@@ -6723,8 +6719,6 @@ def compare_two_three(ITSs, testing, p_line, par):
 
     exp(keq) OLD: pre-translocated -> low rate, post-translocated -> high rate
 
-    This actually makes perfect sense, now it's just the correlation that is
-    strange.
     """
 
     # no cross validation needed
@@ -6760,7 +6754,7 @@ def compare_two_three(ITSs, testing, p_line, par):
     #Building up slowly
     name1 = '$\Delta G_{3D}$'
     name2 = '$\Delta G_{3D} + \Delta G_{DNA-DNA}$'
-    name3 = '$\Delta G_{3D} + \Delta G_{DNA-DNA}$ + \Delta G_{RNA-DNA}'
+    name3 = '$\Delta G_{3D} + \Delta G_{DNA-DNA}$ + $\Delta G_{RNA-DNA}$'
     #three = get_optimal_params(PYs, its_range, ITSs, three_param, optim, t)
 
     collection = [(one_param, name1),
@@ -6817,7 +6811,7 @@ def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
 
     # interpolate pvalues (x, must increase) with correlation (y) and
     # obtain the correlation for p = 0.05 to plot as a black
-    if p_line and name == 'Original':
+    if p_line and name.endswith('RNA-DNA}$'):
         # hack to get pvals and corr coeffs sorted
         pv, co = zip(*sorted(zip(pvals, corr)))
         f = interpolate(pv, co, k=1)
@@ -6835,7 +6829,7 @@ def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
     ax.set_xticks(range(3,its_max))
     ax.set_xticklabels(xticklabels)
     ax.set_xlim(3,its_max)
-    ax.set_xlabel("RNA length $n$ used to calculate $SE_n$", size=23)
+    ax.set_xlabel("RNA length $n$ used to calculate SE$_n$", size=23)
 
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
@@ -6850,7 +6844,6 @@ def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
     ax.set_ylim(ymin, ymax)
     ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
               alpha=0.5)
-    ax.set_ylabel("Model parameter values", size=23)
 
     #for i, label in enumerate(('A', 'B')):
         #if i == ax_nr:
@@ -7825,11 +7818,6 @@ def abortive_initiation_fromwhere(ITSs):
 
     y0 = [1] + [0 for _ in range(state_nr-1)]
 
-    # the three nettlesome parameters
-    b_rate = 0.1 # vary from 0.05 to 0.5
-    t = 15 # vary from 1 to 100
-    k3_coeff = 1 # vary from 0.5 to 1.5
-
     #b_rates = (0.5-0.05)*np.random.rand(100) + 0.05
     #times = (100-1)*np.random.rand(100) + 1
     #k3_coeffs = (1.5 - 0.5)*np.random.rand(10) + 0.5
@@ -8249,7 +8237,7 @@ def keq_reader():
 def main():
     ITSs = ReadAndFixData() # read raw data
 
-    abortive_initiation_fromwhere(ITSs)
+    #abortive_initiation_fromwhere(ITSs)
 
     #compare_quantitations()
 
@@ -8266,7 +8254,7 @@ def main():
     # Compare the ratio in the new to the old
     #ratio_issue(ITSs)
 
-    #paper_figures(ITSs)
+    paper_figures(ITSs)
 
     # write the its and py to your delta g output file. it's a horrible hack
     # that will come back to haunt you some day. you add its name and py.
