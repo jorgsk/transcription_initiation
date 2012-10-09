@@ -4062,8 +4062,6 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
     if add_fit:
         add_scatter_fit(finals, PYs, ax)
 
-    debug()
-
     return fig
 
 def add_scatter_fit(finals, PYs, ax):
@@ -4260,7 +4258,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
 def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
                          par_ranges, p_line, its_max, its_range, ymin, ymax,
                          testing, description=False, print_params=True,
-                         in_axes=False, ax_nr=0, inset=False):
+                         in_axes=0, ax_nr=0, inset=False):
     """
     Alternative print-scrunch.
     [0][0] is the pearson for the real and the control
@@ -4274,7 +4272,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
         fig, ax = plt.subplots()
         axes = np.array([ax])
 
-    if in_axes:
+    if list(in_axes) != 0:
         axes = in_axes
 
     # assign colors to parameters
@@ -6226,18 +6224,15 @@ def three_param_AB(ITSs, testing, p_line, par):
 
     # modify fig_lad to have the scatterplot in position A
     print_scrunch_scatter(results, rand_results, randomize, par_ranges, PYs,
-                          PY_std, pos=maxnuc, laddax=ax_lad)
+                          PY_std, add_fit, pos=maxnuc, laddax=ax_lad)
 
     # Add A and B if two plots
     for i, label in enumerate(('A', 'B')):
-        ax = fig_lad.axes[i]
+        ax = axes[i]
         ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=26,
                 fontweight='bold', va='top')
 
-    plt.ion()
-    plt.show()
-    debug()
-    return fig_lad
+    return fig
 
 def linear_model(ITSs, results, PYs):
     """
@@ -6664,14 +6659,12 @@ def paper_figures(ITSs):
 
     ### Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     ##cross-reference. Return either one or two figures.
-    ladder_name = 'three_param_model_AB' + append
+    #ladder_name = 'three_param_model_AB' + append
     #scatter_name = 'three_param_14_scatter' + append
-    fig_back = three_param_AB(ITSs, testing, p_line, global_params)
+    #fig_back = three_param_AB(ITSs, testing, p_line, global_params)
 
-    fig_ladder = fig_back
-
-    fig_ladder.set_size_inches(17,7)
-    figs.append((fig_ladder, ladder_name))
+    #fig_back.set_size_inches(17,7)
+    #figs.append((fig_back, ladder_name))
 
     ##Figure 2.5 -> Three-parameter model with controls 
     #ladder_nog_name = 'three_param_control_AB' + append
