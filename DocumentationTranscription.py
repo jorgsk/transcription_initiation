@@ -4020,7 +4020,7 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
     if laddax is False:
         pass
     else:
-        ax = laddax[1]
+        ax = laddax[0]
         ax.cla()
 
     # if you haven't calculated anything, return the empty figure
@@ -4368,6 +4368,9 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
 
                 # print the best parameters
                 best_par_vals = [d[parameter] for d in paramz_best]
+                if print_params and ax_nr >0:
+                    print "Wrong ax_nr incoming"
+
                 axes[ax_nr+1].plot(incrX, best_par_vals,
                                    label=par2label[parameter], linewidth=3,
                                    color=par2col[parameter])
@@ -6121,7 +6124,7 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges, printB):
 
 
 
-def three_param_AB(ITSs, testing, p_line, par, scalad=False):
+def three_param_AB(ITSs, testing, p_line, par):
     """
     Print three parameter model with parameter estimation values.
 
@@ -6208,33 +6211,34 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     ymax = 1.0 # correlation is always high
     randomize = rands # you didn't randomize
     inset_plot = False
+
+    # create the figure and subplots
+    fig, axes = plt.subplots(1,2)
+    ax_nr = 1 # put the ladder as plot B
+
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, randomize,
                                            par_ranges, p_line, its_max,
                                            its_range, ymin,
-                                           ymax, testing, print_params=True,
-                                           inset=inset_plot)
+                                           ymax, testing, print_params=False,
+                                           inset=inset_plot, in_axes=axes,
+                                           ax_nr=ax_nr)
     maxnuc = its_max
-    if not scalad:
-        # where to make the scatter plot
-        # Without scatter + ladder
-        fig_sct = print_scrunch_scatter(results, rand_results, randomize,
-                                        par_ranges, PYs, PY_std, add_fit,
-                                        pos=maxnuc)
 
-        return fig_lad, fig_sct
-    else:
-        # modify fig_lad to have the scatterplot in position B
-        print_scrunch_scatter(results, rand_results, randomize, par_ranges, PYs,
-                              PY_std, pos=maxnuc, laddax=ax_lad)
+    # modify fig_lad to have the scatterplot in position A
+    print_scrunch_scatter(results, rand_results, randomize, par_ranges, PYs,
+                          PY_std, pos=maxnuc, laddax=ax_lad)
 
-        # Add A and B if two plots
-        for i, label in enumerate(('A', 'B')):
-            ax = fig_lad.axes[i]
-            ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=26,
-                    fontweight='bold', va='top')
+    # Add A and B if two plots
+    for i, label in enumerate(('A', 'B')):
+        ax = fig_lad.axes[i]
+        ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=26,
+                fontweight='bold', va='top')
 
-        return fig_lad
+    plt.ion()
+    plt.show()
+    debug()
+    return fig_lad
 
 def linear_model(ITSs, results, PYs):
     """
@@ -6660,22 +6664,15 @@ def paper_figures(ITSs):
     #figs.append((equilib_fig, equilib_name))
 
     ### Figure 1 and 2 -> Three-parameter model with parameter estimation but no
-    ###cross-reference. Return either one or two figures.
-    #ladder_name = 'three_param_model_AB' + append
+    ##cross-reference. Return either one or two figures.
+    ladder_name = 'three_param_model_AB' + append
     #scatter_name = 'three_param_14_scatter' + append
-    #scatterladder = True
-    ##scatterladder = False
-    #fig_back = three_param_AB(ITSs, testing, p_line, global_params,
-                              #scalad=scatterladder)
+    fig_back = three_param_AB(ITSs, testing, p_line, global_params)
 
-    #if scatterladder:
-        #fig_ladder = fig_back
-    #else:
-        #fig_ladder, fig_scatter = fig_back
-        #figs.append((fig_scatter, scatter_name))
+    fig_ladder = fig_back
 
-    #fig_ladder.set_size_inches(17,7)
-    #figs.append((fig_ladder, ladder_name))
+    fig_ladder.set_size_inches(17,7)
+    figs.append((fig_ladder, ladder_name))
 
     ##Figure 2.5 -> Three-parameter model with controls 
     #ladder_nog_name = 'three_param_control_AB' + append
@@ -6695,9 +6692,9 @@ def paper_figures(ITSs):
     #figs.append((fig_rna_stable, rna_stable_name))
 
     ##Figure 4 -> Predicted VS actual PY
-    evaluation_name = 'Predicted_vs_measured' + append
-    fig_evaluation = predicted_vs_measured(ITSs)
-    figs.append((fig_evaluation, evaluation_name))
+    #evaluation_name = 'Predicted_vs_measured' + append
+    #fig_evaluation = predicted_vs_measured(ITSs)
+    #figs.append((fig_evaluation, evaluation_name))
 
     ### Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
