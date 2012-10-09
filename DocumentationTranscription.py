@@ -75,6 +75,43 @@ fig_dir2 = '/home/jorgsk/Dropbox/The-Tome/my_papers/rna-dna-paper/figures'
 
 fig_dirs = (fig_dir1, fig_dir2)
 
+class Fit(object):
+
+    def linear_function(self, B, x):
+        """
+        Linear fit -- for comparison
+        """
+        return B[0]*x + B[1]
+
+    def linear_error(self, B, x, y):
+        """
+        """
+        return y - self.linear_function(B, x)
+
+    def sigmoid_function(self, B, x):
+        """
+        B is the parameters and x is the SE_15
+        """
+        return B[0]/(B[1]+B[2]*np.exp(-x))
+
+    def sigmoid_error(self, B, x, y):
+        """
+        """
+        return y - self.sigmoid_function(B, x)
+
+    def exponential_function(self, B, x):
+        """
+        B is the parameters and x is the SE_15
+        """
+
+        return B[0] + B[1]*np.exp(B[2]*x)
+
+    def exponential_error(self, B, x, y):
+        """
+        """
+        return y - self.exponential_function(B, x)
+
+
 class AutoVivification(dict):
     """Implementation of perl's autovivification feature."""
     def __getitem__(self, item):
@@ -1005,7 +1042,7 @@ def new_ladder(lizt):
 
     ax.set_xticks(range(3,21))
     ax.set_xticklabels(xticklabels)
-    ax.set_xlabel("RNA length (nt)", size=26)
+    ax.set_xlabel("ITS length (nt)", size=26)
     ax.set_ylabel("Correlation coefficient, $r$", size=26)
 
     if pline == 'yes':
@@ -3679,7 +3716,7 @@ def print_model_family2(resultz, p_line, max_its, ymin):
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,21)
 
-        ax.set_xlabel("RNA length (nt)", size=10)
+        ax.set_xlabel("ITS length (nt)", size=10)
 
         for l in ax.get_xticklabels():
             l.set_fontsize(6)
@@ -3804,7 +3841,7 @@ def print_model_family(resultz, p_line, max_its, ymin):
             ax.set_xlim(3,21)
 
             if row_nr == 1:
-                ax.set_xlabel("RNA length (nt)", size=8)
+                ax.set_xlabel("ITS length (nt)", size=8)
 
             for l in ax.get_xticklabels():
                 l.set_fontsize(5)
@@ -3955,7 +3992,7 @@ class Model(object):
         self.description = description
 
 def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
-                          PYs, PY_std, pos=None, laddax=False):
+                          PYs, PY_std, add_fit, pos=None, laddax=False):
     """
     Print scatter plots at peak correlation (14 at the moment)
 
@@ -3970,8 +4007,6 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
     #plt.ion()
 
     PYs = PYs*100
-
-    #rows = [5, 10, 15, 20]
 
     # use the position form the pos argument; if not given, use the position
     # wigh highest correlation
@@ -3997,6 +4032,7 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
     print("Spearman for maxnuc: {0} and PY".format(maxnuc))
     print(spearmanr(finals, PYs))
     print(pearsonr(finals, PYs))
+
     ax.scatter(finals, PYs, color= 'k')
     ax.errorbar(finals, PYs, yerr=PY_std, fmt=None, color= 'k')
 
@@ -4020,7 +4056,23 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
     yscale_high = (ymax-ymin)*0.4
     ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
 
+    # determine which function (linear, exponential, or sigmoid) fits best;
+    # print the sum, mean, and median of errors of fit
+    # add the plot of the best-fitting function
+
+    if add_fit:
+        add_scatter_fit(finals, PYs, ax)
+
+    debug()
+
     return fig
+
+def add_scatter_fit(finals, PYs, ax):
+    """
+    Evaluate the fit to sigmoid, linear, and exponential functions and add to
+    the plot the function that has the best fit, as determined by the residual
+    sum of errors.
+    """
 
 def parameter_relationship(results, optim, randomize, par_ranges):
     """
@@ -4064,7 +4116,7 @@ def parameter_relationship(results, optim, randomize, par_ranges):
     ax.set_xticks(x_range)
     ax.set_xticklabels(xticklabels)
     #ax.set_xlim(3,21)
-    ax.set_xlabel("RNA length (nt)", size=20)
+    ax.set_xlabel("ITS length (nt)", size=20)
 
 def print_scrunch_ladder_compare(results, rand_results, retrof_results,
                                  randomize, par_ranges, p_line, its_max, ymin,
@@ -4151,7 +4203,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
         ax.set_xticks(range(3,its_max))
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,its_max)
-        ax.set_xlabel("RNA length (nt)", size=23)
+        ax.set_xlabel("ITS length (nt)", size=23)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
@@ -4346,7 +4398,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
         ax.set_xticks(range(3,its_max))
         ax.set_xticklabels(xticklabels_skip)
         ax.set_xlim(3,its_max)
-        ax.set_xlabel("RNA length (nt)", size=21)
+        ax.set_xlabel("ITS length (nt)", size=21)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
@@ -6051,7 +6103,7 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges, printB):
     ax.set_xticks(range(3,its_max))
     ax.set_xticklabels(xticklabels)
     ax.set_xlim(3,its_max)
-    ax.set_xlabel("RNA length $n$ used to calculate SE$_n$", size=23)
+    ax.set_xlabel("ITS length $n$ used to calculate SE$_n$", size=23)
 
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
@@ -6078,6 +6130,9 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
     Wow, awzm. Your new results show no role for the RNA-DNA hybrid. Also you've
     got 90% peak correlation at +11! :) Peaks at +14 instead.
     """
+
+    # add a fitted curve to the scatter plot?
+    add_fit = True
 
     # grid size
     grid_size = 15
@@ -6164,7 +6219,8 @@ def three_param_AB(ITSs, testing, p_line, par, scalad=False):
         # where to make the scatter plot
         # Without scatter + ladder
         fig_sct = print_scrunch_scatter(results, rand_results, randomize,
-                                        par_ranges, PYs, PY_std, pos=maxnuc)
+                                        par_ranges, PYs, PY_std, add_fit,
+                                        pos=maxnuc)
 
         return fig_lad, fig_sct
     else:
@@ -6253,6 +6309,10 @@ def predicted_vs_measured(ITSs):
     You ran, I think, with these parameters.
     params = (15, 0, 0.022, 0.24)
 
+    You fit a sigmoid; fit a linear function and calculate the sum of squared
+    errors between the functions and the data. Might that argue for the sigmoid
+    fit?
+
     """
 
     # add a polynomial or sigmoid fit
@@ -6339,6 +6399,8 @@ def predicted_vs_measured(ITSs):
     if fit_function:
         add_fitted_function(ax, predicted, tested)
 
+    fig.set_size_inches(7,7)
+
     return fig
 
 def write_py_SE15(tested_PY, pred_PY):
@@ -6357,33 +6419,63 @@ def add_fitted_function(ax, predicted, tested):
     """
     Add a sigmoid fit to the plot
     """
-    #from scipy.odr import odrpack as odr
-    #from scipy.odr import models
 
-    def sigmoid_function(B, x):
-        """
-        B is the parameters and x is the SE_15
-        """
-
-        #return B[0]/(1+np.exp(-x))
-        #return B[0]/(B[1]+np.exp(-x))
-        return B[0]/(B[1]+B[2]*np.exp(-x))
-
-    def sigm_error(B, x, y):
-        """
-        """
-        return y - sigmoid_function(B, x)
-
-    B0 = [1, 1, 1]
     x = np.array(predicted)
     y = np.array(tested)
 
-    # Normal least squares
-    fit = optimize.leastsq(sigm_error, B0, args=(x, y))
+    # List with tuples of the differnt functions you fit to
+
+    F = Fit()
+
+    ffuncs = [('Sigmoid', F.sigmoid_error, F.sigmoid_function),
+             ('Linear', F.linear_error, F.linear_function),
+             ('Exponential', F.exponential_error, F.exponential_function)]
+
+    # keep score
+    score = {}
+
+    B0 = [1, 1, 1]
+    for (fname, f_error, f_function) in ffuncs:
+        fit = optimize.leastsq(f_error, B0, args=(x, y))
+        outp_args = fit[0]
+        fit_vals = [f_function(outp_args, x_val) for x_val in x]
+        # calc stuff
+
+    # Normal least squares on sigmoid fit
+    #B0 = [1, 1, 1]
+    ##391.535639527
+    ##15.0590630587
+
+    # Normal least squares on linear fit
+    #B0 = [1, 1]
+    #fit = optimize.leastsq(linear_error, B0, args=(x, y))
+    #outp_args = fit[0]
+    #fit_vals = [linear_function(outp_args, x_val) for x_val in x]
+    ##359.388266403 total
+    ##13.8226256309 averaged
+
+    F = Fit()
+
+    # Normal least squares on exponential fit
+    B0 = [1, 1, 1]
+    fit = optimize.leastsq(F.exponential_error, B0, args=(x, y))
     outp_args = fit[0]
-    fit_vals = [sigmoid_function(outp_args, x_val) for x_val in x]
+    fit_vals = [F.exponential_function(outp_args, x_val) for x_val in x]
+    #338.361666364
+    #13.0139102448
+
     # sort by increasing x-value
     (sort_x, sort_fit) = zip(*sorted(zip(x, fit_vals)))
+
+    sse = sum([(y_1 - f_1)**2 for (y_1, f_1) in zip(y, fit_vals)])
+
+    mean_fit = np.mean(fit_vals)
+    sum_of_residuals = sum([(y_1-mean_fit)**2 for y_1 in y])
+    print sum_of_residuals
+    print sum_of_residuals/len(y)
+
+    print sse
+    print sse/len(y)
 
     # odd_ least squares
     #my_model = odr.Model(sigmoid_function)
@@ -6394,7 +6486,9 @@ def add_fitted_function(ax, predicted, tested):
     #fit = my_odr.run()
     # XXX I didn't get a nice fit this way, but keep code just in case
 
+    plt.ion()
     ax.plot(sort_x, sort_fit, linewidth=2)
+    plt.show()
 
 def get_new_exprimetal_py(pred_file):
     """
@@ -6583,7 +6677,7 @@ def paper_figures(ITSs):
     #fig_ladder.set_size_inches(17,7)
     #figs.append((fig_ladder, ladder_name))
 
-    #Figure 2.5 -> Three-parameter model with controls 
+    ##Figure 2.5 -> Three-parameter model with controls 
     #ladder_nog_name = 'three_param_control_AB' + append
     #fig_nog_ladder, fig_nog_scatter = three_param_control_A(ITSs, testing,
                                                             #p_line,
@@ -6591,9 +6685,9 @@ def paper_figures(ITSs):
     #figs.append((fig_nog_ladder, ladder_nog_name))
 
     ### Figure 2.7 -> Compare two and three parameter models
-    compare_name = 'compare_two_three_AB' + append
-    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    figs.append((fig_controversy, compare_name))
+    #compare_name = 'compare_two_three_AB' + append
+    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    #figs.append((fig_controversy, compare_name))
 
     ### Figure 3 -> The RNA DNA hybrid as a positive stabilizing force
     #rna_stable_name = 'RNA_stabilizing' + append
@@ -6601,9 +6695,9 @@ def paper_figures(ITSs):
     #figs.append((fig_rna_stable, rna_stable_name))
 
     ##Figure 4 -> Predicted VS actual PY
-    #evaluation_name = 'Predicted_vs_measured' + append
-    #fig_evaluation = predicted_vs_measured(ITSs)
-    #figs.append((fig_evaluation, evaluation_name))
+    evaluation_name = 'Predicted_vs_measured' + append
+    fig_evaluation = predicted_vs_measured(ITSs)
+    figs.append((fig_evaluation, evaluation_name))
 
     ### Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
@@ -6907,7 +7001,7 @@ def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
 
     # interpolate pvalues (x, must increase) with correlation (y) and
     # obtain the correlation for p = 0.05 to plot as a black
-    if p_line and name == 'Original':
+    if p_line and name.endswith('-DNA}$'):
         # hack to get pvals and corr coeffs sorted
         pv, co = zip(*sorted(zip(pvals, corr)))
         f = interpolate(pv, co, k=1)
@@ -6926,7 +7020,7 @@ def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
     #ax.set_xticklabels(xticklabels)
     ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='odd'))
     ax.set_xlim(3,its_max)
-    ax.set_xlabel("RNA length (nt)", size=21)
+    ax.set_xlabel("ITS length (nt)", size=21)
 
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
@@ -8341,8 +8435,6 @@ def main():
     #compare_quantitations()
 
     #third_report_figures(ITSs)
-
-    #debug()
 
     #genome_wide()
     #new_genome()
