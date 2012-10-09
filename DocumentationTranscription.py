@@ -1042,7 +1042,7 @@ def new_ladder(lizt):
 
     ax.set_xticks(range(3,21))
     ax.set_xticklabels(xticklabels)
-    ax.set_xlabel("ITS length (nt)", size=26)
+    ax.set_xlabel("RNA length (nt)", size=26)
     ax.set_ylabel("Correlation coefficient, $r$", size=26)
 
     if pline == 'yes':
@@ -3716,7 +3716,7 @@ def print_model_family2(resultz, p_line, max_its, ymin):
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,21)
 
-        ax.set_xlabel("ITS length (nt)", size=10)
+        ax.set_xlabel("RNA length (nt)", size=10)
 
         for l in ax.get_xticklabels():
             l.set_fontsize(6)
@@ -3841,7 +3841,7 @@ def print_model_family(resultz, p_line, max_its, ymin):
             ax.set_xlim(3,21)
 
             if row_nr == 1:
-                ax.set_xlabel("ITS length (nt)", size=8)
+                ax.set_xlabel("RNA length (nt)", size=8)
 
             for l in ax.get_xticklabels():
                 l.set_fontsize(5)
@@ -4116,7 +4116,7 @@ def parameter_relationship(results, optim, randomize, par_ranges):
     ax.set_xticks(x_range)
     ax.set_xticklabels(xticklabels)
     #ax.set_xlim(3,21)
-    ax.set_xlabel("ITS length (nt)", size=20)
+    ax.set_xlabel("RNA length (nt)", size=20)
 
 def print_scrunch_ladder_compare(results, rand_results, retrof_results,
                                  randomize, par_ranges, p_line, its_max, ymin,
@@ -4203,7 +4203,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
         ax.set_xticks(range(3,its_max))
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,its_max)
-        ax.set_xlabel("ITS length (nt)", size=23)
+        ax.set_xlabel("RNA length (nt)", size=23)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
@@ -4398,7 +4398,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
         ax.set_xticks(range(3,its_max))
         ax.set_xticklabels(xticklabels_skip)
         ax.set_xlim(3,its_max)
-        ax.set_xlabel("ITS length (nt)", size=21)
+        ax.set_xlabel("RNA length (nt)", size=21)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
@@ -6103,7 +6103,7 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges, printB):
     ax.set_xticks(range(3,its_max))
     ax.set_xticklabels(xticklabels)
     ax.set_xlim(3,its_max)
-    ax.set_xlabel("ITS length $n$ used to calculate SE$_n$", size=23)
+    ax.set_xlabel("RNA length (nt)", size=23)
 
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
@@ -6881,8 +6881,6 @@ def compare_two_three(ITSs, testing, p_line, par):
 
     exp(keq) OLD: pre-translocated -> low rate, post-translocated -> high rate
 
-    This actually makes perfect sense, now it's just the correlation that is
-    strange.
     """
 
     # no cross validation needed
@@ -7001,7 +6999,7 @@ def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
 
     # interpolate pvalues (x, must increase) with correlation (y) and
     # obtain the correlation for p = 0.05 to plot as a black
-    if p_line and name.endswith('-DNA}$'):
+    if p_line and name.endswith('RNA-DNA}$'):
         # hack to get pvals and corr coeffs sorted
         pv, co = zip(*sorted(zip(pvals, corr)))
         f = interpolate(pv, co, k=1)
@@ -7020,7 +7018,7 @@ def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
     #ax.set_xticklabels(xticklabels)
     ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='odd'))
     ax.set_xlim(3,its_max)
-    ax.set_xlabel("ITS length (nt)", size=21)
+    ax.set_xlabel("RNA length (nt)$", size=23)
 
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
@@ -8010,11 +8008,6 @@ def abortive_initiation_fromwhere(ITSs):
     variator_coefficients = ['k2'] # k2 gives smaller values but same pattern
 
     y0 = [1] + [0 for _ in range(state_nr-1)]
-
-    # the three nettlesome parameters
-    b_rate = 0.1 # vary from 0.05 to 0.5
-    t = 15 # vary from 1 to 100
-    k3_coeff = 1 # vary from 0.5 to 1.5
 
     #b_rates = (0.5-0.05)*np.random.rand(100) + 0.05
     #times = (100-1)*np.random.rand(100) + 1
