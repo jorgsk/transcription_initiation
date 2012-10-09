@@ -11,7 +11,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 import scipy.stats
 from scipy import optimize
 from scipy.stats import spearmanr, pearsonr
@@ -6530,9 +6529,9 @@ def paper_figures(ITSs):
     #figs.append((fig_nog_ladder, ladder_nog_name))
 
     ## Figure 2.7 -> Compare two and three parameter models
-    compare_name = 'compare_two_three_AB' + append
-    fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
-    figs.append((fig_controversy, compare_name))
+    #compare_name = 'compare_two_three_AB' + append
+    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    #figs.append((fig_controversy, compare_name))
 
     ## Figure 3 -> The RNA DNA hybrid as a positive stabilizing force
     #rna_stable_name = 'RNA_stabilizing' + append
@@ -6733,13 +6732,18 @@ def compare_two_three(ITSs, testing, p_line, par):
     grid_size = 10
 
     if testing:
-        grid_size = 6
+        grid_size = 4
 
     # initial grid
     c1 = np.array([par['K']]) # insensitive to variation here
     c2 = np.linspace(0, 1, grid_size)
     c3 = np.linspace(0, 1, grid_size)
     c4 = np.linspace(-1, 0, grid_size)
+
+    # fast processing -- for figure ediing
+    #c2 = np.array([0.3]) # 
+    #c3 = np.array([0.25]) #
+    #c4 = np.array([-0.39]) #
 
     # define the ranges for the two minimal models
     zero = np.array([0])
@@ -6782,18 +6786,24 @@ def compare_two_three(ITSs, testing, p_line, par):
     fig, ax = plt.subplots()
 
     # plot them 
-    colors = ['b', 'g', 'c', 'k', 'r']
+    colors = ['b', 'g', 'c']
+    lstyle = ['D', 'v', '-']
     for name, results in resulter.items():
         color = colors.pop()
-        compare_plot(ax, name, results, color, its_max, p_line, ymin, ymax)
+        ls = lstyle.pop()
+        compare_plot(ax, name, results, color, ls, its_max, p_line, ymin, ymax)
 
     #fig.set_figwidth(20)
     fig.set_figwidth(15)
     fig.set_figheight(10)
 
+    plt.show()
+
+    debug()
+
     return fig
 
-def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
+def compare_plot(ax, name, results, colr, ls, its_max, p_line, ymin, ymax):
     """
     Plot all the ladder plots on top of each other.
     """
@@ -6807,7 +6817,7 @@ def compare_plot(ax, name, results, colr, its_max, p_line, ymin, ymax):
 
     # check for nan in corr (make it 0)
     corr, pvals = remove_nan(corr, pvals)
-    ax.plot(incrX, corr, label=name, linewidth=3, color=colr)
+    ax.plot(incrX, corr, label=name, linewidth=3, color=colr, ls=ls)
 
     # interpolate pvalues (x, must increase) with correlation (y) and
     # obtain the correlation for p = 0.05 to plot as a black
