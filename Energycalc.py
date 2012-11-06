@@ -3,17 +3,78 @@ from Bio.Seq import Seq
 import copy
 import numpy as np
 
-# RNA-DNA duplexes from 2002 paper
-# DNA bases are given.
-NNRD = {'TT':-0.4,'TG':-1.6,'TC':-1.4,'TA':-1.0,'GT':-1.0,'GG':-1.5,'GC':-1.2,'GA':-0.9,'CT':-1.4,'CG':-2.4,'CC':-2.2,'CA':-1.5,'AT':-0.3,'AG':-0.8,'AC':-1.0,'AA':-0.2,'Initiation':1.0}
+def complement(in_dict):
+    """
+    Return the dinucleotide -> value dict with the complementary dinucleotide.
+
+    Example 'AC': 5 will be returned as 'TG': 5
+
+    """
+    translate = {'A':'T', 'C': 'G', 'G':'C', 'T':'A', 'U':'A'}
+
+    out_dict = {}
+
+    for rna_din, val in in_dict.items():
+        if len(rna_din) == 2:
+            dna_din = ''.join([translate[nuc] for nuc in list(rna_din)])
+
+            out_dict[dna_din] = val
+        else:
+            # symmertry, terminal, etc. (non-dinucleotide entries)
+            out_dict[rna_din] = val
+
+    return out_dict
+
+
+# RNA-DNA duplexes from Sugimoto 2002 paper
+# BASES ARE FROM THE TEMPLATE DNA STRAND OF A TRANSCRIPTION BUBBLE WITH AN
+# RNA-DNA HYBRID
+NNRD = {'AA':-0.4,
+        'AC':-1.6,
+        'AG':-1.4,
+        'AT':-1.0,
+        'CA':-1.0,
+        'CC':-1.5,
+        'CG':-1.2,
+        'CT':-0.9,
+        'GA':-1.4,
+        'GC':-2.4,
+        'GG':-2.2,
+        'GT':-1.5,
+        'TA':-0.3,
+        'TC':-0.8,
+        'TG':-1.0,
+        'TT':-0.2,
+        'Initiation':1.0}
 # EnLibRNA is for calculating expected random sequence values
+
 EnLibRNA = copy.deepcopy(NNRD)
 del(EnLibRNA['Initiation'])
 
-# DNA-DNA duplexes from 2004 paper in the 5->3 direction
-NNDD = {'AA':-1.0,'TT':-1.0,'AT':-0.88,'TA':-0.58,'CA':-1.45,'TG':-1.45,'GT':-1.44,'AC':-1.44,'CT':-1.28,'AG':-1.28,'GA':-1.3,'TC':-1.3,'CG':-2.17,'GC':-2.24,'GG':-1.84,'CC':-1.84,'TerminalAT':0.05,'Initiation':1.96,'Symmetry':0.43}
+# DNA-DNA duplexes from Santalucia 2004 paper in the 5->3 direction
+NNDD = {'AA':-1.00,
+        'TT':-1.00,
+        'AT':-0.88,
+        'TA':-0.58,
+        'CA':-1.45,
+        'TG':-1.45,
+        'GT':-1.44,
+        'AC':-1.44,
+        'CT':-1.28,
+        'AG':-1.28,
+        'GA':-1.30,
+        'TC':-1.30,
+        'CG':-2.17,
+        'GC':-2.24,
+        'GG':-1.84,
+        'CC':-1.84,
+        'TerminalAT':0.05,
+        'Initiation':1.96,
+        'Symmetry':0.43}
 EnLibDNA = copy.deepcopy(NNDD)
 del(EnLibDNA['Initiation'])
+
+#EnLibDNA = complement(EnLibRNA)
 
 def RNA_DNAexpected(length):
     """ Returns expected RNA/DNA energy for random sequence of length 'length'. """
@@ -105,13 +166,20 @@ def PhysicalDNA(sequence):
 from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
 
 # recalculate the Keq and the reverse for more accuracy
-
 invEq = {}
 reKeq = {}
 
 for dinuc, val in kminus1.items():
     invEq[dinuc] = val/k1[dinuc]
     reKeq[dinuc] = k1[dinuc]/val
+
+    # The inverse has a large problem since some kf the k1 values are very small
+    if dinuc == 'TA':
+        invEq[dinuc] = 5
+    if dinuc == 'TG':
+        invEq[dinuc] = 6
+    # You are fixing it by ad-hoc reducing some values. This helps to bring
+    # positive correlation like you expected!
 
 # try to normalize some values for invEq
 # result: correlation reappears with 'sensible' values
@@ -122,45 +190,36 @@ def seq2din(sequence):
     indiv = list(sequence) # splitting sequence into individual letters
     return [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
-def dnaizer(in_dict):
-    """
-    in_dict has got RNA dinucleotides to energy, NN: float
-
-        XXXXXNN
-        YYYYYZZ
-
-    return ZZ: float to get he DNA version
-    """
-    translate = {'A':'T', 'C': 'G', 'G':'C', 'T':'A', 'U':'A'}
-
-    out_dict = {}
-
-    for rna_din, val in in_dict.items():
-        dna_din = ''.join([translate[nuc] for nuc in list(rna_din)])
-
-        out_dict[dna_din] = val
-
-    return out_dict
-
-# XXX go from Keq to Delta G values. Do 1/en because Hein paper has got the
+# XXX go from Keq to Delta G values. Do 1/Keq because Hein paper has got the
 # equilibrium constant for the opposite reaction.
 # Keq = exp(-DG/RT) -> DG = -ln(Keq)*RT
-# Also go from RNA to DNA sequence
+# Keq_EC8_EC9 is already in dna coding strand sequence
 
 RT = 1.9858775*(37 + 273.15)
-dna_keq = dnaizer(Keq_EC8_EC9)
-#dna_keq = Keq_EC8_EC9
+#dna_keq = complement(Keq_EC8_EC9)
+dna_keq = Keq_EC8_EC9
 
-delta_keq = {}
+delta_keq_f = {}
 for din, en in dna_keq.items():
-    delta_keq[din] = -RT*np.log(1/en)/1000  #divide by 1000 to get kcal
+    delta_keq_f[din] = RT*np.log(en)/1000  #divide by 1000 to get kcal
 
-def Delta_trans(sequence):
+delta_keq_b = {}
+for din, en in dna_keq.items():
+    delta_keq_b[din] = -RT*np.log(en)/1000  #divide by 1000 to get kcal
+
+def Delta_trans_forward(sequence):
     """
-    Delta values for keq
+    Delta values for keq for the forward reaction
     """
 
-    return sum([delta_keq[din] for din in seq2din(sequence)])
+    return sum([delta_keq_f[din] for din in seq2din(sequence)])
+
+def Delta_trans_backward(sequence):
+    """
+    Delta values for keq for the backward reaction
+    """
+
+    return sum([delta_keq_b[din] for din in seq2din(sequence)])
 
 def res_frac(sequence):
     """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
@@ -190,4 +249,28 @@ def Keq(sequence):
         return 0
 
     return sum([Keq_EC8_EC9[din] for din in seq2din(sequence)])
+
+def Keq_mine(sequence):
+    """ Calculate the Keq of 'sequence'. """
+    if len(sequence) < 2:
+        return 0
+
+    return sum([k1[din]/kminus1[din] for din in seq2din(sequence)])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

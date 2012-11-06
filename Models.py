@@ -20,32 +20,29 @@ def residuals_mainM(parameters, variables, PY):
 
     return PY - mainM(parameters, variables)
 
-def logKeq(parameters, variables):
+def derived(parameters, variables):
     """
-    #PY = c1*exp(b1*x1 - (b2)ln(x2))
-    PY = c1*exp(b1*x1 - ln(x2) + b2)
-
-    Try to model using the logarithm of Keq
-    This is the only model i get out of equilibrium kinetics. The expression
-    divides by x2 and then I take log(ln)
+    This is the only model i get out of equilibrium kinetics.
     """
-    keq, rna_dna = variables
+    keq, rna_dna, dna_dna = variables
 
-    if len(parameters) == 4:
-        c1, b1, b2, b3 = parameters
-        return c1*np.exp(b1*rna_dna - b2*np.log(b3*keq))
+    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
 
     if len(parameters) == 3:
-        c1, b1, b2 = parameters
-        return c1*np.exp(b1*rna_dna - b2*np.log(keq))
+        b1, b2, b3 = parameters
+        return np.exp(b1*rna_dna + b2*dna_dna + b3*keq)/RT
 
     elif len(parameters) == 2:
-        c1, b1 = parameters
-        return c1*np.exp(rna_dna - b1*np.log(keq))
+        b1, b2 = parameters
+        return np.exp(b1*dna_dna + b2*keq)/RT
 
-def residuals_logKeq(parameters, variables, PY):
+    elif len(parameters) == 1:
+        b1 = parameters
+        return np.exp(b1*keq)/RT
 
-    return PY - logKeq(parameters, variables)
+def residuals_derived(parameters, variables, PY):
+
+    return PY - derived(parameters, variables)
 
 def logRT(parameters, variables):
     """

@@ -91,7 +91,8 @@ class Fit(object):
         """
         B is the parameters and x is the SE_15
         """
-        return B[0]/(B[1]+B[2]*np.exp(-x))
+        #return B[0]/(B[1]+B[2]*np.exp(-x))
+        return (B[1]+B[2]*np.exp(-B[3]*x))/B[0]
 
     def sigmoid_error(self, B, x, y):
         """
@@ -103,7 +104,9 @@ class Fit(object):
         B is the parameters and x is the SE_15
         """
 
-        return B[0] + B[1]*np.exp(B[2]*x)
+        #return B[0] + B[1]*np.exp(B[2]*x)
+        #return B[0] + B[1]/np.exp(B[2]*x)
+        return B[1]/np.exp(B[2]*x)
 
     def exponential_error(self, B, x, y):
         """
@@ -449,6 +452,7 @@ class ITS(object):
         self.redlist = []
         self.redlisted = False
 
+        # make a dinucleotide list of the ITS sequence
         __seqlen = len(self.sequence)
         __indiv = list(self.sequence)
         __dinucs = [__indiv[c] + __indiv[c+1] for c in range(__seqlen-1)]
@@ -456,7 +460,8 @@ class ITS(object):
         # Make di-nucleotide vectors for all the energy parameters
         self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
         self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
-        self.keq_delta_di = [Ec.delta_keq[di] for di in __dinucs]
+        self.keq_delta_di_f = [Ec.delta_keq_f[di] for di in __dinucs]
+        self.keq_delta_di_b = [Ec.delta_keq_b[di] for di in __dinucs]
 
     def __repr__(self):
         return "{0}, PY: {1}".format(self.name, self.PY)
@@ -1041,7 +1046,7 @@ def new_ladder(lizt):
 
     ax.set_xticks(range(3,21))
     ax.set_xticklabels(xticklabels)
-    ax.set_xlabel("RNA length (nt)", size=26)
+    ax.set_xlabel("Length of RNA $(n)$", size=26)
     ax.set_ylabel("Correlation coefficient, $r$", size=26)
 
     if pline == 'yes':
@@ -1854,7 +1859,7 @@ def new_AP(ITSs):
         abortz = [a for a in abortProbs[its.name] if a != '-']
 
         #get the keqs up to the length of abortiz
-        keqs = its.keq_delta_di[:len(abortz)]
+        keqs = its.keq_delta_di_f[:len(abortz)]
 
         #APs.append(np.std(ap))
         #props.append(np.std(keqs))
@@ -3207,14 +3212,21 @@ def naive_model(ITSs, new_set=[]):
     PYs = np.array([itr.PY for itr in ITSs])
 
     # optimize parameters XXX unfinished, maybe you can delete this later.
-    output, opt_param = optim_naive_model(ITSlen, PYs, rna_dna, dna_dna,
-                                          keq_delta)
+    #output, opt_param = optim_naive_model(ITSlen, PYs, rna_dna, dna_dna,
+                                          #keq_delta)
 
-    #exponential = (c2*dna_dna + c3*keq_delta + c4*rna_dna)/RT
-    exponential = (c2*dna_dna + c3*keq_delta)/RT + c4*rna_dna
+    RT = 1.9858775*(37 + 273.15)/1000   # divide by 1000 to get kcalories
+    c2 = 0.5
+    c3 = 0.5
+    c4 = 0.5
+    c1 = 0.1
+    exponential = (c2*dna_dna + c3*keq_delta + c4*rna_dna)/RT
+    #exponential = (c2*dna_dna + c3*keq_delta)/RT + c4*rna_dna
+    #exponential = (c2*dna_dna + c3*keq_delta)/RT
+    #exponential = (c3*keq_delta)/RT
     outp = c1*np.exp(-exponential)
 
-    # Make a continuous energy values for plotting
+    # Make continuous energy values for plotting
     minval = min(exponential)
     maxval = max(exponential)
     plot_range = np.arange(minval, maxval, 0.01)
@@ -3232,7 +3244,7 @@ def naive_model(ITSs, new_set=[]):
     plt.ion()
 
     fig, ax = plt.subplots()
-    ax.errorbar(c1*exponential, PYs, yerr=PYs_std, fmt='go')
+    ax.errorbar(outp, PYs, yerr=PYs_std, fmt='go')
     #for name, py, fit in zip(names, PYs, c1*exponential):
 
         ## only annotate these
@@ -3250,14 +3262,17 @@ def naive_model(ITSs, new_set=[]):
     xend = max(c1*exponential)
     x_range = np.linspace(xbeg, xend, len(plot_data))
 
-    ax.plot(x_range, plot_data)
+    #ax.plot(x_range, plot_data)
 
     ax.set_xticklabels([])
     ax.set_xlabel('Abortive propensity', size=20)
     ax.set_ylabel('Productive yield', size=20)
     ax.set_title('Fitting $PY = Ke^{-(b1\Delta G_1 + b2\Delta G_2)}$')
 
-def fitting_models(lizt, ITSs):
+    plt.show()
+    debug()
+
+def fitting_models(ITSs):
     """
     You have implicitly assumed the linear relationship with unity-parameters
     for the relationship between PY and the variables you consider. What if the
@@ -3292,17 +3307,19 @@ def fitting_models(lizt, ITSs):
     # get the variables you need 
     rna_dna = np.array([Ec.RNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
     dna_dna = np.array([Ec.DNA_DNAenergy(s.sequence[:ITSlen]) for s in ITSs])
-    keq = np.array([Ec.Keq(s.sequence[:ITSlen]) for s in ITSs])
-    k1 = np.array([Ec.K1(s.sequence[:ITSlen]) for s in ITSs])
-    kMinus1 = np.array([Ec.Kminus1(s.sequence[:ITSlen]) for s in ITSs])
+    keq = np.array([Ec.Delta_trans(s.sequence[:ITSlen]) for s in ITSs])
 
-    added = [Ec.super_f(s.sequence[:ITSlen]) for s in ITSs]
+    # GOOD NEWS! It is possible to have a positive correlation; it might not be as
+    # good as the one you used to have; but it will have to be good enough; I
+    # don't care if the paper is weaker, as long as the paper is good enough to
+    # publish. XXX ! Now just get that XXX positive correlation back in the game
+    # and FX0r the rst. But. Big problem: the correlation hinges on rna-dna
+    # shart increase at the end :S it's so goddamned fx0red up.
+
     # your Y-values, the PYs
     PYs = np.array([itr.PY for itr in ITSs])
     PYs_std = [itr.PY_std for itr in ITSs]
     names = [itr.name for itr in ITSs]
-
-    import scipy.optimize as optimize
 
     #variables = (k1, rna_dna)
     #variables = (kMinus1, rna_dna)
@@ -3341,14 +3358,15 @@ def fitting_models(lizt, ITSs):
      # fit. A good sign.
 
     #### the exp model with log(keq) and /RT
-    parameters = (10, -1, 1)
-    #parameters = (10, -1)
-    #parameters = (10,)
-    variables = (rna_dna, keq)
+    #parameters = (1, 1, -1)
+    parameters = (-1, -1)
+    #parameters = (-1)
+    variables = (keq, rna_dna, dna_dna)
 
-    plsq = optimize.leastsq(Models.residuals_logRT, parameters, args=(variables, PYs))
+    plsq = optimize.leastsq(Models.residuals_derived, parameters,
+                            args=(variables, PYs))
     fitted_parm = plsq[0]
-    outp = Models.logRT(fitted_parm, variables)
+    outp = Models.derived(fitted_parm, variables)
 
     #c1, c2 = fitted_parm
     #c1 = fitted_parm
@@ -3715,7 +3733,7 @@ def print_model_family2(resultz, p_line, max_its, ymin):
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,21)
 
-        ax.set_xlabel("RNA length (nt)", size=10)
+        ax.set_xlabel("Length of RNA $(n)$", size=10)
 
         for l in ax.get_xticklabels():
             l.set_fontsize(6)
@@ -3840,7 +3858,7 @@ def print_model_family(resultz, p_line, max_its, ymin):
             ax.set_xlim(3,21)
 
             if row_nr == 1:
-                ax.set_xlabel("RNA length (nt)", size=8)
+                ax.set_xlabel("Length of RNA $(n)$", size=8)
 
             for l in ax.get_xticklabels():
                 l.set_fontsize(5)
@@ -3991,7 +4009,8 @@ class Model(object):
         self.description = description
 
 def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
-                          PYs, PY_std, add_fit, pos=None, laddax=False):
+                          PYs, PY_std, add_fit, pos=None, in_axes=False,
+                          ax_nr=0):
     """
     Print scatter plots at peak correlation (14 at the moment)
 
@@ -4015,54 +4034,48 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
         maxnuc = list(sorted([(r.corr_max, v) for (v, r) in
                               results.items()]))[-1][-1]
 
-    fig, ax = plt.subplots()
-    if laddax is False:
-        pass
-    else:
-        ax = laddax[0]
-        ax.cla()
-
     # if you haven't calculated anything, return the empty figure
     if maxnuc-1 in results:
         finals = results[maxnuc-1].finals # you were comparing to PY/100
     else:
-        return fig
+        return None
 
     print("Spearman for maxnuc: {0} and PY".format(maxnuc))
     print(spearmanr(finals, PYs))
     print(pearsonr(finals, PYs))
 
-    ax.scatter(finals, PYs, color= 'k')
-    ax.errorbar(finals, PYs, yerr=PY_std, fmt=None, color= 'k')
+    for axes in in_axes:
+        ax = axes[ax_nr]
 
-    ax.set_ylabel("PY", size=21)
-    ax.set_xlabel("SE$_{20}$", size=21)
+        ax.scatter(finals, PYs, color= 'k')
+        ax.errorbar(finals, PYs, yerr=PY_std, fmt=None, color= 'k')
 
-    # awkward way of setting the tick sizes
-    for l in ax.get_xticklabels():
-        l.set_fontsize(18)
-        #l.set_fontsize(6)
-    for l in ax.get_yticklabels():
-        l.set_fontsize(18)
-        #l.set_fontsize(6)
+        ax.set_ylabel("PY", size=12)
+        ax.set_xlabel("SE$_{20}$", size=12)
 
-    xmin, xmax = min(finals), max(finals)
-    xscale = (xmax-xmin)*0.1
-    ax.set_xlim(xmin-xscale, xmax+xscale)
+        ymin = -0.2
 
-    ymin, ymax = min(PYs), max(PYs)
-    yscale_low = (ymax-ymin)*0.1
-    yscale_high = (ymax-ymin)*0.4
-    ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
+        # awkward way of setting the tick sizes
+        for l in ax.get_xticklabels():
+            l.set_fontsize(10)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(10)
 
-    # determine which function (linear, exponential, or sigmoid) fits best;
-    # print the sum, mean, and median of errors of fit
-    # add the plot of the best-fitting function
+        xmin, xmax = min(finals), max(finals)
+        xscale = (xmax-xmin)*0.1
+        ax.set_xlim(xmin-xscale, xmax+xscale)
 
-    if add_fit:
-        add_scatter_fit(finals, PYs, ax)
+        ymin, ymax = min(PYs), max(PYs)
+        yscale_low = (ymax-ymin)*0.1
+        yscale_high = (ymax-ymin)*0.4
+        ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
 
-    return fig
+        # determine which function (linear, exponential, or sigmoid) fits best;
+        # print the sum, mean, and median of errors of fit
+        # add the plot of the best-fitting function
+
+        if add_fit:
+            add_scatter_fit(finals, PYs, ax)
 
 def add_scatter_fit(finals, PYs, ax):
     """
@@ -4113,7 +4126,7 @@ def parameter_relationship(results, optim, randomize, par_ranges):
     ax.set_xticks(x_range)
     ax.set_xticklabels(xticklabels)
     #ax.set_xlim(3,21)
-    ax.set_xlabel("RNA length (nt)", size=20)
+    ax.set_xlabel("Length of RNA $(n)$", size=20)
 
 def print_scrunch_ladder_compare(results, rand_results, retrof_results,
                                  randomize, par_ranges, p_line, its_max, ymin,
@@ -4200,7 +4213,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
         ax.set_xticks(range(3,its_max))
         ax.set_xticklabels(xticklabels)
         ax.set_xlim(3,its_max)
-        ax.set_xlabel("RNA length (nt)", size=23)
+        ax.set_xlabel("Length of RNA $(n)$", size=23)
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
@@ -4258,7 +4271,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
 def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
                          par_ranges, p_line, its_max, its_range, ymin, ymax,
                          testing, description=False, print_params=True,
-                         in_axes=0, ax_nr=0, inset=False):
+                         in_axes=[0], ax_nr=0, inset=False, lbel=True):
     """
     Alternative print-scrunch.
     [0][0] is the pearson for the real and the control
@@ -4266,210 +4279,138 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
 
     insert plot makes inset of growth in correlation from one step to another
     """
-    if print_params:
-        fig, axes = plt.subplots(1,2)
+
+    # if passing axes (as list!) use them
+    if in_axes[0] != 0:
+        axxes = in_axes
+    # if not, make a new figure for this plot
     else:
         fig, ax = plt.subplots()
-        axes = np.array([ax])
+        axxes = [[ax]]
 
-    if list(in_axes) != 0:
-        axes = in_axes
+    for axes in axxes:
+        # if there is just 1 figure, use ax_nr = 0
+        if len(axes) > 1:
+            ax = axes[ax_nr]
+        else:
+            ax = axes[0]
 
-    # assign colors to parameters
-    colors_params = ['r', 'c', 'm', 'k', 'g']
-    all_params = ('c1', 'c2', 'c3', 'c4', 'c5')
-    labels = ['K', 'RNA-DNA', 'DNA-DNA', "3' dinucleotide"]
-    # only plot parameters that are variable 
+        # go over both the real and random results
+        # This loop covers [0][0] and [0][1]
+        for (ddict, name, colr) in [(results, 'real', 'b'),
+                                    (rand_results, 'random', 'g'),
+                                   (retrof_results, 'cross-validated', 'k')]:
 
-    plot_params = [p for p, r in zip(all_params, par_ranges) if len(r) > 1]
+            # don't process 'random' or 'retrofit' if not evaluated
+            if False in ddict.values():
+                continue
 
-    # assign colors to parameters
-    par2col = dict(zip(all_params, colors_params))
-    par2label = dict(zip(all_params, labels))
+            # get its_index and corr-coeff from sorted dict
+            if name == 'real':
+                indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_min)
+                                   for r in sorted(ddict.items())])
 
-    # go over both the real and random results
-    # This loop covers [0][0] and [0][1]
-    for (ddict, name, colr) in [(results, 'real', 'b'),
-                                (rand_results, 'random', 'g'),
-                               (retrof_results, 'cross-validated', 'k')]:
+            elif name == 'random':
+                indx, corr = zip(*[(r[0], r[1].corr_mean)
+                                   for r in sorted(ddict.items())])
 
-        # don't process 'random' or 'retrofit' if not evaluated
-        if False in ddict.values():
-            continue
+                stds = [r[1].corr_std for r in sorted(ddict.items())]
 
-        # get its_index and corr-coeff from sorted dict
-        if name == 'real':
-            indx, corr, pvals = zip(*[(r[0], r[1].corr_max, r[1].pvals_min)
-                               for r in sorted(ddict.items())])
+            elif name == 'cross-validated':
+                indx, corr = zip(*[(r[0], r[1].corr_mean)
+                                   for r in sorted(ddict.items())])
+
+                stds = [r[1].corr_std for r in sorted(ddict.items())]
+
+            # points on x-axis for plotting -- same as its_lenghts
+            incrX = its_range
+
+            # change sign for correlation to get an 'upward' plot
+            corr = [-c for c in corr] # change sign
+
+            if name == 'real':
+
+                # check for nan in corr (make it 0)
+                corr, pvals = remove_nan(corr, pvals)
+
+                lab = 'correlation: PY and SE$_n$)'
+
+                axes[ax_nr].plot(incrX, corr, label=lab, linewidth=3, color=colr)
+
+                if p_line:
+                    # sort pvals and corr and interpolate
+                    pv, co = zip(*sorted(zip(pvals, corr)))
+                    # interpolate pvalues (x, must increase) with correlation
+                    # (y) and obtain the threshold for p = 0.05
+                    f = interpolate(pv[:-2], co[:-2], k=1)
+                    axes[ax_nr].axhline(y=f(0.05), ls='--', color='r',
+                                        label='p = 0.05 threshold', linewidth=2)
+
+            # if random, plot with errorbars
+            elif name == 'random':
+                lab = 'using random sequences'
+                axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=lab,
+                                     linewidth=2, color=colr)
+
+            elif name == 'cross-validated':
+                lab = 'cross-validation'
+                axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=lab,
+                                     linewidth=2, color=colr)
 
 
-        elif name == 'random':
-            indx, corr = zip(*[(r[0], r[1].corr_mean)
-                               for r in sorted(ddict.items())])
+        # yticks
+        yticklabels = [format(i ,'.1f') for i in np.arange(-ymin, -1.1, -0.1)]
+        yticklabels_skip = odd_even_spacer(yticklabels)
 
-            stds = [r[1].corr_std for r in sorted(ddict.items())]
-
-        elif name == 'cross-validated':
-            indx, corr = zip(*[(r[0], r[1].corr_mean)
-                               for r in sorted(ddict.items())])
-
-            stds = [r[1].corr_std for r in sorted(ddict.items())]
-
-        # points on x-axis for plotting -- same as its_lenghts
-        incrX = its_range
-
-        if name == 'real':
-            # check for nan in corr (make it 0)
-            corr, pvals = remove_nan(corr, pvals)
-
-            lab = 'correlation(PY, SE$_n$)'
-            axes[ax_nr].plot(incrX, corr, label=lab, linewidth=4, color=colr)
-
-            # interpolate pvalues (x, must increase) with correlation (y) and
-            # obtain the correlation for p = 0.05 to plot as a black
-
-            if p_line:
-                # sort pvals and corr and interpolate
-                pv, co = zip(*sorted(zip(pvals, corr)))
-                f = interpolate(pv, co, k=1)
-                axes[ax_nr].axhline(y=f(0.05), ls='--', color='r',
-                                    label='p = 0.05 threshold', linewidth=3)
-
-            # add inset plot with addition of corr at each step
-            # XXX 
-            #if inset:
-                #pass
-                #debug()
-
-        # if random, plot with errorbars
-        elif name == 'random':
-            lab = 'using random sequences'
-            axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=lab, linewidth=3,
-                             color=colr)
-
-        elif name == 'cross-validated':
-            lab = 'cross-validation'
-            axes[ax_nr].errorbar(incrX, corr, yerr=stds, label=lab, linewidth=3,
-                             color=colr)
-
-        # skip if you're not printing parametes
-        if print_params and name == 'real':
-
-            paramz_best = [r[1].params_best for r in sorted(ddict.items())]
-            #paramz_mean = [r[1].params_mean for r in sorted(ddict.items())]
-            #paramz_std = [r[1].params_std for r in sorted(ddict.items())]
-
-            # each parameter should be plotted with its best (solid) and mean
-            # (striped) values (mean should have std)
-            for parameter in plot_params:
-
-                # print the best parameters
-                best_par_vals = [d[parameter] for d in paramz_best]
-                if print_params and ax_nr >0:
-                    print "Wrong ax_nr incoming"
-
-                axes[ax_nr+1].plot(incrX, best_par_vals,
-                                   label=par2label[parameter], linewidth=3,
-                                   color=par2col[parameter])
-                # mean
-                #mean_par_vals = [d[parameter] for d in paramz_mean]
-
-                # std XXX maybe it's best not to use the error bars
-                # print the mean and std of the top 20 parameters
-                #std_par_vals = [d[parameter] for d in paramz_std]
-                #axes[ax_nr+1].errorbar(incrX, mean_par_vals, yerr=std_par_vals,
-                                       #color=par2col[parameter], linestyle='--')
-
-    xticklabels = [str(integer) for integer in range(3, its_max)]
-
-    # only show even xticks
-    xticklabels_skip = odd_even_spacer(xticklabels, oddeven='odd')
-
-    #Make sure ymin has only one value behind the comma
-    ymin = float(format(ymin, '.1f'))
-    yticklabels = [format(i ,'.1f') for i in np.arange(ymin, 1.1, 0.1)]
-    yticklabels_skip = odd_even_spacer(yticklabels)
-
-    for ax in axes.flatten():
-        # legend
-        ax.legend(loc='lower right')
+        ax.set_yticks(np.arange(ymin, 1.1, 0.1))
+        ax.set_yticklabels(yticklabels_skip)
+        ax.set_ylim(ymin, 1.001)
+        ax.set_ylabel("Correlation coefficient, $r$", size=11)
 
         # xticks
-        ax.set_xticks(range(3,its_max))
+        xticklabels = [str(integer) for integer in range(3, its_max)]
+        xticklabels_skip = odd_even_spacer(xticklabels, oddeven='odd')
+
+        ax.set_xticks(range(3, its_max))
         ax.set_xticklabels(xticklabels_skip)
-        ax.set_xlim(3,its_max)
-        ax.set_xlabel("RNA length (nt)", size=21)
+        ax.set_xlim(3, its_max)
+        ax.set_xlabel("RNA length $(n)$", size=11)
+
+        if lbel:
+            ax.legend(loc='lower right', prop={'size':8})
 
         # awkward way of setting the tick font sizes
         for l in ax.get_xticklabels():
-            l.set_fontsize(18)
+            l.set_fontsize(10)
         for l in ax.get_yticklabels():
-            l.set_fontsize(18)
-        #axes[0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                  #alpha=0.5)
-        #axes[0].xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                  #alpha=0.5)
+            l.set_fontsize(10)
+
         ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-             alpha=0.5)
+                      alpha=0.5)
         ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                  alpha=0.5)
+                      alpha=0.5)
 
-    axes[0].set_ylabel("Correlation coefficient, $r$", size=21)
+    if in_axes[0] == 0:
+        return fig, axes
 
-    axes[0].set_yticks(np.arange(ymin, 1.1, 0.1))
-    #axes[0].set_yticks(np.arange(0, 1, 0.1))
-    axes[0].set_yticklabels(yticklabels_skip)
-    axes[0].set_ylim(ymin, 1.001)
-    # you need a grid to see your awsome 0.8 + correlation coefficient
-
-    if print_params:
-        axes[1].set_ylabel("Parameter value", size=23)
-        #axes[1].set_yticks(np.arange(-0.05, 0.5, 0.05))
-        #axes[1].set_yticklabels(yticklabels_1)
-        #axes[1].set_ylim(-0.05, 0.5)
-
-        fig.set_figwidth(20)
-        fig.set_figheight(10)
-    else:
-        fig.set_figwidth(10)
-        fig.set_figheight(10)
-
-    # This last part was the title which you don't need in production
-    # (Remove and False if you ever want to print something like this again)
-    if testing and False:
-
-        for_join = []
-
-        for let, par in zip(('a', 'b', 'c', 'd'), par_ranges):
-            if len(par) == 1:
-                for_join.append(let + ':{0:.2f}'.format(par[0]))
-            else:
-                mi, ma = (format(min(par), '.2f'), format(max(par), '.2f'))
-                for_join.append(let + ':({0}--{1})'.format(mi, ma))
-
-        if description:
-            descr = ', '.join(for_join) + '\n' + description
-        else:
-            descr = ', '.join(for_join)
-
-        hedr = 'Nr random samples: {0}\n\n{1}\n'.format(randomize, descr)
-        fig.suptitle(hedr)
-
-
-    return fig, axes
-
-def odd_even_spacer(vals, oddeven='even'):
+def odd_even_spacer(vals, oddeven='even', integer=False):
     out = []
     if oddeven == 'odd':
         for val_nr, val in enumerate(vals):
             if val_nr % 2:
-                out.append(val)
+                if integer:
+                    out.append(int(val))
+                else:
+                    out.append(val)
             else:
                 out.append(' ')
     else:
         for val_nr, val in enumerate(vals):
             if not val_nr % 2:
-                out.append(val)
+                if integer:
+                    out.append(int(val))
+                else:
+                    out.append(val)
             else:
                 out.append(' ')
 
@@ -4536,7 +4477,6 @@ def scrunch_runner(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
         results_retrof[its_len] = retrof_obj
         results_random[its_len] = random_obj
 
-
     return results, results_random, results_retrof
 
 
@@ -4547,6 +4487,7 @@ def get_its_variables(ITSs, randomize=False, retrofit=False, PY=False):
     """
     new_ITSs = []
 
+    # same order as PYs -- energy list and PY list agree
     for its in ITSs:
 
         # if randomize, create a new object ITS object from a random sequence
@@ -4556,7 +4497,8 @@ def get_its_variables(ITSs, randomize=False, retrofit=False, PY=False):
 
         ITSs_dict = {'rna_dna_di': np.array(its.rna_dna_di),
                      'dna_dna_di': np.array(its.dna_dna_di),
-                     'keq_di': np.array(its.keq_delta_di)}
+                     #'keq_di': np.array(its.keq_delta_di_f)}
+                     'keq_di': np.array(its.keq_delta_di_b)}
 
         new_ITSs.append(ITSs_dict)
 
@@ -4583,9 +4525,24 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
     """
     Separate scruch calls into randomize, retrofit, or neither.
     """
+    if (not retrof) and (not randomize):
+        normal_run = True
+    else:
+        normal_run = False
+
+    # NO RETROFIT AND NO RANDOMIZE
+    if normal_run:
+        #go from ITS object to dict to appease the impotent pickle
+        # maybe you didn't have to do that. that really sucks. now.
+        ITS_variables = get_its_variables(ITSs)
+
+        arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap,
+                     predictive)
+
+        return grid_scrunch(arguments, ranges)
 
     # RETROFIT
-    if retrof:
+    elif retrof:
         retro_results = []
         for repeat in range(retrof):
 
@@ -4649,16 +4606,6 @@ def grid_scruncher(PYs, its_len, ITSs, ranges, y0, state_nr, randomize=0,
 
         return average_rand_result(rand_results)
 
-    # NO RETROFIT AND NO RANDOMIZE
-    else:
-        #go from ITS object to dict to appease the impotent pickle
-        # maybe you didn't have to do that. that really sucks. now.
-        ITS_variables = get_its_variables(ITSs)
-
-        arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap,
-                     predictive)
-
-        return grid_scrunch(arguments, ranges)
 
 def average_rand_result(rand_results):
     """
@@ -4718,7 +4665,8 @@ def grid_scrunch(arguments, ranges):
     #rmax = 5 #XXX uncomment for multiprocessing debugging.
     if rmax > 6:
         my_pool = multiprocessing.Pool()
-        results = [my_pool.apply_async(_multi_func, (p, arguments)) for p in divide]
+        results = [my_pool.apply_async(_multi_func,
+                                       (p, arguments)) for p in divide]
         my_pool.close()
         my_pool.join()
         # flatten the output
@@ -4733,6 +4681,11 @@ def grid_scrunch(arguments, ranges):
 
     # Filter and pick the 20 with smallest pval
     all_sorted = sorted(all_results, key=itemgetter(3))
+
+    all_corr = sorted([a[-2] for a in all_results])
+
+    if all_corr != []:
+        print all_corr[0], all_corr[-1]
 
     # pick top 20
     top_hits = all_sorted[:20]
@@ -4777,11 +4730,12 @@ def _multi_func(paras, arguments):
 
         # correlation
         #rp, pp = pearsonr(PYs, finals)
+        #rp, pp = spearmanr(PYs, finals)
+
         rp, pp = spearmanr(PYs, finals)
 
         # ignore those where the correlation is a nan
         # they get a pvalue of 0 which mezzez things up
-        # ooopz, w
         if not predictive and np.isnan(rp):
             continue
 
@@ -4853,6 +4807,8 @@ def mini_scrunch(seqs, params, state_nr, y0, multi_range):
 def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
                             b, c, d, hybrid_weight=False):
     """
+    NOTE!! now calculating for the backward translocation
+
     Recall that the energies are in dinucleotide form. Thus ATG -> [0.4, 0.2]
 
     Tip for the future; start at +1 also for nucleotides, so all arrays have the
@@ -4910,12 +4866,11 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
 
     for i in range(0, its_len-2):
 
-        KEQ = keq[i]
+        KEQ = keq[i] # already formulated for the reverse reaction
         keq_array.append(KEQ)
 
-        #DNA_DNA = sum(dna_dna[:i+1+1]) - sum(dna_dna[:i+1]) #+1 for python
-        #DNA_DNA = sum(dna_dna[:i+1]) # proving a point ...
-        DNA_DNA = dna_dna[i+1] # the difference is the same as the last element
+        #DNA_DNA = dna_dna[i+1] # the difference is the same as the last element
+        DNA_DNA = -dna_dna[i+1] # negative for back-translocation
         dnadna_array.append(DNA_DNA)
 
         # index 8 is the same as x_11. k[8] is for x_11
@@ -4925,12 +4880,15 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
         else:
             # the 7 and the 8 are because of starting at +3, dinucleotides, and
             # python indexing 
-            RNA_DNA = sum(rna_dna[i-7:i+1]) - sum(rna_dna[i-8:i+1])
+            #RNA_DNA = sum(rna_dna[i-7:i+1]) - sum(rna_dna[i-8:i+1])
+            # take the negative for back-translocation
+            RNA_DNA = -(sum(rna_dna[i-7:i+1]) - sum(rna_dna[i-8:i+1]))
+
         rnadna_array.append(RNA_DNA)
 
-        expo = (b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
+        exponent = (b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
 
-        rate = a*np.exp(-expo)
+        rate = a*np.exp(-exponent) #b, c, d positive -> forward
 
         # if hybrid weight .. RESULT destroys correlation
         if hybrid_weight:
@@ -4943,7 +4901,6 @@ def calculate_k1_difference(RT, its_len, keq, dna_dna, rna_dna, a,
 
         else:
             k1[i] = rate
-
 
     return k1, (rnadna_array, dnadna_array, keq_array)
 
@@ -5936,7 +5893,7 @@ def get_optimal_params(PYs, its_range, ITSs, par_ranges,
 
     return optimal_params
 
-def three_param_control_A(ITSs, testing, p_line, par):
+def three_param_control_A(ITSs, testing, p_line, par, in_axes=False, ax_nr=0):
     """
     Print three parameter model with the two controls.
 
@@ -5963,9 +5920,13 @@ def three_param_control_A(ITSs, testing, p_line, par):
     # it only makes sense in the case that these parameters are valid also for
     # half the dataset. ... 
     c1 = np.array([par['K']]) # insensitive to variation here
-    c2 = np.array([0])
-    c3 = np.array([0.25])
-    c4 = np.array([-0.39])
+    #c2 = np.array([0])
+    #c3 = np.array([0.25])
+    #c4 = np.array([-0.39])
+
+    c2 = np.array([0.33]) # 
+    c3 = np.array([0.11]) #
+    c4 = np.array([4.50]) #
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -5983,14 +5944,22 @@ def three_param_control_A(ITSs, testing, p_line, par):
 
     # ladder plot
     ymin = -0.4 # correlation is always high
-    ymax = 0.9 # correlation is always high
+    ymax = 1.001 # correlation is always high
     randomize = rands # you didn't randomize
     printB = False
+
+    if not in_axes:
+        axxes = [0]
+    else:
+        fig, ax = plt.subplots(1)
+        axxes = [list(in_axes), [ax]]
+
     fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
                                            retrof_results, randomize,
                                            par_ranges, p_line, its_max,
                                            its_range, ymin, ymax, testing,
-                                           print_params=printB)
+                                           print_params=printB, lbel=False,
+                                           ax_nr=ax_nr, in_axes=axxes)
 
     # calculate a new plot B
     grid_size = 15
@@ -6005,7 +5974,7 @@ def three_param_control_A(ITSs, testing, p_line, par):
     #c2 = np.array([0]) # insensitive to variation here
     c2 = np.linspace(0, 1, grid_size)
     c3 = np.linspace(0, 1, grid_size)
-    c4 = np.linspace(-1, 0, grid_size)
+    c4 = np.linspace(3, 5, grid_size)
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6014,11 +5983,15 @@ def three_param_control_A(ITSs, testing, p_line, par):
 
     # Add the new ax-2 to ax_ladder if printB is true. If not, just print the
     # mean and std of the mean 20-run cross-validations
-    new_ax_two(ax_lad, all_results, its_max, par_ranges, printB)
+    #new_ax_two(ax_lad, all_results, its_max, par_ranges, printB)
 
-    fig_lad.set_size_inches(7,7)
+    width = mm2inch(87)
+    height = mm2inch(87)
 
-    return fig_lad, False
+    fig_lad.set_size_inches(width, height)
+    fig_lad.subplots_adjust(left=0.14)
+
+    return fig_lad
 
 def new_ax_two(ax_lad, all_results, its_max, par_ranges, printB):
     """
@@ -6103,13 +6076,13 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges, printB):
     ax.set_xticks(range(3,its_max))
     ax.set_xticklabels(xticklabels)
     ax.set_xlim(3,its_max)
-    ax.set_xlabel("RNA length (nt)", size=23)
+    ax.set_xlabel("Length of RNA $(n)$", size=10)
 
     # awkward way of setting the tick font sizes
     for l in ax.get_xticklabels():
-        l.set_fontsize(15)
+        l.set_fontsize(8)
     for l in ax.get_yticklabels():
-        l.set_fontsize(15)
+        l.set_fontsize(8)
     ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
          alpha=0.5)
     ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
@@ -6120,8 +6093,7 @@ def new_ax_two(ax_lad, all_results, its_max, par_ranges, printB):
             fontweight='bold', va='top')
 
 
-
-def three_param_AB(ITSs, testing, p_line, par):
+def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
     """
     Print three parameter model with parameter estimation values.
 
@@ -6129,6 +6101,21 @@ def three_param_AB(ITSs, testing, p_line, par):
 
     Wow, awzm. Your new results show no role for the RNA-DNA hybrid. Also you've
     got 90% peak correlation at +11! :) Peaks at +14 instead.
+
+    Update: the old results were with wrong dinucleotides (template instead of
+    coding strand :/) (amazing that the template strand gives better results)
+
+    Is there any kind of reason?
+
+    New idea: make your score according to the propensity for the
+    pre-translocated state. In the first scatter-plot, show the negative trend.
+
+    The reason why the sign-thing is not so easy is that keq is ultimately
+    calculated as "keq" or "1/keq", the last of which has a broken correlation
+    due to enlargment of outlier values.
+
+    Now you have done it: representing things in terms of reverse translocation,
+    and making the ladder plot growing by reversing the stuffz.
     """
 
     # add a fitted curve to the scatter plot?
@@ -6139,30 +6126,26 @@ def three_param_AB(ITSs, testing, p_line, par):
     rands = 0 # for cross-validating and random sequences
 
     if testing:
-        grid_size = 15
+        grid_size = 6
 
+    PYs = np.array([its.PY for its in ITSs])*0.01
+    #PYs = PYs[::-1]
     # Compare with the PY percentages in this notation
-    PYs = np.array([itr.PY for itr in ITSs])*0.01
-    #PYs = np.array([-np.log(itr.APR) for itr in ITSs])*0.01 # use APR instead
     # or log (Fl/Ab), will give you the positive trend.
     PY_std = np.array([itr.PY_std for itr in ITSs])
+    #PY_std = PY_std[::-1]
 
     # Parameter ranges you want to test out
     # free it up
     c1 = np.array([par['K']]) # insensitive to variation here
 
-    #c2 = np.linspace(0, par['rd_max'], grid_size)
-    #c3 = np.linspace(-par['dd_max'], 0, grid_size)
-    #c4 = np.linspace(0, par['eq_max'], grid_size)
+    #c2 = np.linspace(0, 1.0, grid_size)
+    #c3 = np.linspace(0, 1.0, grid_size)
+    #c4 = np.linspace(3, 5.0, grid_size)
 
-    #c2 = np.linspace(0, 1, grid_size)
-    #c2 = np.linspace(0, 0, 1)
-    #c3 = np.linspace(0, 1, grid_size)
-    #c4 = np.linspace(-1, 0, grid_size)
-
-    c2 = np.array([0.07]) # 
-    c3 = np.array([0.26]) #
-    c4 = np.array([-0.40]) #
+    c2 = np.array([0.33]) # 15 runs
+    c3 = np.array([0.11]) # 15 runs
+    c4 = np.array([4.50]) # 15 runs
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6171,11 +6154,10 @@ def three_param_AB(ITSs, testing, p_line, par):
         #its_max = 15
 
     its_range = range(2, its_max)
-    #its_range = range(2, 15)
+    #its_range = range(5, its_max)
     #its_range = [15]
     #its_range = [10, 15, 20]
-    #its_range = [10, 12, 15, 18, 20]
-
+    #its_range = [5,10, 15, 20]
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
                                  randize=rands, retrofit=rands)
 
@@ -6191,17 +6173,18 @@ def three_param_AB(ITSs, testing, p_line, par):
 
     # XXX pringing params
     # print the mean and std of the estimated parameters
-    #for param in ['c1', 'c2', 'c3', 'c4']:
-        ##get the parameter values from pos 6 to 21
-        #par_vals = [results[pos].params_best[param] for pos in range(6,its_max)]
-        #if param == 'c2':
-            #mean = np.mean(par_vals[8:])
-            #std = np.std(par_vals[8:])
-        #else:
-            #mean = np.mean(par_vals)
-            #std = np.std(par_vals)
+    for param in ['c1', 'c2', 'c3', 'c4']:
+        #get the parameter values from pos 6 to 21
+        par_vals = [results[pos].params_best[param] for pos in range(6,its_max)]
+        print param, par_vals
+        if param == 'c2':
+            mean = np.mean(par_vals[8:])
+            std = np.std(par_vals[8:])
+        else:
+            mean = np.mean(par_vals)
+            std = np.std(par_vals)
 
-        #print('{0}: {1:.2f} +/- {2:.2f}'.format(param, mean, std))
+        print('{0}: {1:.2f} +/- {2:.2f}'.format(param, mean, std))
 
     # ladder plot
     ymin = -0.2 # correlation is always high
@@ -6211,26 +6194,40 @@ def three_param_AB(ITSs, testing, p_line, par):
 
     # create the figure and subplots
     fig, axes = plt.subplots(1,2)
-    ax_nr = 1 # put the ladder as plot B
 
-    fig_lad, ax_lad = print_scrunch_ladder(results, rand_results,
-                                           retrof_results, randomize,
-                                           par_ranges, p_line, its_max,
-                                           its_range, ymin,
-                                           ymax, testing, print_params=False,
-                                           inset=inset_plot, in_axes=axes,
-                                           ax_nr=ax_nr)
+    #pparms=True
+    pparms=False
+
+    if not in_axes:
+        axxes = [list(axes)]
+    else:
+        axxes = [list(axes), list(in_axes)] # first is for the single figure, second
+    #is for both
+    # you must make as a list in order to be able to test the values for truth
+    # or false
+
     maxnuc = its_max
-
-    # modify fig_lad to have the scatterplot in position A
+    # make a scatter plot and put in first plot position
     print_scrunch_scatter(results, rand_results, randomize, par_ranges, PYs,
-                          PY_std, add_fit, pos=maxnuc, laddax=ax_lad)
+                          PY_std, add_fit, pos=maxnuc, in_axes=axxes, ax_nr=0)
+
+    # make a ladder plot and put in the second position
+    print_scrunch_ladder(results, rand_results, retrof_results, randomize,
+                         par_ranges, p_line, its_max, its_range, ymin, ymax,
+                         testing, print_params=pparms, inset=inset_plot,
+                         in_axes=axxes, ax_nr=1, lbel=True)
 
     # Add A and B if two plots
     for i, label in enumerate(('A', 'B')):
-        ax = axes[i]
-        ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=26,
+        ax = axes[i] # for the local figure
+        ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=16,
                 fontweight='bold', va='top')
+
+    width = mm2inch(87)
+    height = mm2inch(87)
+
+    fig.set_size_inches(width*2, height)
+    fig.tight_layout()
 
     return fig
 
@@ -6300,25 +6297,20 @@ def RNAP_2_PY(ITSs, concentrations, params=(20, 0, 0.022, 0.24), its_len=15):
 
     return pred_PY
 
-def predicted_vs_measured(ITSs):
+def predicted_vs_measured(ITSs, in_axes=0, ax_nr=0):
     """
     Return the correlation between predicted and measured PYs
-
-    You ran, I think, with these parameters.
-    params = (15, 0, 0.022, 0.24)
 
     You fit a sigmoid; fit a linear function and calculate the sum of squared
     errors between the functions and the data. Might that argue for the sigmoid
     fit?
-
     """
 
     # add a polynomial or sigmoid fit
     fit_function = True
 
     # 2) Calculate the PY scores for them.
-    # TODO update these parameters
-    params = (1, 0, 0.25, -0.39)
+    params = (1, 0.33, 0.11, 4.5)
     par_ranges = [np.array([p]) for p in params]
 
     its_range = range(3, 21)
@@ -6356,50 +6348,100 @@ def predicted_vs_measured(ITSs):
 
     # Get the PYs from the experiamant!
     #pred_file = 'prediction_experiment/my_summary_first_quant.csv'
-    pred_file = 'prediction_experiment/Second_quantification/summary_second_quant.csv'
+    pred_file = 'prediction_experiment/Second_quantification/'\
+            'summary_second_quant.csv'
     tested_PY = get_new_exprimetal_py(pred_file)
 
-    predicted, tested = zip(*[(pred_PY[pr][0], tested_PY[pr].PY) for pr in pred_PY])
+    predicted, tested, names = zip(*[(pred_PY[pr][0], tested_PY[pr].PY, pr) for
+                                     pr in pred_PY])
     # get standard deviation
     tested_std = [tested_PY[pr].PY_std for pr in pred_PY]
 
     # write all of this to an output file
     write_py_SE15(tested_PY, pred_PY)
 
+    # pick out just N25 and N25_A1anti
+    # you can add them specificially
+    #n25_py_pred = (tested_PY['N25'].PY, pred_PY['N25'][0])
+    #A1anti_py_pred = (tested_PY['N25_A1anti'].PY, pred_PY['N25_A1anti'][0])
+    specials = ['N25', 'N25_A1anti']
+
     fig, ax = plt.subplots()
+    # Should be 8.7 cm
+    # 1 inch = 25.4 mm
+    width = mm2inch(87)
+    height = mm2inch(87)
+    fig.set_size_inches(width, height)
 
-    ax.scatter(predicted, tested)
-    plt.errorbar(predicted, tested, yerr=tested_std, fmt=None)
+    if in_axes != 0:
+        axxes = [list(in_axes), [ax]]
+    else:
+        axxes = [[ax]]
 
-    ########### Set figure and axis properties ############
-    ax.set_xlabel('SE$_{15}$', size=21)
-    ax.set_ylabel('PY', size=21)
+    for axes in axxes:
+        if len(axes) > 1:
+            ax = axes[ax_nr]
+        else:
+            ax = axes[0]
 
-    xmin, xmax = min(predicted), max(predicted)
-    xscale = (xmax-xmin)*0.1
-    ax.set_xlim(xmin-xscale, xmax+xscale)
+        ax.scatter(predicted, tested)
+        ax.errorbar(predicted, tested, yerr=tested_std, fmt=None)
 
-    ymin, ymax = min(tested), max(tested)
-    yscale_low = (ymax-ymin)*0.2
-    yscale_high = (ymax-ymin)*0.3
-    ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
+        ########### Set figure and axis properties ############
+        ax.set_xlabel('SE$_{15}$', size=12)
+        ax.set_ylabel('PY', size=12)
 
-    for l in ax.get_xticklabels():
-        l.set_fontsize(18)
-    for l in ax.get_yticklabels():
-        l.set_fontsize(18)
-    #######################
+        xmin, xmax = min(predicted), max(predicted)
+        xscale = (xmax-xmin)*0.1
+        ax.set_xlim(xmin-xscale, xmax+xscale)
 
-    #spearm = spearmanr(predicted, tested)
-    #pears = pearsonr(predicted, tested)
-    #ax.set_title('r = {0:.2f}, p-value = {1:.2e}'.format(*spearm))
+        ymin, ymax = min(tested), max(tested)
+        yscale_low = (ymax-ymin)*0.2
+        yscale_high = (ymax-ymin)*0.3
+        ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
 
-    if fit_function:
-        add_fitted_function(ax, predicted, tested)
+        # shown only every other tick
+        xticklabels_skip = odd_even_spacer(ax.get_xticks(), oddeven='odd',
+                                           integer=True)
+        ax.set_xticklabels(xticklabels_skip)
 
-    fig.set_size_inches(7,7)
+        for l in ax.get_xticklabels():
+            l.set_fontsize(10)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(10)
+        #######################
+
+        print spearmanr(predicted, tested)
+        print pearsonr(predicted, tested)
+        #ax.set_title('r = {0:.2f}, p-value = {1:.2e}'.format(*spearm))
+
+        if fit_function:
+            add_fitted_function(ax, predicted, tested)
+
+        specials = ['N25', 'N25_A1anti']
+        for name in specials:
+            py = tested_PY[name].PY
+            pred = pred_PY[name][0]
+            box_x = 50
+            box_y = 10
+            if name == 'N25_A1anti':
+                name = 'N25/A1anti'
+                box_y = 50
+
+            colr = 'yellow'
+            ax.annotate(name,
+                    xy=(pred, py), xytext=(box_x,box_y), textcoords='offset points',
+                        bbox=dict(boxstyle='round, pad=0.5', fc=colr,
+                                  alpha=0.5), ha='right', va='bottom',
+                        arrowprops=dict(arrowstyle='->',
+                                        connectionstyle='arc3,rad=0'), size=10
+                    )
 
     return fig
+
+def mm2inch(mm):
+
+    return float(mm)/25.4
 
 def write_py_SE15(tested_PY, pred_PY):
 
@@ -6432,12 +6474,22 @@ def add_fitted_function(ax, predicted, tested):
     # keep score
     score = {}
 
-    B0 = [1, 1, 1]
+    mean_y = np.mean(y)
+    B0 = [1, 3, 0.2, 0.01]
+    #B0 = [3, 10, 0.2]
     for (fname, f_error, f_function) in ffuncs:
         fit = optimize.leastsq(f_error, B0, args=(x, y))
         outp_args = fit[0]
         fit_vals = [f_function(outp_args, x_val) for x_val in x]
-        # calc stuff
+
+        # residual sum of squares
+        sst = sum([(y_1 - mean_y)**2 for (y_1, f_1) in zip(y, fit_vals)])
+        # total sum of squares (proportional to variance)
+        sse = sum([(y_1 - f_1)**2 for (y_1, f_1) in zip(y, fit_vals)])
+
+        # Coefficient of determination R squared:
+        Rsq = 1 - sse/sst
+        print('{0}: coefficient of determination: {1}'.format(fname, Rsq))
 
     # Normal least squares on sigmoid fit
     #B0 = [1, 1, 1]
@@ -6451,29 +6503,33 @@ def add_fitted_function(ax, predicted, tested):
     #fit_vals = [linear_function(outp_args, x_val) for x_val in x]
     ##359.388266403 total
     ##13.8226256309 averaged
+    plt.ioff()
 
     F = Fit()
 
     # Normal least squares on exponential fit
-    B0 = [1, 1, 1]
+    B0 = [1, 40, 0.02, 0.01]
     fit = optimize.leastsq(F.exponential_error, B0, args=(x, y))
     outp_args = fit[0]
     fit_vals = [F.exponential_function(outp_args, x_val) for x_val in x]
-    #338.361666364
-    #13.0139102448
+
+    #B0 = [1, 3, 10, 0.01]
+    #fit = optimize.leastsq(F.sigmoid_error, B0, args=(x, y))
+    #outp_args = fit[0]
+    #fit_vals = [F.sigmoid_function(outp_args, x_val) for x_val in x]
 
     # sort by increasing x-value
     (sort_x, sort_fit) = zip(*sorted(zip(x, fit_vals)))
 
+    # residual sum of squares
+    sst = sum([(y_1 - mean_y)**2 for (y_1, f_1) in zip(y, fit_vals)])
+    # total sum of squares (proportional to variance)
     sse = sum([(y_1 - f_1)**2 for (y_1, f_1) in zip(y, fit_vals)])
 
-    mean_fit = np.mean(fit_vals)
-    sum_of_residuals = sum([(y_1-mean_fit)**2 for y_1 in y])
-    print sum_of_residuals
-    print sum_of_residuals/len(y)
+    # Coefficient of determination R squared:
+    Rsq = 1 - sse/sst
 
-    print sse
-    print sse/len(y)
+    #print('Coefficient of determination: {0}'.format(Rsq))
 
     # odd_ least squares
     #my_model = odr.Model(sigmoid_function)
@@ -6484,9 +6540,7 @@ def add_fitted_function(ax, predicted, tested):
     #fit = my_odr.run()
     # XXX I didn't get a nice fit this way, but keep code just in case
 
-    plt.ion()
     ax.plot(sort_x, sort_fit, linewidth=2)
-    plt.show()
 
 def get_new_exprimetal_py(pred_file):
     """
@@ -6570,8 +6624,8 @@ def equilibrium_vs_py(ITSs, testing, global_params):
     c1 = np.array([par['K']]) # insensitive to variation here
     #c2 = np.linspace(par['rd_min'], par['dd_max'], grid_size)
     c2 = np.array([0]) # DNA-DNA
-    c3 = np.linspace(-par['dd_max'], -par['dd_min'], grid_size) # RNA-DNA
-    c4 = np.linspace(par['eq_min'], par['eq_max'], grid_size) # 3D
+    c3 = np.linspace(0, 2, grid_size) # RNA-DNA
+    c4 = np.linspace(-2, 0, grid_size) # 3D
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6592,7 +6646,7 @@ def equilibrium_vs_py(ITSs, testing, global_params):
 
             for its in ITSs:
                 # calculate the 3d, dd, and rd (the -1/2 just works)
-                keq = its.keq_delta_di[:its_len-2]
+                keq = its.keq_delta_di_b[:its_len-2]
                 dna_dna = its.dna_dna_di[:its_len-1]
                 dna_dna = its.dna_dna_di[:its_len-2]
                 ddlen = len(dna_dna)
@@ -6618,7 +6672,7 @@ def equilibrium_vs_py(ITSs, testing, global_params):
     for its_len, outp in results.items():
         print its_len
         best_res = sorted(outp)
-        debug()
+
 
     fig, ax = plt.subplots()
     ax.scatter(k1s, PYs)
@@ -6626,12 +6680,23 @@ def equilibrium_vs_py(ITSs, testing, global_params):
     ax.set_xlabel('Sum of translocation equilibrium constants')
     ax.set_ylabel('PY')
 
+    plt.show()
+    debug()
+
     return fig
 
 def paper_figures(ITSs):
     """
     The figures you want to include in the paper.
 
+    UPD: You want to make one figure for all the ladder and scatterplots in
+    order to save some moneys. Dineritos. Thus you'll need an external fig, axes
+    = subplots(5). You must pass these axes to each of the plot programs and add
+    the plots to those axes exactly like you do with the other.
+
+    What figure can go out? I would say the random sampling and cross-validation
+    figure. It's not imperative to have it there -- then you get 4 plots along
+    the width of the page, which might be sufficient.
     """
     testing = True  # if testing, run everything fast
     #testing = False
@@ -6651,6 +6716,18 @@ def paper_figures(ITSs):
     # global parameters
     global_params = get_global_params()
 
+    # Figure 1
+    #figure1, axes1 = plt.subplots(1,4)
+    #fig1_name = 'figure1'
+
+    #width = mm2inch(178)
+    #height = mm2inch(87)
+
+    #figure1.set_size_inches(width*2, height)
+    #figure1.tight_layout()
+
+    #figs.append((figure1, fig1_name))
+
     # Figure 0 -> Keq equilibrium and PY values
     # UPDATE: now doing this with previous approach: just passing argument
     #equilib_name = 'equilibrium_vs_py'
@@ -6658,24 +6735,33 @@ def paper_figures(ITSs):
     #figs.append((equilib_fig, equilib_name))
 
     ### Figure 1 and 2 -> Three-parameter model with parameter estimation but no
-    ##cross-reference. Return either one or two figures.
+    ###cross-reference. Return either one or two figures.
     #ladder_name = 'three_param_model_AB' + append
-    #scatter_name = 'three_param_14_scatter' + append
+    #fig_back = three_param_AB(ITSs, testing, p_line, global_params, in_axes=axes1)
     #fig_back = three_param_AB(ITSs, testing, p_line, global_params)
 
-    #fig_back.set_size_inches(17,7)
     #figs.append((fig_back, ladder_name))
 
-    ##Figure 2.5 -> Three-parameter model with controls 
-    #ladder_nog_name = 'three_param_control_AB' + append
-    #fig_nog_ladder, fig_nog_scatter = three_param_control_A(ITSs, testing,
-                                                            #p_line,
-                                                            #global_params)
-    #figs.append((fig_nog_ladder, ladder_nog_name))
+    #Figure 2.5 -> Three-parameter model with controls 
+    #ax_nr = 3
+    #ladder_control_name = 'three_param_control_AB' + append
+    #fig_control_ladder = three_param_control_A(ITSs, testing, p_line,
+                                               #global_params, in_axes=axes1,
+                                               #ax_nr=ax_nr)
+    #fig_control_ladder = three_param_control_A(ITSs, testing, p_line,
+                                               #global_params)
+    #fig_control_ladder.tight_layout()
+    #figs.append((fig_control_ladder, ladder_control_name))
 
-    ## Figure 2.7 -> Compare two and three parameter models
+    #plt.show()
+
+    ### Figure 2.7 -> Compare two and three parameter models
+    #ax_nr = 2
     #compare_name = 'compare_two_three_AB' + append
+    #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params,
+                                        #ax_nr=ax_nr, in_axes=axes1)
     #fig_controversy = compare_two_three(ITSs, testing, p_line, global_params)
+    #fig_controversy.tight_layout()
     #figs.append((fig_controversy, compare_name))
 
     ### Figure 3 -> The RNA DNA hybrid as a positive stabilizing force
@@ -6683,10 +6769,13 @@ def paper_figures(ITSs):
     #fig_rna_stable = rna_stable(ITSs, testing, p_line, global_params)
     #figs.append((fig_rna_stable, rna_stable_name))
 
-    ##Figure 4 -> Predicted VS actual PY
-    #evaluation_name = 'Predicted_vs_measured' + append
-    #fig_evaluation = predicted_vs_measured(ITSs)
-    #figs.append((fig_evaluation, evaluation_name))
+    #Figure 4 -> Predicted VS actual PY
+    #ax_nr = 3
+    evaluation_name = 'Predicted_vs_measured' + append
+    #fig_evaluation = predicted_vs_measured(ITSs, in_axes=axes1, ax_nr=ax_nr)
+    fig_evaluation = predicted_vs_measured(ITSs)
+    fig_evaluation.tight_layout()
+    figs.append((fig_evaluation, evaluation_name))
 
     ### Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append
@@ -6825,7 +6914,7 @@ def xmer(ITSs, testing, p_line, global_params):
 
             for its in ITSs:
 
-                d3 = its.keq_delta_di
+                d3 = its.keq_delta_di_b
                 dna_dna = its.dna_dna_di
                 rna_dna = its.rna_dna_di
 
@@ -6855,21 +6944,9 @@ def xmer(ITSs, testing, p_line, global_params):
 
     return fig
 
-def compare_two_three(ITSs, testing, p_line, par):
+def compare_two_three(ITSs, testing, p_line, par, ax_nr=0, in_axes=False):
     """
-    Adding each variable sequentially
-
-    What does this mean?
-    exp(dna-dna): GC-rich -> low rate. AT-rich -> high rate
-
-    exp(-rna-dna): GC-rich -> high rate. AT-rich -> low rate
-
-    exp(-keq) NEW: Pre-translocated -> low rate, post-translocated -> high rate
-
-    In the old model Keq has a positive sign
-
-    exp(keq) OLD: pre-translocated -> low rate, post-translocated -> high rate
-
+    Adding each variable sequentially.
     """
 
     # no cross validation needed
@@ -6890,12 +6967,12 @@ def compare_two_three(ITSs, testing, p_line, par):
     c1 = np.array([par['K']]) # insensitive to variation here
     c2 = np.linspace(0, 1, grid_size)
     c3 = np.linspace(0, 1, grid_size)
-    c4 = np.linspace(-1, 0, grid_size)
+    c4 = np.linspace(0, 1, grid_size)
 
     # fast processing -- for figure ediing
-    #c2 = np.array([0.3]) # 
-    #c3 = np.array([0.25]) #
-    #c4 = np.array([-0.39]) #
+    c2 = np.array([0.33]) # 
+    c3 = np.array([0.11]) #
+    c4 = np.array([4.50]) #
 
     # define the ranges for the two minimal models
     zero = np.array([0])
@@ -6962,26 +7039,35 @@ def compare_two_three(ITSs, testing, p_line, par):
     ymin = -0.2 # correlation is always high
     ymax = 1.0 # correlation is always high
 
-    #fig, axes = plt.subplots(1,2)
     fig, ax = plt.subplots()
 
+    if not in_axes:
+        axxes = [[ax]]
+    elif list(in_axes):
+        axxes = [list(in_axes), [ax]]
+
     # plot them 
-    colors = ['b', 'g', 'c']
-    lstyle = ['D', 'v', '-']
+    colors = ['b', 'g', 'k']
+    lstyle = ['-', '-', '-']
+    plt.ion()
     for name, results in resulter.items():
         color = colors.pop()
         ls = lstyle.pop()
-        compare_plot(ax, name, results, color, ls, its_max, p_line, ymin, ymax)
+        compare_plot(axxes, name, results, color, ls, its_max, p_line, ymin,
+                     ymax, ax_nr=ax_nr)
 
-    fig.set_size_inches(7,7)
+    width = mm2inch(87)
+    height = mm2inch(87)
 
-    plt.show()
+    #the y label was disappearing
+    fig.subplots_adjust(left=0.14)
 
-    debug()
+    fig.set_size_inches(width, height)
 
     return fig
 
-def compare_plot(ax, name, results, colr, ls, its_max, p_line, ymin, ymax):
+def compare_plot(axxes, name, results, colr, ls, its_max, p_line, ymin, ymax,
+                 ax_nr=0):
     """
     Plot all the ladder plots on top of each other.
     """
@@ -6993,54 +7079,66 @@ def compare_plot(ax, name, results, colr, ls, its_max, p_line, ymin, ymax):
     # make x-axis
     incrX = range(indx[0], indx[-1]+1)
 
+    # invert the correlation for 'upward' plot purposes
+    corr = [-c for c in corr]
+
     # check for nan in corr (make it 0)
     corr, pvals = remove_nan(corr, pvals)
-    ax.plot(incrX, corr, label=name, linewidth=3, color=colr, ls=ls)
 
-    # interpolate pvalues (x, must increase) with correlation (y) and
-    # obtain the correlation for p = 0.05 to plot as a black
-    if p_line and name.endswith('RNA-DNA}$'):
-        # hack to get pvals and corr coeffs sorted
-        pv, co = zip(*sorted(zip(pvals, corr)))
-        f = interpolate(pv, co, k=1)
-        ax.axhline(y=f(0.05), ls='--', color='r', linewidth=3)
+    #for x, y in zip(incrX, corr):
+        #print x, y
 
-    xticklabels = [str(integer) for integer in range(3, its_max)]
-    #Make sure ymin has only one value behind the comma
-    ymin = float(format(ymin, '.1f'))
-    yticklabels = [format(i ,'.1f') for i in np.arange(ymin, 1.1, 0.1)]
+    #print name
+    #print colr
+    #print ls
 
-    # legend
-    ax.legend(loc='lower right')
+    for axes in axxes:
+        if len(axes) > 1:
+            ax = axes[ax_nr]
+        else:
+            ax = axes[0]
 
-    # xticks
-    ax.set_xticks(range(3,its_max))
-    #ax.set_xticklabels(xticklabels)
-    ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='odd'))
-    ax.set_xlim(3,its_max)
-    ax.set_xlabel("RNA length (nt)$", size=23)
+        ax.plot(incrX, corr, label=name, linewidth=3, color=colr, ls=ls)
 
-    # awkward way of setting the tick font sizes
-    for l in ax.get_xticklabels():
-        l.set_fontsize(18)
-    for l in ax.get_yticklabels():
-        l.set_fontsize(18)
+        # interpolate pvalues (x, must increase) with correlation (y) and
+        # obtain the correlation for p = 0.05 to plot as a black
+        if p_line and name.endswith('RNA-DNA}$'):
+            # hack to get pvals and corr coeffs sorted
+            pv, co = zip(*sorted(zip(pvals, corr)))
+            f = interpolate(pv, co, k=1)
+            ax.axhline(y=f(0.05), ls='--', color='r', linewidth=3)
 
-    ax.set_ylabel("Correlation coefficient, $r$", size=21)
+        xticklabels = [str(integer) for integer in range(3, its_max)]
+        #Make sure ymin has only one value behind the comma
+        ymin = float(format(ymin, '.1f'))
+        yticklabels = [format(i ,'.1f') for i in np.arange(-ymin, -1.1, -0.1)]
 
-    ax.set_yticks(np.arange(ymin, 1.1, 0.1))
-    #ax.set_yticklabels(yticklabels)
-    ax.set_yticklabels(odd_even_spacer(yticklabels))
-    ax.set_ylim(ymin, 1.0001)
-    ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-              alpha=0.5)
-    ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-              alpha=0.5)
+        # legend
+        ax.legend(loc='lower right', prop={'size':7})
 
-    #for i, label in enumerate(('A', 'B')):
-        #if i == ax_nr:
-            #ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=26,
-                    #fontweight='bold', va='top')
+        # xticks
+        ax.set_xticks(range(3,its_max))
+        #ax.set_xticklabels(xticklabels)
+        ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='odd'))
+        ax.set_xlim(3,its_max)
+        ax.set_xlabel("RNA length $(n)$", size=12)
+
+        # awkward way of setting the tick font sizes
+        for l in ax.get_xticklabels():
+            l.set_fontsize(10)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(10)
+
+        ax.set_ylabel("Correlation coefficient, $r$", size=10)
+
+        ax.set_yticks(np.arange(ymin, 1.1, 0.1))
+        #ax.set_yticklabels(yticklabels)
+        ax.set_yticklabels(odd_even_spacer(yticklabels))
+        ax.set_ylim(ymin, 1.0001)
+        ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      alpha=0.5)
+        ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      alpha=0.5)
 
 
 def ITS_centric_selection(ITSs):
@@ -8423,6 +8521,55 @@ def keq_reader():
 def main():
     ITSs = ReadAndFixData() # read raw data
 
+    """Big realizeation: I can't just make the reverse reaction work with k_1/k1.
+    The keq value just will not correlate! Second realization! This is because
+    two dinucleotides TA and TG have very large values!! It is in other words
+    difficult to make the reverse transformation properly.
+
+    XXX! When you updated those values, the reverse RT*log(en)/1000 increased
+    the correlation with 0.7 correlation points, approaching the raw correlation
+    closely.
+
+    The good news is that there ___IS___ a negative correlation with the
+    propensity for being in the pre-translocated state and the PY (it's negative
+    to 0.6, 0.57)
+
+    That is the raw, unadulterated equilibrium constant from Hein et al.
+
+    Maybe -- just maybe -- you should reformulate everything in terms of the
+    reverse reaction, since that is what you have got?
+
+    AhA! I found it!!! The reason why the negative correlation is there -- is
+    because that corresponds to the raw Hein et al. Keq values by +/- change!
+    keq_f = exp(log(keq_f)), while keq_b = exp(-log(keq_f)) !!
+
+    All the more reason to try to reformulate things into a backward
+    translocation issue! :::))) Thank GOD for this!
+
+    That means that the correlation you found was strong and correct -- but it
+    was for the reverse reaction. You will now find the same correlation by
+    defining the equilibirum constant for reverse translocation and including
+    the DNA bubble. That will increase your correlation a bit toward what you
+    used to have -- but you will not return to those levels. It must have been
+    an artefact :S
+    """
+
+    #pys = [i.PY for i in ITSs]
+    #pys = [i.PY for i in ITSs][::-1]
+
+    #keq = [sum(np.log(i.keq)) for i in ITSs]
+    #keq = [sum(i.keq) for i in ITSs]
+    #keq = [sum(i.keq_inverse) for i in ITSs]
+    #keq= [sum(i.keq_delta_di_f) for i in ITSs]
+    #keq= [sum(i.keq_delta_di_b[:20]) for i in ITSs]
+    #plt.scatter(keq, pys)
+    #print spearmanr(keq, pys)
+    #print pearsonr(keq, pys)
+    #plt.ion()
+    #plt.show()
+    #debug()
+    #debug()
+
     #abortive_initiation_fromwhere(ITSs)
 
     #compare_quantitations()
@@ -8475,7 +8622,7 @@ def main():
     #variable_corr()
 
     # the naive exp-fitting models
-    #fitting_models(lizt, ITSs)
+    #fitting_models(ITSs)
 
     #frequency_change()
     # NOTE the poly(A) and poly(T) tracts could be regulatory elements of

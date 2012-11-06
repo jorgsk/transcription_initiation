@@ -4,7 +4,7 @@ Dictionaries with dinucleotide values from:
 
 RNA Transcript 3′-Proximal Sequence Affects Translocation Bias of RNA Polymerase
 
-NOTE dinucleotides are for the RNA, not the DNA.
+NOTE dinucleotides are in terms of the non-template DNA!!
 
 """
 resistant_fraction = {
@@ -130,8 +130,10 @@ Keq_EC8_EC9 = {
 'GC':0.2,
 'TT':2.8,
 'TA':0.09,
+#'TA':0.18,
 'TC':0.4,
 'TG':0.05,
+#'TG':0.15,
 }
 Keq_EC8_EC9_pm = {
 'AA':0.2,
