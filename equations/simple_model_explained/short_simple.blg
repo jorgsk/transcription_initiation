@@ -1,8 +1,0 @@
-[0] Config.pm:300> INFO - This is Biber 0.9.8
-[0] Config.pm:302> INFO - Config file is '/home/jorgsk/.biber.conf'
-[0] Config.pm:303> INFO - Logfile is 'short_simple.blg'
-[0] biber:134> INFO - === Tue Apr  3, 2012, 10:44:31
-[0] Biber.pm:271> INFO - Reading 'short_simple.bcf'
-[10] Biber.pm:586> INFO - Found 0 citekeys in bib section 0
-[10] Utils.pm:184> ERROR - The file 'short_simple.bcf' does not contain any citations!
-[10] Biber.pm:110> INFO - ERRORS: 1
