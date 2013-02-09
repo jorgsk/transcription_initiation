@@ -59,14 +59,6 @@ def AbortiveP():
     return apDict
 
 # Labels of CSV file ['Name','Sequence','PY','PYst','RPY','RPYst','RIF','RIFst','APR','MSAT','R']
-def PYHsu(filename):
-    """ Read Hsu csv-file with PY etc data. """
-    f = open(homedir+'/sequence_data'+filename, 'rt')
-    a = csv.reader(f, delimiter='\t')
-    b = [[Workhouse.StringOrFloat(v) for v in row] for row in a]
-    f.close()
-
-    return b
 
 def Rahmi104(adapt):
     """ Read Rahmi's 104 sequences and return as dictionary. """
