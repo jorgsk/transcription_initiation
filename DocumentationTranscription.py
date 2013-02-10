@@ -4008,8 +4008,7 @@ class Model(object):
         self.description = description
 
 def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
-                          PYs, PY_std, add_fit, pos=None, in_axes=False,
-                          ax_nr=0):
+                          PYs, PY_stdt, pos=None, in_axes=False, ax_nr=0):
     """
     Print scatter plots at peak correlation (14 at the moment)
     """
@@ -4064,9 +4063,6 @@ def print_scrunch_scatter(results, rand_results, randomize, par_ranges,
         # determine which function (linear, exponential, or sigmoid) fits best;
         # print the sum, mean, and median of errors of fit
         # add the plot of the best-fitting function
-
-        if add_fit:
-            add_scatter_fit(finals, PYs, ax)
 
 def add_scatter_fit(finals, PYs, ax):
     """
@@ -6137,9 +6133,6 @@ def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
     and making the ladder plot growing by reversing the stuffz.
     """
 
-    # add a fitted curve to the scatter plot?
-    add_fit = True
-
     # grid size
     grid_size = 15
     rands = 0 # for cross-validating and random sequences
@@ -6230,7 +6223,7 @@ def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
     maxnuc = its_max
     # make a scatter plot and put in first plot position
     print_scrunch_scatter(results, rand_results, randomize, par_ranges, PYs,
-                          PY_std, add_fit, pos=maxnuc, in_axes=axxes, ax_nr=0)
+                            PY_std, pos=maxnuc, in_axes=axxes, ax_nr=0)
 
     # make a ladder plot and put in the second position
     print_scrunch_ladder(results, rand_results, retrof_results, randomize,

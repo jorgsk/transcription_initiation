@@ -22,8 +22,8 @@ class ITS(object):
         # available
         self.quantitations = []
         # all data lists go from RNA-mer 2 to 21
-        self.abortiveProb = [] # mean, find by running calc_AP()
-        self.abortiveProb_std = [] # std, find by running calc_AP()
+        self.abortiveProb = [] # mean
+        self.abortiveProb_std = [] # std
 
         # Raw quants
         self.rawData = {} # one entry for each quantitation
@@ -120,6 +120,8 @@ class ITS(object):
 
         # store the AP for each quantitation
         self._APraw = {}
+        self._totAbort = {}
+        self._totRNA = {}
 
         # go through each quantitation
         for quant in self.quantitations:
@@ -130,6 +132,9 @@ class ITS(object):
 
             totalAbortive = sum(rawD)
             totalRNA = totalAbortive + fullL
+            # Save these two for posterity
+            self._totAbort[quant] = totalAbortive
+            self._totRNA[quant] = totalRNA
 
             rDRange = range(len(rawD))
 
@@ -152,22 +157,23 @@ class ITS(object):
         self.abortiveProb_std = std([ap for ap in self._APraw.values()], axis=0 )
 
 
-def PYHsu(filename):
+def PYHsu(filepath):
+    import csv
     """ Read Hsu dg100 csv-file with PY etc data. """
-    f = open(homedir+'/sequence_data'+filename, 'rt')
+    f = open(filepath, 'rb')
     a = csv.reader(f, delimiter='\t')
     b = [[Workhouse.StringOrFloat(v) for v in row] for row in a]
     f.close()
 
     lizt = [[row[0], row[1], row[2], row[3], row[4], row[6], row[8], row[10],
-             row[11]] for row in lazt]
+             row[11]] for row in b]
 
     # Making a list of instances of the ITS class.
     ITSs = [ITS(row[1], row[0], row[2], row[3], row[6], row[7]) for row in lizt]
 
-    return b
+    return ITSs
 
-def dg400(path, files):
+def read_dg400(path, files):
     """
     Read data for the DG400 series so you can work with them later
     """
@@ -197,7 +203,7 @@ def dg400(path, files):
         for variant in rawData:
 
             # turn nans to zeros
-            entry = rawData[variant].fillna(0)
+            entry = rawData[variant].fillna(value=-99)
 
             # not replica unles contains '.'
             replica = ''
@@ -229,27 +235,44 @@ def dg400(path, files):
         itsObj.averageRawDataAndFL()
         itsObj.labels = labels
 
-    # return a list sorted by ITS name to be consistent
+    # return a list sorted by ITS name/PY to be consistent
     from operator import attrgetter as atrb
-    ITSs = sorted([obj for obj in ITSs.values()], key=atrb('name'))
+    #ITSs = sorted([obj for obj in ITSs.values()], key=atrb('name'))
+    ITSs = sorted([obj for obj in ITSs.values()], key=atrb('PY'))
 
     return  ITSs
 
+def add_AP(ITSs):
+    """
+    Parse the AP file for the DG100 library and get the AP in there
+    """
+    dg100ap = 'Hsu_original_data/AbortiveProbabilities/abortiveProbabilities_mean.csv'
+    APs = pandas.read_csv(dg100ap, index_col=0).fillna(value=-999)
+    for its in ITSs:
+        its.abortiveProb = APs[its.name].tolist()
+
+    return ITSs
+
 def ReadData(dataset):
-    """ Read Hsu 2006 paper-data. """
+    """ Read Hsu data. """
 
     # Selecting the dataset you want to use
-    # Othe datasets are available but undocumented
     if dataset == 'dg100':
-        path = '/Hsu/csvHsu'
+        path = 'sequence_data/Hsu/csvHsu'
         ITSs = PYHsu(path) # Unmodified Hsu data
+
+        ITSs = add_AP(ITSs)
 
     elif dataset == 'dg400':
         path = '/home/jorgsk/Dropbox/phdproject/hsuVitro/prediction_experiment/raw_data'
-        files = {16: 'quant16_raw.csv',
-                 23: 'quant23_raw.csv'}
+        files = {'16_first':  'quant16_raw.csv',
+                 '27_second': 'quant27_raw.csv',
+                 '23_first':  'quant23_raw.csv'}
+        #files = {'27': 'quant27_raw.csv',
+                 #'16':  'quant16_raw.csv',
+                 #'23':  'quant23_raw.csv'}
 
-        ITSs = dg400(path, files)
+        ITSs = read_dg400(path, files)
 
     else:
         print('Provide valid dataset input to ReadData!')
