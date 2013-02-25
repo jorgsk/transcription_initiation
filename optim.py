@@ -102,25 +102,23 @@ def main_optim(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
 
     for its_len in its_range:
 
-        state_nr = its_len - 1
-
         # 'normal' results (full dataset)
         if normal:
-            normal_obj = temp_name(PYs, its_len, ITSs, ranges, state_nr)
+            normal_obj = temp_name(PYs, its_len, ITSs, ranges)
         else:
             normal_obj = False
 
         # Randomize
         if randize:
             random_obj = temp_name(PYs, its_len, ITSs, ranges,
-                                        state_nr, randomize=randize)
+                                    randomize=randize)
         else:
             random_obj = False
 
         # Retrofit
         if retrofit:
             retrof_obj = temp_name(PYs, its_len, ITSs, ranges,
-                                        state_nr, retrof=retrofit)
+                                        retrof=retrofit)
         else:
             retrof_obj = False
 
@@ -131,7 +129,7 @@ def main_optim(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
     return results, results_random, results_retrof
 
 
-def temp_name(PYs, its_len, ITSs, ranges, state_nr, randomize=0, retrof=0):
+def temp_name(PYs, its_len, ITSs, ranges, randomize=0, retrof=0):
     """
     Separate scruch calls into randomize, retrofit, or neither.
     """
@@ -143,7 +141,7 @@ def temp_name(PYs, its_len, ITSs, ranges, state_nr, randomize=0, retrof=0):
     # NO RETROFIT AND NO RANDOMIZE
     if normal_run:
 
-        return core_optim_wrapper(its_len, state_nr, ITSs, ranges)
+        return core_optim_wrapper(its_len, ITSs, ranges)
 
     # RETROFIT
     elif retrof:
@@ -157,7 +155,7 @@ def temp_name(PYs, its_len, ITSs, ranges, state_nr, randomize=0, retrof=0):
             #extract the stuff
             ITS_fitting, ITS_compare, PYs_fitting, PYs_compare = retrovar
 
-            arguments_fit = (its_len, state_nr, ITSs)
+            arguments_fit = (its_len, ITSs)
 
             fit_result = core_optim_wrapper(arguments_fit, ranges)
 
@@ -171,7 +169,7 @@ def temp_name(PYs, its_len, ITSs, ranges, state_nr, randomize=0, retrof=0):
                           for p in par_order]
 
             # rerun with new arguments
-            arguments_compare = (y0, its_len, state_nr, ITS_compare,
+            arguments_compare = (y0, its_len, ITS_compare,
                                  PYs_compare, non_rnap)
 
             # run the rest of the ITS with the optimal parameters
@@ -200,7 +198,7 @@ def temp_name(PYs, its_len, ITSs, ranges, state_nr, randomize=0, retrof=0):
 
             ITS_variables = get_its_variables(ITSs, randomize=True)
 
-            arguments = (y0, its_len, state_nr, ITS_variables, PYs, non_rnap)
+            arguments = (y0, its_len, ITS_variables, PYs, non_rnap)
 
             rand_result = core_optim_wrapper(arguments, ranges)
 
@@ -214,7 +212,7 @@ def temp_name(PYs, its_len, ITSs, ranges, state_nr, randomize=0, retrof=0):
         return average_rand_result(rand_results)
 
 
-def core_optim_wrapper(its_len, state_nr, ITSs, ranges):
+def core_optim_wrapper(its_len, ITSs, ranges):
     """
     Wrapper around the multi-core solver. Return a Result object with
     correlations and pvalues.
@@ -236,14 +234,14 @@ def core_optim_wrapper(its_len, state_nr, ITSs, ranges):
     #rmax = 5  # uncomment for multiprocessing debugging.
     if rmax > 6:
         my_pool = multiprocessing.Pool()
-        results = [my_pool.apply_async(_multi_calc, (p, its_len, state_nr, ITSs))
+        results = [my_pool.apply_async(_multi_calc, (p, its_len, ITSs))
                       for p in divide]
         my_pool.close()
         my_pool.join()
         # flatten the output
         all_results = sum([r.get() for r in results], [])
     else:  # the non-parallell version for debugging and no multi-range calculations
-        all_results = sum([_multi_calc(*(p, its_len, state_nr, ITSs))
+        all_results = sum([_multi_calc(*(p, its_len, ITSs))
                             for p in divide], [])
 
     all_corr = sorted([a[-2] for a in all_results])
@@ -281,7 +279,7 @@ def core_optim_wrapper(its_len, state_nr, ITSs, ranges):
     return result_obj
 
 
-def _multi_calc(paras, its_len, state_nr, ITSs):
+def _multi_calc(paras, its_len, ITSs):
     """
     Evaluate the model for all parameter combinations. Return the final values,
     the parameters, and the correlation coefficients.
@@ -291,7 +289,7 @@ def _multi_calc(paras, its_len, state_nr, ITSs):
     y = [its.PY for its in ITSs]
 
     for par in paras:
-        SEn = keq_calc(par, its_len, state_nr, ITSs)
+        SEn = keq_calc(par, its_len, ITSs)
 
         # correlation
         rp, pp = spearmanr(y, SEn)
@@ -306,7 +304,7 @@ def _multi_calc(paras, its_len, state_nr, ITSs):
     return all_hits
 
 
-def keq_calc(start_values, its_len, state_nr, ITSs):
+def keq_calc(start_values, its_len, ITSs):
 
     """
     k1 = exp(-(c2*rna_dna_i + c3*dna_dna_{i+1} + c4*Keq_{i-1}) * 1/RT)
@@ -326,7 +324,7 @@ def keq_calc(start_values, its_len, state_nr, ITSs):
         # must shift by minus 1 ('GATTA' example: GA, AT, TT, TA -> len 5, but 4
         # relevant dinucleotides)
 
-        # first -1 because of python indexing. additional -1 because onlt (1,2)
+        # first -1 because of python indexing. additional -1 because only (1,2)
         # information is needed for 3. ATG -> [(1,2), (2,3)]. Only DNA-DNA needs
         # both.
 
@@ -338,7 +336,7 @@ def keq_calc(start_values, its_len, state_nr, ITSs):
         (a, b, c, d) = start_values
 
         # equilibrium constants at each position
-        k1, entup = keq_i(RT, its_len, dg3d, dna_dna, rna_dna, a, b, c, d)
+        k1 = keq_i(RT, its_len, dg3d, dna_dna, rna_dna, a, b, c, d)
 
         SE = sum(k1)
 
@@ -433,7 +431,7 @@ def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
 
         k1[i] = rate
 
-    return k1, (rnadna_array, dnadna_array, keq_array)
+    return k1
 
 
 def average_rand_result(rand_results):

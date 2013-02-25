@@ -161,7 +161,6 @@ def PhysicalDNA(sequence):
         enlist.append((DNA_DNAenergy(subseq),(pos1,pos2)))
     return enlist
 
-
 # add the stuff from new paper
 from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
 
@@ -256,21 +255,3 @@ def Keq_mine(sequence):
         return 0
 
     return sum([k1[din]/kminus1[din] for din in seq2din(sequence)])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

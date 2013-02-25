@@ -2,12 +2,15 @@ from __future__ import division
 import Energycalc as Ec
 import Workhouse
 import pandas
-from numpy import mean, std
+import os
+import numpy as np
 
-from ipdb import set_trace as debug
+from ipdb import set_trace as debug  # NOQA
+
 
 class ITS(object):
     """ Storing the ITSs in a class for better handling. """
+
     def __init__(self, sequence, name='noname', PY=-1, PY_std=-1, apr=-1, msat=-1):
         # Set the initial important data.
         self.name = name
@@ -22,13 +25,13 @@ class ITS(object):
         # available
         self.quantitations = []
         # all data lists go from RNA-mer 2 to 21
-        self.abortiveProb = [] # mean
-        self.abortiveProb_std = [] # std
+        self.abortiveProb = []  # mean
+        self.abortiveProb_std = []  # std
 
         # Raw quants
-        self.rawData = {} # one entry for each quantitation
-        self.rawDataMean = -1 # one entry for each quantitation
-        self.rawDataStd = -1  # one entry for each quantitation
+        self.rawData = {}  # one entry for each quantitation
+        self.rawDataMean = -1  # one entry for each quantitation
+        self.rawDataStd = -1   # one entry for each quantitation
 
         # FL
         self.fullLength = {}
@@ -39,9 +42,12 @@ class ITS(object):
         self._prctYield = {}
         self._RNAprodFromHere = {}
 
-        # Redlisted sequences 
+        # Redlisted sequences
         self.redlist = []
         self.redlisted = False
+
+        # The SE sum of equilibrium constants (Keqs)
+        self.SE = -1
 
         # make a dinucleotide list of the ITS sequence
         __seqlen = len(self.sequence)
@@ -54,6 +60,12 @@ class ITS(object):
         self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
         self.keq_delta_di_f = [Ec.delta_keq_f[di] for di in __dinucs]
         self.keq_delta_di_b = [Ec.delta_keq_b[di] for di in __dinucs]
+        self.keq = self.keq_delta_di_b  # shortcut
+
+        # define the 15 dna-dna and rna-rna and keq values
+        self.DgDNA15 = sum(self.dna_dna_di[:15])
+        self.DgRNA15 = sum(self.rna_dna_di[:15])
+        self.DgKeq15 = sum(self.keq[:15])
 
     def __repr__(self):
         return "{0}, PY: {1}".format(self.name, self.PY)
@@ -67,12 +79,12 @@ class ITS(object):
             return
 
         # average mean
-        self.fullLengthMean = mean(self.fullLength.values())
-        self.fullLengthStd = std(self.fullLength.values())
+        self.fullLengthMean = np.mean(self.fullLength.values())
+        self.fullLengthStd = np.std(self.fullLength.values())
 
         # average raw data
-        self.rawDataMean = mean(self.rawData.values(), axis=0)
-        self.rawDataStd = std(self.rawData.values(), axis=0)
+        self.rawDataMean = np.mean(self.rawData.values(), axis=0)
+        self.rawDataStd = np.std(self.rawData.values(), axis=0)
 
     def sane(self):
         """
@@ -106,9 +118,8 @@ class ITS(object):
             totalRNA = sum(self.rawData[quant]) + self.fullLength[quant]
             self._PYraw[quant] = self.fullLength[quant]/totalRNA
 
-        self.PY = mean([py for py in self._PYraw.values()])
-        self.PY_std = std([py for py in self._PYraw.values()])
-
+        self.PY = np.mean([py for py in self._PYraw.values()])
+        self.PY_std = np.std([py for py in self._PYraw.values()])
 
     def calc_AP(self):
         """
@@ -120,8 +131,8 @@ class ITS(object):
 
         # store the AP for each quantitation
         self._APraw = {}
-        self._totAbort = {}
-        self._totRNA = {}
+        self.totAbort = {}
+        self.totRNA = {}
 
         # go through each quantitation
         for quant in self.quantitations:
@@ -132,9 +143,10 @@ class ITS(object):
 
             totalAbortive = sum(rawD)
             totalRNA = totalAbortive + fullL
+
             # Save these two for posterity
-            self._totAbort[quant] = totalAbortive
-            self._totRNA[quant] = totalRNA
+            self.totAbort[quant] = totalAbortive
+            self.totRNA[quant] = totalRNA
 
             rDRange = range(len(rawD))
 
@@ -153,8 +165,33 @@ class ITS(object):
             # little abortive product but reducing productive yield)
             self._APraw[quant] = [prctYield[i]/prctRNAP[i] for i in rDRange]
 
-        self.abortiveProb = mean([ap for ap in self._APraw.values()], axis=0 )
-        self.abortiveProb_std = std([ap for ap in self._APraw.values()], axis=0 )
+        self.totAbortMean = np.mean(self.totAbort.values(), axis=0)
+        self.totRNAMean = np.mean(self.totRNA.values(), axis=0)
+
+        self.abortiveProb = np.mean(self._APraw.values(), axis=0)
+        self.abortiveProb_std = np.std(self._APraw.values(), axis=0)
+
+    def calc_keq(self, c1, c2, c3):
+        """
+        Calculate Keq_i for each i in [3,20]
+
+        """
+
+        RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
+
+        its_len = 21
+        dna_dna = self.dna_dna_di[:its_len-1]
+        rna_dna = self.rna_dna_di[:its_len-2]
+        dg3d = self.keq_delta_di_b[:its_len-2]
+
+        # the c1, c3, c4 values
+        c0 = 1
+
+        # equilibrium constants at each position
+        import optim
+        self.keq = optim.keq_i(RT, its_len, dg3d, dna_dna, rna_dna, c0, c1, c2, c3)
+
+        self.SE = sum(self.keq)
 
 
 def PYHsu(filepath):
@@ -173,34 +210,51 @@ def PYHsu(filepath):
 
     return ITSs
 
-def read_dg400(path, files):
+
+def read_raw(path, files, dset):
     """
-    Read data for the DG400 series so you can work with them later
+    Read raw quantitation data
     """
 
-    # the row labels
-    labels = ["{0} mer".format(val) for val in range(2, 22)]
+    # 1) test: assert that the names of the promoter variants are the same in
+    # all the raw-files (and that the set size is identical)
+
+    # 2) test assert that there is a match between the names in the sequence
+    # file and the names in the should I?
+
+    cwd = '/home/jorgsk/Dropbox/phdproject/hsuVitro/'
+
     ITSs = {}
-
-    # first get the DNA sequences
     seqs = {}
-    seq_file = '/home/jorgsk/Dropbox/phdproject/hsuVitro/output_seqs/tested_seqs.txt'
-    last5 = 'GAGTT'
+
+    # specify the location of the ITS DNA sequence
+    if dset == 'dg400':
+        seq_file = cwd + 'output_seqs/tested_seqs.txt'
+
+    if dset == 'dg100':
+        seq_file = cwd + 'sequence_data/Hsu/dg100Seqs'
+
     for line in open(seq_file, 'rb'):
         variant, seq = line.split()
+
         # special case to catch spelling
         if variant.endswith('A1anti'):
-            seqs['N25/A1anti'] = seq + last5
+            seqs['N25/A1anti'] = seq
         else:
-            seqs[variant] = seq + last5
-
-    import os
+            seqs[variant] = seq
 
     for fNr, fName in files.items():
         target = os.path.join(path, fName)
         rawData = pandas.read_csv(target, index_col=0)
 
+        # 2-mer to 22-mer, depending on the gel.
+        labels = [i for i in rawData.index if not i.startswith('F')]
+
         for variant in rawData:
+
+            # skip all N25s, they're upsetting things
+            if 'N25' in variant:
+                continue
 
             # turn nans to zeros
             entry = rawData[variant].fillna(value=-99)
@@ -215,8 +269,14 @@ def read_dg400(path, files):
                 itsObj = ITSs[variant]
             # if not, create new
             else:
-                itsObj = ITS(seqs[variant], variant)
-                ITSs[variant] = itsObj
+                # Check if N25a or smth like that
+                # REMOVE THIS WHEN YOU GET ANSWER FROM LILIAN?
+                if variant[:-1] in ITSs:
+                    var = variant[:-1]
+                    itsObj = ITSs[var]
+                else:
+                    itsObj = ITS(seqs[variant], variant)
+                    ITSs[variant] = itsObj
 
             saveas = str(fNr)
             if replica != '':
@@ -225,7 +285,7 @@ def read_dg400(path, files):
             # get the raw reads for each x-mer
             rawReads = [entry[l] for l in labels]
             itsObj.rawData[saveas] = rawReads
-            itsObj.fullLength[saveas] = entry['FL']
+            itsObj.fullLength[saveas] = entry['FL']  # first gel has FL2?
             itsObj.quantitations.append(saveas)
 
     # calculate AP and PY
@@ -235,12 +295,8 @@ def read_dg400(path, files):
         itsObj.averageRawDataAndFL()
         itsObj.labels = labels
 
-    # return a list sorted by ITS name/PY to be consistent
-    from operator import attrgetter as atrb
-    #ITSs = sorted([obj for obj in ITSs.values()], key=atrb('name'))
-    ITSs = sorted([obj for obj in ITSs.values()], key=atrb('PY'))
+    return ITSs
 
-    return  ITSs
 
 def add_AP(ITSs):
     """
@@ -253,29 +309,51 @@ def add_AP(ITSs):
 
     return ITSs
 
+
 def ReadData(dataset):
-    """ Read Hsu data. """
+    """ Read Hsu data.
+
+    Possible input is dg100, dg100-new, dg400.
+
+    dg100 is the version of the dg100 dataset you have used the past 3 years.
+    Here you just used the PY values calculated by Lilian.
+
+    dg100-new uses the raw transcription data. This allows you to calculate PY
+    and AP yourself.
+
+    dg400 also uses raw transcription data.
+    """
+    cwd = '/home/jorgsk/Dropbox/phdproject/hsuVitro/'
 
     # Selecting the dataset you want to use
     if dataset == 'dg100':
-        path = 'sequence_data/Hsu/csvHsu'
-        ITSs = PYHsu(path) # Unmodified Hsu data
-
+        path = cwd + 'sequence_data/Hsu/csvHsu'
+        ITSs = PYHsu(path)  # Unmodified Hsu data
         ITSs = add_AP(ITSs)
 
+    elif dataset == 'dg100-new':
+        path = cwd + 'Hsu_original_data/2006/2013_email'
+        files = {'1122_first':  'quant1122.csv',
+                 '1207_second': 'quant1207.csv',
+                 '1214_third':  'quant1214.csv'}
+
+        ITSs = read_raw(path, files, dset='dg100')
+
     elif dataset == 'dg400':
-        path = '/home/jorgsk/Dropbox/phdproject/hsuVitro/prediction_experiment/raw_data'
+        path = cwd + 'prediction_experiment/raw_data'
         files = {'16_first':  'quant16_raw.csv',
                  '27_second': 'quant27_raw.csv',
                  '23_first':  'quant23_raw.csv'}
-        #files = {'27': 'quant27_raw.csv',
-                 #'16':  'quant16_raw.csv',
-                 #'23':  'quant23_raw.csv'}
 
-        ITSs = read_dg400(path, files)
+        ITSs = read_raw(path, files, dset='dg400')
 
     else:
         print('Provide valid dataset input to ReadData!')
         return 0
+
+    # Make into a list for backwards compatability and sort the ITSs
+    from operator import attrgetter as atrb
+    #ITSs = sorted([obj for obj in ITSs.values()], key=atrb('name'))
+    ITSs = sorted([obj for obj in ITSs.values()], key=atrb('PY'))
 
     return ITSs
