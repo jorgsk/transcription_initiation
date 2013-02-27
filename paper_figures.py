@@ -15,7 +15,8 @@ import data_handler
 import numpy as np
 import matplotlib.pyplot as plt
 import optim
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pearsonr  # NOQA
+from operator import attrgetter
 
 
 class SimulationResult(object):
@@ -47,6 +48,20 @@ class PlotObject(object):
         self.nrSubolots = 1
 
         self.imageSize = [1, 4]
+
+
+class AP(object):
+    def __init__(self, keq, dg3d, ap, dgDna, dgRna, dgDnaNorm, dgRnaNorm):
+        self.keq = keq
+        self.dg3d = dg3d
+        self.ap = ap
+        self.dgDna = dgDna
+        self.dgRna = dgRna
+        self.dgDnaNorm = dgDnaNorm
+        self.dgRnaNorm = dgRnaNorm
+
+        self.dgControl = dgDna - dgRna
+        self.dgControlNorm = dgDnaNorm - dgRnaNorm
 
 
 def visual_inspection(ITSs, variable='AP'):
@@ -272,7 +287,6 @@ def sortITS(ITSs, attribute='PY'):
     """
     Sort the ITSs
     """
-    from operator import attrgetter
 
     ITSs = sorted(ITSs, key=attrgetter(attribute))
 
@@ -351,7 +365,7 @@ def getITSdnaSep(ITSs, nr='two', upto=15):
     Can also be in a low, high group (better for publication)
     """
 
-    scrunches = separateByScrunch(ITSs, 'DgDNA15', nr=nr, upto=upto)
+    scrunches = separateByScrunch(ITSs, 'DgDNA15', nr=nr)
 
     arranged = {}
 
@@ -360,11 +374,12 @@ def getITSdnaSep(ITSs, nr='two', upto=15):
         aProbs = []
         keqs = []
 
-        fro = 1
-        to = 10
+        fro = 2
+        to = upto
 
         # build arrays
         for its in ITSs:
+            #for (ap, keq) in zip(its.abortiveProb[fro:to], its.dg3d[fro:to]):
             for (ap, keq) in zip(its.abortiveProb[fro:to], its.keq[fro:to]):
 
                 aProbs.append(ap)
@@ -375,49 +390,70 @@ def getITSdnaSep(ITSs, nr='two', upto=15):
     return arranged
 
 
-def getDinosaur(ITSs, upto=15):
+def getDinosaur(ITSs, nr=2, upto=15, sortBy='dgDna'):
     """
     Sort values with the DNA DNA value up to that point
 
     Optionally subtract the RNA-DNA value (length 10 RNA-DNA)
 
     How to do it? Make a basic class for AP! This makes it super-easy to change
-    sortings. Just loop through a keyword.
+    sortings: just loop through a keyword.
+
+    Return arrays of AP and DG3D values in different batches. For example, the
+    values could be split in 2 or 3. What determines the difference in
+    correlation between those two groups will then be how you split the
     """
-    class AP(object):
-        def __init__(self, ap, dgDna, dgRna, dgDnaNorm, dgRnaNorm):
-            self.ap = ap
-            self.dgDna = dgDna
-            self.dgRna = dgRna
-            self.dgDnaNorm = dgDnaNorm
-            self.dgRnaNorm = dgRnaNorm
 
-            self.dgControl = dgDna - dgRna
-            self.dgControlNorm = dgDnaNorm - dgRnaNorm
-
-    arranged = {}
-    label = 'dinosaur'
-
-    # add objects here and sort by the dgdna-score
+    # add objects here and sort by score
     objects = []
 
     for its in ITSs:
-        for pos in range(1, upto):
+        for pos in range(0, upto):
 
             # correct for a max 10 nt rna-dna hybrid
-            rnaBeg = min(pos-10, 0)
+            rnaBeg = max(pos-10, 0)
 
-            apObj = AP(its.abortiveProb[pos],
+            if its.abortiveProb[pos] < 0:
+                continue
+
+            #apObj = AP(sum(its.keq[pos:pos+1]),
+            apObj = AP(its.keq[pos],
+                       its.dg3d[pos],
+                       its.abortiveProb[pos],
                        sum(its.dna_dna_di[:pos]),
                        sum(its.rna_dna_di[rnaBeg:pos]),
                        sum(its.dna_dna_di[:pos])/float(pos),
-                       sum(its.rna_dna_di[rnaBeg:pos])/float(pos)),
+                       sum(its.rna_dna_di[rnaBeg:pos])/float(pos))
 
             objects.append(apObj)
 
-    # TODO! sort objects by one of your metrices and offYago!
+    # sort objects by one of your metrices (small to large)
+    objects.sort(key=attrgetter(sortBy))
 
+    arranged = {}
+    # divide the list into two/three etc
+    ssize = int(len(objects)/nr)
+    splitObj = [objects[i:i+ssize] for i in range(0, len(objects), ssize)]
 
+    # XXX todo if onw group is small, add to the closest.
+
+    for spNr, sub_objs in enumerate(splitObj):
+        if spNr == 0:
+            label = '1 Smallest values'
+        elif spNr == nr-1:
+            label = '{0} Largest values'.format(nr)
+        else:
+            label = '{0} Intermediate value'.format(spNr+1)
+
+        label = label + ' ({0} objects)'.format(len(sub_objs))
+
+        aprobs = [o.ap for o in sub_objs]
+        #dg3d = [o.dg3d for o in sub_objs]
+        dg3d = [o.keq for o in sub_objs]
+
+        arranged[label] = (aprobs, dg3d)
+
+    return arranged
 
 
 def keq_ap_raw(ITSs, method='initial', upto=15):
@@ -465,32 +501,81 @@ def keq_ap_raw(ITSs, method='initial', upto=15):
     They have opposite behavior. However, this is getting very technical for
     people who aren't 'into it'. You'll need to simplify.
 
+    It seems that by looking only at sites with a large dg3d and/or large AP
+    you're getting a good correlation.
+
+    Is this even more important than checking for dgdna? if so, can you combine
+    them to reach a higher score? For example, you could divide the group into
+    4 and compare only the top/low 25% for example.
+
+    Either way what you have is good enough.
+
+    How robust is it to a +/- 1 shift in ap values?
+
+    OMG! Strangeness: the keq is strongly anticorrelated with AP-1 at the keq
+    position; it is then weakly positively correlated with AP-2, before being
+    zero-corrlated with AP-3.
+
+    It is also zero correlated with ap+1 and somewhat correlated with ap+2/3/4
+
+    How can you describe this systematically?
+
+    Now you normalized AP -- and should ignore positions with ap < 0
+
     """
     plt.ion()
 
     #fig, ax = plt.subplots()
 
-    if method == 'initial':
-        arranged = getITSdnaSep(ITSs, nr='two', upto=upto)
+    #method = 'initial'
+    method = 'dinosaur'
+    upto = 15
 
-    elif method == 'dinosaur':
-        arranged = getDinosaur(ITSS, upto=upto)
+    # TODO do a systematic +/- 1,2,3,4 analysis of the AP and keq to look for
+    # correlation. Find out what the relationship really really means. Make
+    # sure that the AP matches the keq/dg3d so you KNOW what you are comparing
 
-    for (labl, (aprobs, keqs)) in arranged.items():
+    #for srtb in ['dg3d', 'ap', 'dgDna', 'dgRna', 'dgDnaNorm', 'dgRnaNorm',
+            #'dgControl', 'dgControlNorm']:
+    #for srtb in ['dg3d', 'ap', 'dgDna', 'dgRna']:
+    for srtb in ['dgDna']:
+        #cols = ['r', 'g', 'k']
 
-        # separate between a series of plots and just a single value?
+        if method == 'initial':
+            arranged = getITSdnaSep(ITSs, nr='two', upto=upto)
 
-        corr, pvals = spearmanr(aprobs, keqs)
+        elif method == 'dinosaur':
+            arranged = getDinosaur(ITSs, nr=2, upto=upto, sortBy=srtb)
 
-        print(labl)
-        print('Corr: {0}, pval: {1}\n'.format(corr, pvals))
+        print('\n'+ '-------- ' + srtb + '--------')
+        for labl in sorted(arranged):
+
+            if len(arranged[labl][0]) < 30:
+                continue
+
+            aprobs, keqs = arranged[labl]
+
+            corr, pvals = spearmanr(aprobs, keqs)
+
+            print(labl)
+            print('Corr: {0}, pval: {1}'.format(corr, pvals))
+            #ax.scatter(aprobs, keqs, label=labl, color=cols.pop())
+        print('-------- ' + srtb + '--------')
+
+    #ax.legend()
+
+    # keqs
 
 
-def ap_other(ITSs):
+def normalize_AP(ITSs):
     """
-    Correlate the AP with whatever you can come up with DGDNA/RNA G, A, T,C and
-    so on. Basically showing that the AP don't depend on a lot of shait.
+    Sum(AP) for a given ITS is large for low PY. Therefore, normalize it to a
+    value between 0 and 1 for each its.
     """
+    for its in ITSs:
+        # don't count the zero AP ones (represented with negative values)
+        apS = sum([v for v in its.abortiveProb if v > 0])
+        its.abortiveProb = its.abortiveProb/apS
 
 
 def main():
@@ -505,10 +590,25 @@ def main():
         controls = ['DG133', 'DG115a', 'N25', 'N25anti']
         dg400 = [i for i in dg400 if not i.name in controls]
 
-    ITSs = dg100
-    #ITSs = dg400
+    #ITSs = dg100
+    ITSs = dg400
 
     add_keq(ITSs)
+
+    # You see a bias: sum(AP) is perfectly negatively correlated with PY
+    # Normalize the AP
+    normalize_AP(ITSs)
+
+    # Control: no correlation any more
+    pys, aps = zip(*[(i.PY, sum([v for v in i.abortiveProb if v >0])) for i in ITSs])
+    print spearmanr(pys, aps)
+
+    # ALSO! Ignore any its object with negative AP. DOn't include those in your
+    # correlations.
+
+    # re-plot the normalized AP
+    # currently, the AP reflects sequence-global values. This makes it
+    # difficult to compare AP between itss.
 
     #ITSs = sortITS(ITSs, 'PY')
 
@@ -533,7 +633,7 @@ def main():
 
     # try to correlate the AP to other values, such as the DGDNA up to that
     # point, and/or the DGDNA + DGRNA up to that point
-    ap_other(ITSs)
+    #ap_other(ITSs)
 
     # When you have these two plots -- what is your story? First you need to
     # find out if your theory about dgdna dng rna scrunched complex works.

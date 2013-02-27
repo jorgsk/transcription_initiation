@@ -54,18 +54,20 @@ class ITS(object):
         __indiv = list(self.sequence)
         __dinucs = [__indiv[c] + __indiv[c+1] for c in range(__seqlen-1)]
 
+        self.dinucs = __dinucs
+
         # Make di-nucleotide vectors for all the energy parameters
         # goes from 2-mer till length of sequence
         self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
         self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
         self.keq_delta_di_f = [Ec.delta_keq_f[di] for di in __dinucs]
         self.keq_delta_di_b = [Ec.delta_keq_b[di] for di in __dinucs]
-        self.keq = self.keq_delta_di_b  # shortcut
+        self.dg3d = self.keq_delta_di_b  # shortcut
 
         # define the 15 dna-dna and rna-rna and keq values
         self.DgDNA15 = sum(self.dna_dna_di[:15])
         self.DgRNA15 = sum(self.rna_dna_di[:15])
-        self.DgKeq15 = sum(self.keq[:15])
+        self.Dg3D15 = sum(self.dg3d[:15])
 
     def __repr__(self):
         return "{0}, PY: {1}".format(self.name, self.PY)
