@@ -51,17 +51,12 @@ class PlotObject(object):
 
 
 class AP(object):
-    def __init__(self, keq, dg3d, ap, dgDna, dgRna, dgDnaNorm, dgRnaNorm):
+    def __init__(self, keq, ap, dg3d=-1, dgDna=-1, dgRna=-1):
         self.keq = keq
         self.dg3d = dg3d
         self.ap = ap
         self.dgDna = dgDna
         self.dgRna = dgRna
-        self.dgDnaNorm = dgDnaNorm
-        self.dgRnaNorm = dgRnaNorm
-
-        self.dgControl = dgDna - dgRna
-        self.dgControlNorm = dgDnaNorm - dgRnaNorm
 
 
 def visual_inspection(ITSs, variable='AP'):
@@ -293,9 +288,10 @@ def sortITS(ITSs, attribute='PY'):
     return ITSs
 
 
-def add_keq(ITSs):
+def add_keq(ITSs, SE_beg=2):
     """
-    Calculate keq for the different ITSs
+    Calculate keq and SE for the different ITSs. By default calculate SE
+    starting from 2-mers.
     """
 
     #c1, c2, c3 = optimize(dg100, testing, target='PY')
@@ -304,7 +300,7 @@ def add_keq(ITSs):
 
     # add the constants to the ITS objects and calculate Keq
     for its in ITSs:
-        its.calc_keq(c1, c2, c3)
+        its.calc_keq(c1, c2, c3, SE_beg)
 
     return ITSs
 
@@ -390,6 +386,43 @@ def getITSdnaSep(ITSs, nr='two', upto=15):
     return arranged
 
 
+def shifted_ap_keq(ITSs, start=2, upto=15, plusmin=5):
+    """
+    Sort values with the DNA DNA value up to that point
+
+    Optionally subtract the RNA-DNA value (length 10 RNA-DNA)
+
+    How to do it? Make a basic class for AP! This makes it super-easy to change
+    sortings: just loop through a keyword.
+
+    Return arrays of AP and DG3D values in different batches. For example, the
+    values could be split in 2 or 3. What determines the difference in
+    correlation between those two groups will then be how you split the
+
+    Maybe ... just maybe you have to do this correlation on a
+    position-by-position basis and use a weighting factor to control for.
+    Another method. After. Then you cover both ranges.
+    """
+
+    # add objects here and sort by score
+    objects = {}
+
+    for pm in range(-plusmin, plusmin+1):
+        apobjs = []
+        for its in ITSs:
+            for ap_pos in range(start, upto):
+
+                keq_pos = ap_pos + pm
+                # only use keq_pos for the same range as ap_pos
+                if keq_pos in range(start, upto):
+
+                    apobjs.append(AP(its.keq[keq_pos], its.abortiveProb[ap_pos]))
+
+        objects[pm] = apobjs
+
+    return objects
+
+
 def getDinosaur(ITSs, nr=2, upto=15, sortBy='dgDna'):
     """
     Sort values with the DNA DNA value up to that point
@@ -408,7 +441,7 @@ def getDinosaur(ITSs, nr=2, upto=15, sortBy='dgDna'):
     objects = []
 
     for its in ITSs:
-        for pos in range(0, upto):
+        for pos in range(1, upto):
 
             # correct for a max 10 nt rna-dna hybrid
             rnaBeg = max(pos-10, 0)
@@ -417,18 +450,17 @@ def getDinosaur(ITSs, nr=2, upto=15, sortBy='dgDna'):
                 continue
 
             #apObj = AP(sum(its.keq[pos:pos+1]),
-            apObj = AP(its.keq[pos],
+            apObj = AP(its.keq[pos-1],
                        its.dg3d[pos],
                        its.abortiveProb[pos],
                        sum(its.dna_dna_di[:pos]),
-                       sum(its.rna_dna_di[rnaBeg:pos]),
-                       sum(its.dna_dna_di[:pos])/float(pos),
-                       sum(its.rna_dna_di[rnaBeg:pos])/float(pos))
+                       sum(its.rna_dna_di[rnaBeg:pos]))
 
             objects.append(apObj)
 
     # sort objects by one of your metrices (small to large)
-    objects.sort(key=attrgetter(sortBy))
+    if sortBy:
+        objects.sort(key=attrgetter(sortBy))
 
     arranged = {}
     # divide the list into two/three etc
@@ -545,7 +577,7 @@ def keq_ap_raw(ITSs, method='initial', upto=15):
             arranged = getITSdnaSep(ITSs, nr='two', upto=upto)
 
         elif method == 'dinosaur':
-            arranged = getDinosaur(ITSs, nr=2, upto=upto, sortBy=srtb)
+            arranged = getDinosaur(ITSs, nr=1, upto=upto, sortBy=srtb)
 
         print('\n'+ '-------- ' + srtb + '--------')
         for labl in sorted(arranged):
@@ -577,6 +609,571 @@ def normalize_AP(ITSs):
         apS = sum([v for v in its.abortiveProb if v > 0])
         its.abortiveProb = its.abortiveProb/apS
 
+    # Control: no correlation any more
+    pys, aps = zip(*[(i.PY, sum([v for v in i.abortiveProb if v >0])) for i in ITSs])
+    print spearmanr(pys, aps)
+
+
+def positionwise_shifted_ap_keq(ITSs, x_merStart, x_merStop, plusmin,
+        keqAs='keq'):
+    """
+    Return array from 'x-mer' to 'y-mer'; each array has all the
+    AP at those positions AND the Keq shifted by plusmin from those positions.
+
+    Normally use keq for correlation, but also accept dg3d
+    """
+
+    # add objects here and sort by score
+    objects = {}
+
+    # in the its-arrays, abortiveProb[0] is for 2-mer
+    # similarly, keq[0] is for the 2-nt RNA
+    # therefore, if x_merStart is 2; we need to access ap_pos 0
+    # in genral, it would have been nice if its's were indexed with x-mer
+    arrayStart = x_merStart-2
+    arrayStop = x_merStop-2
+    for ap_pos in range(arrayStart, arrayStop):
+
+        ap_val = []
+        keqshift_val = []
+
+        keq_pos = ap_pos + plusmin
+        if keq_pos in range(arrayStart, arrayStop):
+            for its in ITSs:
+
+                ap_val.append(its.abortiveProb[ap_pos])
+                if keqAs == 'keq':
+                    keqshift_val.append(its.keq[keq_pos])
+                elif keqAs == 'dg3d':
+                    keqshift_val.append(its.dg3d[keq_pos])
+
+        objects[ap_pos+2] = {'ap': ap_val, 'keq': keqshift_val}
+
+    return objects
+
+
+def position_wise_correlation_shifted(dg100, dg400):
+    """
+    Obtain the correlation between Keq and AP at each position from start to
+    upto. At each position also shift the relationship: find out if the AP at a
+    given position for all ITSs is correlated with a keq at another position.
+
+    plan: the same as you get now, but obtain lists for each position 2-mer and
+    3-mer and up, but produce 6 plots from -5 to +5 shift, and remember to
+    bonferroni correct for each its-position. probably you should correct for
+    each position * 6.
+
+    When doing so, you obtain a strong, consistent negative correlation between
+    the AP at pos and the Keq at pos+1.
+
+    Looking at the scatter-plot, we see that when Keq is high at pos+1, then AP
+    is invariably low at pos. When Keq is low, AP can be both low and high.
+
+    So: pretranslocated state is favored at pos+1, means AP is low at pos.
+
+    How do we explain this?
+
+    Normalizing the AP changes the correlation between sum(SE) and sum(AP).
+    Before normalization, the correlation is positive, indicating probably that
+    sum(AP) is strongly correlated with PY. After normalization sum(AP) is
+    NEGATIVELY correlated with sum(SE). The normalization is making the AP
+    values more position-rich in information.
+
+    It is not strange that the sign of the correlation between the positions
+    and Keq do not change with normalization.
+
+    What is strange is that there is a negative correlation at all.
+    """
+
+    plt.ion()
+
+    #ITSs = dg400 + dg100
+    ITSs = dg400
+    #ITSs = dg100
+
+    x_merStart = 2
+    x_merStop = 15
+
+    plusmin = 1
+    pm_range = range(-plusmin, plusmin+1)
+
+    for (dg, ITSs) in [('DG100', dg100), ('DG400', dg400), ('Both', dg100+dg400)]:
+
+        # make one figure per pm val
+        for pm in pm_range:
+            objects = positionwise_shifted_ap_keq(ITSs, x_merStart=x_merStart,
+                    x_merStop=x_merStop, plusmin=pm, keqAs='dg3d')
+
+            fig, ax = plt.subplots()
+
+            bar_heights = []
+            p_vals = []
+
+            nr_corl = 0
+
+            for xmer, vals in sorted(objects.items()):
+
+                keqs = vals['keq']
+                aps = vals['ap']
+
+                # if the shift of keq is too far away from ap, no values will be
+                # returned
+                if keqs != []:
+
+                    corr, pval = spearmanr(keqs, aps)
+
+                    bar_heights.append(corr)
+                    p_vals.append(pval)
+
+                    nr_corl += 1  # nr of non-zero correlations for bonferroni
+                else:
+                    bar_heights.append(0)
+                    p_vals.append(0)
+
+                # see the scatter plots for the +1 case
+                #if pm == 1:
+                    #figu, axu = plt.subplots()
+                    #axu.scatter(keqs, aps)
+                    #axu.set_xlabel('Keq at pos {0}'.format(xmer+pm))
+                    #axu.set_ylabel('AP at pos {0}'.format(xmer))
+
+                #if xmer == 2 and pm == 0:
+                    #debug()
+
+            # the positions along the x-axis (got nothing to do with labels)
+            xpos = range(1, len(bar_heights)+1)
+            # this is affected by xlim
+
+            #plim = 0.05/(nr_corl*len(pm_range))  # simple bonferroni testing
+            plim = 0.05/(nr_corl)  # simple bonferroni testing
+
+            colors = []
+            for pval in p_vals:
+                if pval < plim:
+                    colors.append('g')
+                else:
+                    colors.append('k')
+
+            ax.bar(left=xpos, height=bar_heights, align='center', color=colors)
+            ax.set_xticks(xpos)  # to make the 'ticks' physically appear
+            ax.set_xlim(0, x_merStop-2)
+
+            xticknames = range(x_merStart, x_merStop+1)
+            ax.set_xticklabels(xticknames)
+
+            ax.set_ylabel('Spearman correlation coefficient between AP and shifted Keq')
+            ax.set_xlabel('The AP of corresponding x-mer')
+            if pm < 0:
+                shift = str(pm)
+            else:
+                shift = '+' + str(pm)
+
+            ax.set_title('{0}: Keq shifted by {1}'.format(dg, shift))
+            ax.yaxis.grid()
+
+            ax.set_ylim(-0.81, 0.81)
+            ax.set_yticks(np.arange(-0.8, 0.9, 0.2))
+
+
+def plus_minus_keq_ap(dg100, dg400):
+    """
+    Make a histogram plot of keq correlations with AP +/- nts of Keq.
+    """
+    plt.ion()
+
+    #Indicate in some way the statistically significant results.
+    #Do one from 1: and one from 3:
+    ITSs = dg100 + dg400
+
+    # Try both versions: one where you don't consider results when the +/-
+    # thing is above/below 3/14
+    upto = 14
+    start = 2
+    plusmin = 10
+
+    objects = shifted_ap_keq(ITSs, start=start, upto=upto, plusmin=plusmin)
+
+    # make the plot
+    fig, ax = plt.subplots()
+
+    bar_heights = []
+    p_vals = []
+    x_tick_names = range(-plusmin, plusmin+1)
+
+    for pm in x_tick_names:
+        apObjs = objects[pm]
+        aps, keqs = zip(*[(apObj.ap, apObj.keq) for apObj in apObjs])
+        corr, pval = spearmanr(aps, keqs)
+
+        bar_heights.append(corr)
+        p_vals.append(pval)
+
+    xticks = range(1, len(x_tick_names)+1)
+    plim = 0.05/len(xticks)  # simple bonferroni testing
+    colors = []
+    for pval in p_vals:
+        if pval < plim:
+            colors.append('g')
+        else:
+            colors.append('k')
+
+    ax.bar(left=xticks, height=bar_heights, align='center', color=colors)
+    ax.set_xticks(xticks)
+
+    namesminus = [str(x) for x in range(-plusmin, 1)]
+    namesplus = ['+'+str(x) for x in range(1, plusmin+1)]
+
+    ax.set_xticklabels(namesminus + namesplus)
+
+    ax.set_ylabel('Spearman correlation coefficient between AP and Keq')
+    ax.set_xlabel('Position of Keq value relative to AP value')
+    ax.set_title('Correlation between Keq and Abortive Probability '
+                 'at shifted positions')
+    ax.yaxis.grid()
+
+
+def apRawSum(dg100, dg400):
+    """
+    Simple bar plot to show where the raw reads are highest and where the
+    abortive probabilities are highest across all variants.
+
+    Result: 6 and 8 are big values. Wonder if Lilian has seen smth like this.
+
+    Big steps at 6 and 13 in AP. These sites correspond to big jumps also in
+    your ladder-plot.
+
+    I think Lilian should see these plots. I don't think she has seen them
+    before. Make them when you send her an email.
+    """
+    plt.ion()
+
+    #ITSs = dg100
+    ITSs = dg400
+    #ITSs = dg400 + dg100
+
+    mers = range(0, 19)
+    x_names = range(2, 21)
+
+    #rawSum = [sum([i.rawDataMean[x] for i in ITSs]) for x in mers]
+    #apSum = [sum([i.abortiveProb[x] for i in ITSs]) for x in mers]
+
+    rawMean = [np.mean([i.rawDataMean[x] for i in ITSs]) for x in mers]
+    apMean = [np.mean([i.abortiveProb[x] for i in ITSs]) for x in mers]
+
+    rawStd = [np.std([i.rawDataMean[x] for i in ITSs]) for x in mers]
+    apStd = [np.std([i.abortiveProb[x] for i in ITSs]) for x in mers]
+
+    for heights, stds, descr in [(rawMean, rawStd, 'Raw'), (apMean, apStd, 'AP')]:
+
+        fig, ax = plt.subplots()
+
+        ax.bar(left=mers, height=heights, align='center', yerr=stds)
+        ax.set_xticks(mers)
+        ax.set_xticklabels(x_names)
+
+        ax.set_xlabel('X-mer')
+        ax.set_ylabel(descr)
+
+
+def visualPlustest(dg100, dg400):
+    """
+    Print out dinucleotides, AP values, and Keq'z for the positions that give
+    strong correlation. Invaztigatezkthnxzzumz.
+
+    Maybe note that for 3-mers, there is a positive correlation between
+    """
+
+    topAPmers = [3,4,8]
+    keqPlus = 1
+
+
+def basic_info(ITSs):
+    """
+    Basic question: why is there a better correlation between PY and sum(AP)
+    than between PY and TotAbort?
+
+    Strange: the correlation between sum(AP) and SE is NEGATIVE when AP is
+    normalized, but POSITIVE when AP is not normalized. That makes no sense:
+    the changes go in the same direction.
+
+    This seems to be related to the 2-mer. When I exclude it the correlation
+    doesn't change direction. However, apSum becomes
+
+    It is also related to keeping the -AP values. When you exclude them and
+    exclude the 2-mer you get the same correlation between sum(keq) and
+    sum(AP). Including the 2-mer just makes things nearly 1 so that numerical
+    errors come into the picture.
+
+    So after normalization: the fraction of abortive probability accounted for
+    beyond the 2-nt correlates with sum(keq)
+    This is MUCH more evident in the DG400 series.
+
+    Indeed. The normalized AP of the 2-mer in the DG400 series has a very
+    strong correlation 0.74 with PY: the fraction of aborted product which
+    happens at the 2-mer expains most of the PY variation. However this is not
+    evident when looking at the other data.
+
+    # NEW NEW NEW NEW
+    There is DECISIVELY something fishy about the abortive probabilities.
+
+    For DG100 you need sum(AP[:10]) before you reach any decent correlation.
+    That is up to 11-mer!!!! And the 14-mer also makes the difference.
+
+    The 6-7 mer makes a big difference too.
+
+    However!! Excluding the 2-mer and the 3-mer improves this drastically. The
+    early AP do matter, but the 2-mer and 3-mer confound things. It could be
+    that they are 'cheap' abortive products, because they happen very fast.
+
+    It seems that sum(AP) early is almost positively correlated with PY! It's
+    only when considering the late AP that the correlation between sum(AP) and
+    PY becomes negative, like you'd expect.
+
+    High PY variants are likely to abort early, but unlikely to abort late.
+    Relative to each other.
+
+    The AP after the 10-mer is predictive of PY. AP before 10-mer is not very
+    predictive. This is at first appears counter-intuitive, since most abortive
+    product is short. However, this must be balanced by the fact that it is
+    more detrimental to PY to abort late. Perhaps late abortive products take
+    longer time to release? When a full RNA-DNA hybrid is formed, backtracking
+    and bubble collapse could be slower.
+
+    So it has both taken longer time to produce the product, but it also takes
+    longer time to backtrack and abort.
+
+    What underlies the difference? Different stresses causing late and early
+    collapse? Or just low/high probability of late collapse.
+
+    Here is a case study to try to understand the AP values (and raw)
+
+    Imagine an initiating complex that aborts a 2-nt or 3-nt. This happens soon
+    after initating and the initiating complex is not stable. We imagine that
+    this complex can rapidly re-initialize.
+
+    Imagine an initiating complex that aborts a 11-nt or a 12-nt. Count the
+    time (t_11 > t_2). This alone will give less raw product at the 11-nt mark,
+    and therefore a lower AP -- not because the actual collapse probability is
+    different. You'll just see less evidence for it.
+
+    has a full and stabilizing RNA-DNA hybrid
+    contribution to the AP and raw.
+
+    TIME is missing. TIME could explain some things. TIME is part of a more
+    complex model: ap(t) is needed to explain what's going on here. You don't
+    have time for this, however. You must make do with what you've got.
+
+    If we normalize the RAW data with respect to time, we see that it's not so
+    unusual to reach late transcription stages.
+
+    Can you make a sensitivity plot? How sensitive the PY or the total abortive
+    product is to the AP in a certain region?
+    """
+
+    py = [i.PY for i in ITSs]
+    fl = [i.fullLengthMean for i in ITSs]
+    ta = [i.totAbortMean for i in ITSs]
+
+    #print 'FL and TotAbort: ', spearmanr(fl, ta)
+
+    se = [i.SE for i in ITSs]
+    ap2mer = [i.abortiveProb[0] for i in ITSs]
+    ap23mer = [sum(i.abortiveProb[7:19]) for i in ITSs]
+
+    #apSum = [sum([a for a in i.abortiveProb if a >0]) for i in ITSs]
+    apSum = [sum([a for a in i.abortiveProb[1:] if a >0]) for i in ITSs]
+    #apSum = [sum(i.abortiveProb[1:]) for i in ITSs]
+    #apSum = [sum(i.abortiveProb) for i in ITSs]
+    # ~= [1,...,1] after normalization
+    #for d, inf in [(py, 'PY'), (fl, 'FL'), (ta, 'TotAbort'), (apSum, 'sum(AP)')]:
+        #print 'SE', inf, spearmanr(se, d)
+
+    #print '2-mer AP and PY: ', spearmanr(ap2mer, py)
+    #print '2-mer AP and FL: ', spearmanr(ap2mer, fl)
+    #print '2-mer AP and ta: ', spearmanr(ap2mer, ta)
+
+    #print('')
+
+    print '2+3-mer AP and PY: ', spearmanr(ap23mer, py)
+    print '2+3-mer AP and FL: ', spearmanr(ap23mer, fl)
+    print '2+3-mer AP and ta: ', spearmanr(ap23mer, ta)
+    print('')
+
+    #how does the AP correlate with the raw values?
+    # around 0.7
+    #for i in ITSs:
+        #ap = i.abortiveProb
+        #raw = i.rawDataMean
+
+        #print spearmanr(ap, raw)
+
+
+def get_movAv_array(dset, center, movSize, attr):
+    """
+    Hey, it's not an average yet: you're not dividing by movSize .. but you
+    could.
+    """
+
+    movAr = []
+
+    # the last coordinate at which you find keq and AP info
+    for i in dset:
+
+        # for exampe abortiveProb, Keq, etc.
+        array = getattr(i, attr)
+
+        idx = center-2
+        # check if there is enough space around the center to proceed
+        # if center is 1, and movSize is 3, nothing can be done, since you must
+        # average center-3:center+4
+        if (idx - movSize) < 0 or (idx + movSize + 1) > 18:
+            movAr.append(None)  # test for negative values when plotting
+
+        else:
+            movAr.append(sum(array[idx-movSize:idx+movSize+1]))
+
+    return movAr
+
+
+def moving_average_ap(dg100, dg400):
+    """
+    Define a moving average size movSize and correlate each moving average
+    window with the PY/FL/TA
+    """
+
+    #dset = dg100
+    dset = dg400
+
+    movSize = 1
+
+    py = [i.PY for i in dset]
+    fl = [i.fullLengthMean for i in dset]
+    ta = [i.totAbortMean for i in dset]
+
+    xmers = range(2, 21)
+    attr = 'abortiveProb'
+
+    # get a moving average window for each center_position
+    # calculating from an x-mer point of view
+    plim = 0.05
+    # Use a less conservative test for the paper
+
+    for label, meas in [('PY', py), ('FL', fl), ('TotalAbort', ta)]:
+    #for label, meas in [('FL', fl), ('TotalAbort', ta)]:
+
+        # the bar height will be the correlation with the above three values for
+        # each moving average center position
+        bar_height = []
+        pvals = []
+
+        nr_tests = 0
+
+        for mer_center_pos in xmers:
+            movArr = get_movAv_array(dset, center=mer_center_pos,
+                    movSize=movSize, attr=attr)
+
+            corr, pval = spearmanr(meas, movArr)
+
+            if not np.isnan(corr):
+                nr_tests += 1
+
+            bar_height.append(corr)
+            pvals.append(pval)
+
+        # if no tests passed, make to 1 to avoid division by zero
+        if nr_tests == 0:
+            nr_tests = 1
+
+        colors = []
+        for pval in pvals:
+            if pval < (plim/nr_tests):
+                colors.append('g')
+            else:
+                colors.append('k')
+
+        fig, ax = plt.subplots()
+        ax.bar(left=xmers, height=bar_height, align='center', color=colors)
+        ax.set_xticks(xmers)
+        ax.set_xlim(xmers[0]-1, xmers[-1])
+
+        ax.set_xlabel('Center x-mer for moving average')
+        ax.set_ylabel('{0} -- {1}: window size: '
+                        '{2}'.format(label, attr, movSize))
+
+
+def benjami_colors(pvals, nr_tests):
+    """
+    """
+
+    colors = []
+
+    return colors
+
+
+def moving_average_ap_keq(dg100, dg400):
+
+    """
+    Moving average between AP and Keq
+    """
+    plt.ion()
+
+    dset = dg100
+    #dset = dg400
+
+    movSize = 3
+
+    xmers = range(2, 21)
+
+    # get a moving average window for each center_position
+    # calculating from an x-mer point of view
+    plim = 0.05
+    # Use a less conservative test for the paper
+
+    # the bar height will be the correlation with the above three values for
+    # each moving average center position
+    bar_height = []
+    pvals = []
+
+    nr_tests = 0
+
+    for mer_center_pos in xmers:
+
+        attr = 'abortiveProb'
+        movAP = get_movAv_array(dset, center=mer_center_pos, movSize=movSize, attr=attr)
+
+        attr = 'keq'
+        movKeq = get_movAv_array(dset, center=mer_center_pos, movSize=movSize, attr=attr)
+
+        corr, pval = spearmanr(movAP, movKeq)
+
+        if not np.isnan(corr):
+            nr_tests += 1
+
+        bar_height.append(corr)
+        pvals.append(pval)
+
+    # Add colors to the bar-plots according to the benjamini hochberg method
+    # sort the p-values from high to low; test against plim/
+
+    colors = benjami_colors(pvals, nr_tests)
+    colors = []
+    for pval in pvals:
+        if pval < (plim/nr_tests):
+            colors.append('g')
+        else:
+            colors.append('k')
+
+    # plotit
+    fig, ax = plt.subplots()
+    ax.bar(left=xmers, height=bar_height, align='center', color=colors)
+    ax.set_xticks(xmers)
+    ax.set_xlim(xmers[0]-1, xmers[-1])
+
+    ax.set_xlabel('Center x-mer for moving average')
+    ax.set_ylabel('Moving AP vs Keq: window size: {0}'.format(movSize))
+
+    debug()
+
 
 def main():
 
@@ -590,18 +1187,18 @@ def main():
         controls = ['DG133', 'DG115a', 'N25', 'N25anti']
         dg400 = [i for i in dg400 if not i.name in controls]
 
+    for ITSs in [dg100, dg400]:
+        add_keq(ITSs)
+
     #ITSs = dg100
     ITSs = dg400
 
-    add_keq(ITSs)
+    # Normalize the AP -- removes correlation between sum(PY) and sum(AP)
+    # Oddly enough changes the sign between sum(AP) and sum(KEQ)
+    #normalize_AP(ITSs)
 
-    # You see a bias: sum(AP) is perfectly negatively correlated with PY
-    # Normalize the AP
-    normalize_AP(ITSs)
-
-    # Control: no correlation any more
-    pys, aps = zip(*[(i.PY, sum([v for v in i.abortiveProb if v >0])) for i in ITSs])
-    print spearmanr(pys, aps)
+    # basic correlations
+    #basic_info(ITSs)
 
     # ALSO! Ignore any its object with negative AP. DOn't include those in your
     # correlations.
@@ -629,12 +1226,22 @@ def main():
 
     # plot correlation between Keq and AP and Raw
     # add possibility for screening for high/low dnadna dnarna values
-    keq_ap_raw(ITSs)
+    #keq_ap_raw(ITSs)
 
-    # try to correlate the AP to other values, such as the DGDNA up to that
-    # point, and/or the DGDNA + DGRNA up to that point
-    #ap_other(ITSs)
+    # XXX ap keq for all positions
+    #plus_minus_keq_ap(dg100, dg400)
 
+    # XXX ap keq at each position
+    #position_wise_correlation_shifted(dg100, dg400)
+
+    # XXX bar plot of the sum of AP and the sum of raw
+    #apRawSum(dg100, dg400)
+
+    # XXX moving average of AP vs PY/FL/TA and AP vs sum(Keq)
+    #moving_average_ap(dg100, dg400)
+
+    # XXX moving average between AP and Keq
+    moving_average_ap_keq(dg100, dg400)
     # When you have these two plots -- what is your story? First you need to
     # find out if your theory about dgdna dng rna scrunched complex works.
     # in general XXX try to introduce energy in scrunched complex, but be
@@ -691,7 +1298,6 @@ def main():
 
     # 2) Use the DG400 series to correlate Keq with AP and Raw
     # 3) Do those with low AP have DNA-bubble RNA-DNA energy up to that point?
-
     return ITSs
 
     """
@@ -789,3 +1395,4 @@ def main():
 
 if __name__ == '__main__':
     ITSs = main()
+    ga = ITSs[0]  # just for testing attributes in the interpreter...

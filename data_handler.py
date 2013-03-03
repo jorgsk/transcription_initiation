@@ -167,13 +167,13 @@ class ITS(object):
             # little abortive product but reducing productive yield)
             self._APraw[quant] = [prctYield[i]/prctRNAP[i] for i in rDRange]
 
-        self.totAbortMean = np.mean(self.totAbort.values(), axis=0)
-        self.totRNAMean = np.mean(self.totRNA.values(), axis=0)
-
         self.abortiveProb = np.mean(self._APraw.values(), axis=0)
         self.abortiveProb_std = np.std(self._APraw.values(), axis=0)
 
-    def calc_keq(self, c1, c2, c3):
+        self.totAbortMean = np.mean(self.totAbort.values(), axis=0)
+        self.totRNAMean = np.mean(self.totRNA.values(), axis=0)
+
+    def calc_keq(self, c1, c2, c3, SE_beg):
         """
         Calculate Keq_i for each i in [3,20]
 
@@ -193,7 +193,7 @@ class ITS(object):
         import optim
         self.keq = optim.keq_i(RT, its_len, dg3d, dna_dna, rna_dna, c0, c1, c2, c3)
 
-        self.SE = sum(self.keq)
+        self.SE = sum(self.keq[SE_beg-2:])
 
 
 def PYHsu(filepath):
