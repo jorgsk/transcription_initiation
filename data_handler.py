@@ -173,7 +173,7 @@ class ITS(object):
         self.totAbortMean = np.mean(self.totAbort.values(), axis=0)
         self.totRNAMean = np.mean(self.totRNA.values(), axis=0)
 
-    def calc_keq(self, c1, c2, c3, SE_beg):
+    def calc_keq(self, c1, c2, c3, SE_beg=2):
         """
         Calculate Keq_i for each i in [3,20]
 
@@ -213,7 +213,7 @@ def PYHsu(filepath):
     return ITSs
 
 
-def read_raw(path, files, dset):
+def read_raw(path, files, dset, skipN25=False):
     """
     Read raw quantitation data
     """
@@ -254,25 +254,27 @@ def read_raw(path, files, dset):
 
         for variant in rawData:
 
-            # skip all N25s, they're upsetting things
-            if 'N25' in variant:
+            # skip all N25s if requested
+            if skipN25 and 'N25' in variant:
                 continue
 
             # turn nans to zeros
             entry = rawData[variant].fillna(value=-99)
 
-            # not replica unles contains '.'
+            # deal with replicas that contain a '.'
             replica = ''
             if '.' in variant:
                 variant, replica = variant.split('.')
+
+            # Some N25antis have different names
+            if 'N25anti' in variant:
+                variant = 'N25anti'
 
             # if exists (even as replica), append to it
             if variant in ITSs:
                 itsObj = ITSs[variant]
             # if not, create new
             else:
-                # Check if N25a or smth like that
-                # REMOVE THIS WHEN YOU GET ANSWER FROM LILIAN?
                 if variant[:-1] in ITSs:
                     var = variant[:-1]
                     itsObj = ITSs[var]

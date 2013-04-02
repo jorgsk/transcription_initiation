@@ -5,12 +5,14 @@ You are breaking compatibility with the code in DocumentationTranscription
 because you're no longer considering the differential equation model.
 """
 
+from data_handler import ITS
 import itertools
 import numpy as np
-import time
 import multiprocessing
-from scipy.stats import spearmanr, pearsonr
+from scipy.stats import spearmanr
 from operator import itemgetter
+from ipdb import set_trace as debug  # NOQA
+import time
 
 
 class Result(object):
@@ -27,16 +29,15 @@ class Result(object):
     std of the best for each random sample)
     """
     def __init__(self, corr=[np.nan], pvals=np.nan, params=np.nan,
-                 finals=np.nan):
+                 SEn=np.nan):
 
         self.corr = corr
         self.pvals = pvals
         self.params = params
-        self.finals = finals
+        self.SEn = SEn
 
         # calculate the mean, std, max, and min values for correlation
-        # coefficients, pvalues, and finals simulation results (concentration in
-        # its_len)
+        # coefficients, pvalues, and SEn
         self.corr_mean = np.mean(corr)
         self.corr_std = np.std(corr)
         max_indx = np.abs(corr).argmax()  # correlation may be negative
@@ -50,10 +51,10 @@ class Result(object):
         self.pvals_std = np.std(pvals)
         self.pvals_min = np.min(pvals)
 
-        self.finals_mean = np.mean(finals)
-        self.finals_std = np.std(finals)
-        self.finals_max = np.max(finals)
-        self.finals_min = np.min(finals)
+        self.SEn_mean = np.mean(SEn)
+        self.SEn_std = np.std(SEn)
+        self.SEn_max = np.max(SEn)
+        self.SEn_min = np.min(SEn)
 
         # The parameters are not so easy to do something with; the should be
         # supplied in a dictionray [c1,c2,c3,c4] = arrays; so make mean, std,
@@ -78,18 +79,12 @@ class Result(object):
         self.params_best = dict((k, v[0]) for k,v in params.items())
 
 
-def main_optim(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
-                   normal=True):
+def main_optim(its_range, ITSs, ranges, randize, crosscorr, normal):
     """
-    Wrapper around grid_scrunch and opt_scrunch.
 
-    randize and retrofit will randomize DNA and do cross-validation of parameter
-    values. normal is on by default; it calculates the normal correlation you're
-    after (CBP or [RNAP]). non_rnap will not calculate the [RNAP] concentration
-    but will instead calculate the cumulative sum of Keq at the its_ranges.
+    Call the core optimialization wrapper but treat different analysis cases
+    differently.
 
-    use non_rnap to NOTE use the differential equation model, but instead only
-    use the sum of the equilibrium constants Keq to correlate with PY.
     """
 
     # make 'int' into a 'list' containing just that int
@@ -98,118 +93,132 @@ def main_optim(PYs, its_range, ITSs, ranges, randize=0, retrofit=0,
 
     results = {}
     results_random = {}
-    results_retrof = {}
+    results_crosscorr = {}
 
     for its_len in its_range:
 
+        print its_len
+
         # 'normal' results (full dataset)
         if normal:
-            normal_obj = temp_name(PYs, its_len, ITSs, ranges)
+            normal_obj = core_optim_wrapper(its_len, ITSs, ranges)
         else:
             normal_obj = False
 
         # Randomize
         if randize:
-            random_obj = temp_name(PYs, its_len, ITSs, ranges,
-                                    randomize=randize)
+            random_obj = randomize_wrapper(its_len, ITSs, ranges, randize)
         else:
             random_obj = False
 
-        # Retrofit
-        if retrofit:
-            retrof_obj = temp_name(PYs, its_len, ITSs, ranges,
-                                        retrof=retrofit)
+        # Cross correlation
+        if crosscorr:
+            crosscorr_obj = crosscorr_wrapper(its_len, ITSs, ranges, crosscorr)
         else:
-            retrof_obj = False
+            crosscorr_obj = False
 
         results[its_len] = normal_obj
-        results_retrof[its_len] = retrof_obj
+        results_crosscorr[its_len] = crosscorr_obj
         results_random[its_len] = random_obj
 
-    return results, results_random, results_retrof
+    return results, results_random, results_crosscorr
 
 
-def temp_name(PYs, its_len, ITSs, ranges, randomize=0, retrof=0):
+def ITS_RandomSplit(ITSs):
     """
-    Separate scruch calls into randomize, retrofit, or neither.
+    Divide the list in 2 with random indices.
     """
-    if (not retrof) and (not randomize):
-        normal_run = True
-    else:
-        normal_run = False
 
-    # NO RETROFIT AND NO RANDOMIZE
-    if normal_run:
+    its_nr = len(ITSs)
+    fit_indices = set([])
 
-        return core_optim_wrapper(its_len, ITSs, ranges)
+    # populate an array with random indices
+    while len(fit_indices) < its_nr/2.0:
+        fit_indices.add(np.random.randint(np.ceil(its_nr)))
 
-    # RETROFIT
-    elif retrof:
-        retro_results = []
-        for repeat in range(retrof):
+    ITS_fit = [ITSs[i] for i in fit_indices]
+    ITS_compare = [ITSs[i] for i in range(its_nr) if i not in fit_indices]
 
-            # XXX Fix this when you get there
-            1/0
-            # Choose 50% of the ITS randomly; both energies and PYs
-            retrovar = get_its_variables(ITSs, retrofit=True, PY=PYs)
-            #extract the stuff
-            ITS_fitting, ITS_compare, PYs_fitting, PYs_compare = retrovar
+    return ITS_fit, ITS_compare
 
-            arguments_fit = (its_len, ITSs)
 
-            fit_result = core_optim_wrapper(arguments_fit, ranges)
+def randomize_ITS_sequence(ITSs):
+    """
+    Copy the ITS variables and then randomize their sequence.
+    """
 
-            # Skip if you don't get a result (should B OK with large ranges)
-            if not fit_result:
-                continue
+    copy_ITSs = []
 
-            par_order = ('c1', 'c2', 'c3', 'c4')
+    # keep only the PY and names of the ITS objects -> new sequence and energies
+    for its in ITSs:
+        random_its = ITSgenerator()
+        copy_ITSs.append(ITS(random_its, name=its.name, PY=its.PY))
 
-            fit_ranges = [np.array([fit_result.params_best[p]])
-                          for p in par_order]
+    return copy_ITSs
 
-            # rerun with new arguments
-            arguments_compare = (y0, its_len, ITS_compare,
-                                 PYs_compare, non_rnap)
 
-            # run the rest of the ITS with the optimal parameters
-            control_result = core_optim_wrapper(arguments_compare, fit_ranges)
+def ITSgenerator():
+    """Generate a random ITS """
+    import random
+    gatc = list('GATC')
+    return 'AT'+ ''.join([random.choice(gatc) for dummy1 in range(18)])
 
-            # Skip if you don't get a result (should B OK with large ranges)
-            if not control_result:
-                continue
 
-            else:
-                retro_results.append(control_result)
+def randomize_wrapper(its_len, ITSs, ranges, randomize=0):
 
-        # average the results (keeping mean and std) and return
-        return average_rand_result(retro_results)
+    rand_results = []
+    for _ in range(randomize):
 
-    # RANDOMIZE
-    elif randomize:
-        rand_results = []
-        for repeat in range(randomize):
+        ITS_random = randomize_ITS_sequence(ITSs)
 
-            # normalizing by testing random sequences. Can we fit the parameters
-            # from random sequences to these ITS values?
+        rand_result = core_optim_wrapper(its_len, ITS_random, ranges)
 
-            # XXX Fix this when you get there
-            1/0
+        # skip if you don't get anything from this randomizer
+        if not rand_result:
+            continue
 
-            ITS_variables = get_its_variables(ITSs, randomize=True)
+        else:
+            rand_results.append(rand_result)
 
-            arguments = (y0, its_len, ITS_variables, PYs, non_rnap)
+    return average_rand_result(rand_results)
 
-            rand_result = core_optim_wrapper(arguments, ranges)
 
-            # skip if you don't get anything from this randomizer
-            if not rand_result:
-                continue
+def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
+    """
+    Wrapper around core_optim_wrapper that deals with cross-correlation.
+    Optimialization is performed on one half of the ITSs and the correlation is
+    obtained from the second half using the parameters obtained from the first
+    half.
+    """
 
-            else:
-                rand_results.append(rand_result)
+    retro_results = []
+    for _ in range(crosscorr):
 
-        return average_rand_result(rand_results)
+        # Choose 50% of the ITS randomly; both energies and PYs
+        ITS_fit, ITS_compare = ITS_RandomSplit(ITSs)
+
+        fit_result = core_optim_wrapper(its_len, ITS_fit, ranges)
+
+        # Skip if you don't get a result (should B OK with large ranges)
+        if not fit_result:
+            continue
+
+        # Get the optimal parameter values for the fitted ITSs
+        par_order = ('c1', 'c2', 'c3', 'c4')
+        fit_ranges = [np.array([fit_result.params_best[p]])
+                      for p in par_order]
+
+        # run the rest of the ITS with the optimal parameters from fitting-set
+        control_result = core_optim_wrapper(its_len, ITS_compare, fit_ranges)
+
+        # Skip if you don't get a result (should B OK with large ranges)
+        if not control_result:
+            continue
+        else:
+            retro_results.append(control_result)
+
+    # average the results (keeping mean and std) and return
+    return average_rand_result(retro_results)
 
 
 def core_optim_wrapper(its_len, ITSs, ranges):
@@ -218,15 +227,16 @@ def core_optim_wrapper(its_len, ITSs, ranges):
     correlations and pvalues.
     """
 
+    t1 = time.time()
+
     # all possible combinations of c_i values
     params = [p for p in itertools.product(*ranges)]
 
+    # divide the parameter space into subsets for processing
     window = int(np.floor(len(params)/4.0))
     divide = [params[i*window:(i+1)*window] for i in range(3)]
     last = params[3*window:]  # make sure you get all in the last one
     divide.append(last)
-
-    t1 = time.time()
 
     #make a pool of workers for multicore action
     # this is only efficient if you have a range longer than 10 or so
@@ -244,37 +254,30 @@ def core_optim_wrapper(its_len, ITSs, ranges):
         all_results = sum([_multi_calc(*(p, its_len, ITSs))
                             for p in divide], [])
 
-    all_corr = sorted([a[-2] for a in all_results])
-    if all_corr != []:
-        print all_corr[0], all_corr[-1]
-
-    # All_results is a list of tuples on the following form:
-    # ((finals, par, rp, pp))
-    # Sort them on the pearson/spearman correlation pvalue, 'pp'
-
-    # Filter and pick the 20 with smallest pval
+    # All_results is a list of tuples on the following form: ((SEn, par, rp, pp))
+    # Sort them on the pearson/spearman correlation pvalue, 'pp' and pick top 20
     top_hits = sorted(all_results, key=itemgetter(3))[:20]
 
-    # if top_hits is empty, return NaNs (created by default)
+    # if top_hits is empty, return NaNs results (created by default)
     if top_hits == []:
-        return Result()  # all values are NaN
+        return Result()
 
-    # now make separate corr, pvals, params, and finals arrays from these
-    finals = np.array(top_hits[0][0])  # only get finals for the top top
+    # now make separate corr, pvals, params, and SEn arrays from these
+    SEn = np.array(top_hits[0][0])  # only get SEn for the top top
     pars = [c[1] for c in top_hits]
     corr = np.array([c[2] for c in top_hits])
     pvals = np.array([c[3] for c in top_hits])
 
-    # pars must be made into a dict
+    # Return parameters in a dictionary form
     # pars[c1, c2, c3, c4] = [array]
     params = {}
     for par_nr in range(1, len(ranges)+1):
         params['c{0}'.format(par_nr)] = [p[par_nr-1] for p in pars]
 
     # make a Result object
-    result_obj = Result(corr, pvals, params, finals)
+    result_obj = Result(corr, pvals, params, SEn)
 
-    print time.time() - t1
+    print 'time: ', time.time() - t1
 
     return result_obj
 
@@ -317,7 +320,7 @@ def keq_calc(start_values, its_len, ITSs):
     # get the tuning parameters and the rna-dna and k1, kminus1 values
     # RT is the gas constant * temperature
     RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
-    finals = []
+    ITS_SEn = []
 
     for its in ITSs:
 
@@ -336,14 +339,13 @@ def keq_calc(start_values, its_len, ITSs):
         (a, b, c, d) = start_values
 
         # equilibrium constants at each position
-        k1 = keq_i(RT, its_len, dg3d, dna_dna, rna_dna, a, b, c, d)
+        keqs = keq_i(RT, its_len, dg3d, dna_dna, rna_dna, a, b, c, d)
 
-        SE = sum(k1)
+        SEn = sum(keqs)
 
-        # finals are the values which will be correlated with PY
-        finals.append(SE)
+        ITS_SEn.append(SEn)
 
-    return np.array(finals)
+    return np.array(ITS_SEn)
 
 
 def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
@@ -451,8 +453,9 @@ def average_rand_result(rand_results):
     # You don't want all 20 saved outcomes from each random version, you just
     # want the best ones
     for res_obj in rand_results:
+
         # check if this is a NaN object; skip it
-        if res_obj.corr is np.nan:
+        if res_obj.corr[0] is np.nan:
             continue
 
         new_corr.append(res_obj.corr[0])
@@ -466,6 +469,6 @@ def average_rand_result(rand_results):
         return Result()
     else:
         # make a new result object
-        new_res = Result(new_corr, new_pvals, new_params, res_obj.finals)
+        new_res = Result(new_corr, new_pvals, new_params, res_obj.SEn)
 
         return new_res

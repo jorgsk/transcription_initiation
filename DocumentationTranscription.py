@@ -6288,7 +6288,7 @@ def RNAP_2_PY(ITSs, concentrations, params=(20, 0, 0.022, 0.24), its_len=15):
 
     its_range = range(3, 21)
 
-    randomize = 0 # here 0 = False (or randomize 0 times)
+    randomize = 0  # here 0 = False (or randomize 0 times)
     retrofit = 0
 
     all_results = scrunch_runner(PYs, its_range, ITSs, par_ranges,
@@ -6304,12 +6304,13 @@ def RNAP_2_PY(ITSs, concentrations, params=(20, 0, 0.022, 0.24), its_len=15):
 
     # make a predictive function
     def predicted_PY(x, slope, intercept):
-        return  slope*x + intercept
+        return slope*x + intercept
 
     # return the predicted PY values
     pred_PY = [predicted_PY(x, slope, intercept) for x in concentrations]
 
     return pred_PY
+
 
 def predicted_vs_measured(ITSs, in_axes=0, ax_nr=0):
     """
@@ -6336,7 +6337,7 @@ def predicted_vs_measured(ITSs, in_axes=0, ax_nr=0):
 
     its_range = range(3, 21)
 
-    randomize = 0 # here 0 = False (or randomize 0 times)
+    randomize = 0  # here 0 = False (or randomize 0 times)
     retrofit = 0
 
     # 1) Get the sequences you sent which Hsu tested
@@ -6815,12 +6816,12 @@ def paper_figures(ITSs):
 
     ## Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     #cross-reference. Return either one or two figures.
-    #ladder_name = 'three_param_model_AB' + append
-    #fig_back = three_param_AB(ITSs, testing, p_line, global_params)
+    ladder_name = 'three_param_model_AB' + append
+    fig_back = three_param_AB(ITSs, testing, p_line, global_params)
 
-    #figs.append((fig_back, ladder_name))
+    figs.append((fig_back, ladder_name))
 
-    ###Figure 2.5 -> Three-parameter model with controls 
+    ###Figure 2.5 -> Three-parameter model with controls
     #ladder_control_name = 'three_param_control_AB' + append
     #fig_control_ladder = three_param_control_A(ITSs, testing, p_line,
                                                #global_params)

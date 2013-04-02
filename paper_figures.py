@@ -15,8 +15,16 @@ import data_handler
 import numpy as np
 import matplotlib.pyplot as plt
 import optim
-from scipy.stats import spearmanr, pearsonr  # NOQA
+import os
+from scipy.stats import spearmanr, pearsonr, nanmean, nanstd, nanmedian  # NOQA
 from operator import attrgetter
+
+# Global variables :)
+#here = os.getcwd()  # where this script is executed from! Beware! :)
+here = os.path.abspath(os.path.dirname(__file__))  # where this script is located
+fig_dir1 = os.path.join(here, 'figures')
+fig_dir2 = '/home/jorgsk/Dropbox/The-Tome/my_papers/rna-dna-paper/figures'
+fig_dirs = (fig_dir1, fig_dir2)
 
 
 class SimulationResult(object):
@@ -112,13 +120,12 @@ def visual_inspection(ITSs, variable='AP'):
         plt.show()
 
 
-def optimize(ITSs, testing=True, target='PY'):
+def optimize(ITSs, testing=True, target='PY', analysis='Normal'):
     """
     Optimize c1, c2, c3 to obtain max correlation with PY/FL/TA/TR
 
     As of right now, you only have PY for DG100 ... would be interesting to get
-    FL in there as well. Do you have this information? Maybe verify with
-    Lilian.
+    FL in there as well. Do you have this information? Maybe verify with Lilian.
 
     PY = Productive Yield
     FL = Full Length
@@ -127,20 +134,33 @@ def optimize(ITSs, testing=True, target='PY'):
     """
 
     # grid size
-    grid_size = 15
+    grid_size = 20
 
     if testing:
         grid_size = 6
 
-    targetAttr = {'PY': 'PY',
-                  'FL': 'FL',
-                  'TA': 'totAbort',
-                  'TR': 'totRNA'
-                  }
+    # assume normal and no randomization or cros correlation analysis
+    randize = 0
+    crosscorr = 0
 
-    # -> you depend on the order .. maybe you can fix this now once and for
-    # all? :) or just do what works ...
-    y = np.array([getattr(its, targetAttr[target]) for its in ITSs])*0.01
+    if analysis == 'Normal':
+        normal = True
+    elif analysis == 'Random':
+        randize = grid_size
+        normal = False
+    elif analysis == 'Cross Correlation':
+        crosscorr = grid_size
+        normal = False
+    else:
+        print('Give correct analysis parameter name')
+        1/0
+
+    # only use PY for correlation kthnkx
+    #targetAttr = {'PY': 'PY',
+                  #'FL': 'FL',
+                  #'TA': 'totAbort',
+                  #'TR': 'totRNA'
+                  #}
 
     # Parameter ranges you want to test out
     c1 = np.array([1])  # insensitive to variation here
@@ -148,43 +168,73 @@ def optimize(ITSs, testing=True, target='PY'):
     c3 = np.linspace(0, 1.0, grid_size)
     c4 = np.linspace(0, 1.0, grid_size)
 
-    #c2 = np.array([0.33]) # 15 runs
-    #c3 = np.array([0]) # 15 runs
-    #c4 = np.array([0.95]) # 15 runs
-
     par_ranges = (c1, c2, c3, c4)
 
+    its_min = 2
     its_max = 21
     #if testing:
         #its_max = 15
 
-    its_range = range(2, its_max)
-    #its_range = [5,10, 15, 20]
+    its_range = range(its_min, its_max)
+    #its_range = [its_min, 5, 10, 15, its_max]
 
-    all_results = optim.main_optim(y, its_range, ITSs, par_ranges)
+    all_results = optim.main_optim(its_range, ITSs, par_ranges, randize,
+            crosscorr, normal)
 
     # extract the results where the full dataset has been used
-    results = all_results[0]
+    if analysis == 'Normal':
+        results = all_results[0]
+    elif analysis == 'Random':
+        results = all_results[1]
+    elif analysis == 'Cross Correlation':
+        results = all_results[2]
+    else:
+        print('WTF mate')
 
     outp = {}
 
     # print the mean and std of the estimated parameters
     for param in ['c1', 'c2', 'c3', 'c4']:
-        #get the parameter values from pos 6 to 21
-        # TODO should get the ones for which there is significant correlation
-        par_vals = [results[pos].params_best[param] for pos in range(6, its_max)]
-        print param, par_vals
+        parvals = [results[pos].params_best[param] for pos in its_range]
+        pvals = [results[pos].pvals_min for pos in its_range]
+        meanpvals = [results[pos].pvals_mean for pos in its_range]
+        maxcorr = [results[pos].corr_max for pos in its_range]
+        meancorr = [results[pos].corr_mean for pos in its_range]
 
-        if param == 'c2':
-            mean = np.mean(par_vals[8:])
-            std = np.std(par_vals[8:])
-        else:
-            mean = np.mean(par_vals)
-            std = np.std(par_vals)
+        # only report parameter values which correspond to significant correlation
+        significantParvals = []
+        for ix, pval in enumerate(pvals):
+            if pval > 0.05:
+                continue
 
-        print('{0}: {1:.2f} +/- {2:.2f}'.format(param, mean, std))
+            # don't consider rna-dna until after full hybrid length is reached
+            if param == 'c2' and ix < 8:
+                significantParvals.append(0)
+            else:
+                significantParvals.append(parvals[ix])
+
+        print param, significantParvals
+
+        # ignore nan in mean and std calculations
+        mean = nanmean(significantParvals)
+        median = nanmedian(significantParvals)
+        std = nanstd(significantParvals)
+
+        print('{0}: {1:.2f} (mean) or {0}: {2:.2f} (median) +/- '
+                '{3:.2f}'.format(param, mean, median, std))
 
         outp[param] = mean
+
+    # print correlations
+    if analysis == 'Normal':
+        print("Normal analysis: max correlation and corresponding p-value")
+
+        for nt, c, p in zip(its_range, maxcorr, pvals):
+            print nt, c, p
+    else:
+        print("Random or cross-correlation: mean correlation and pvalues")
+        for nt, c, p in zip(its_range, meancorr, meanpvals):
+            print nt, c, p
 
     return outp['c2'], outp['c3'], outp['c4']
 
@@ -284,23 +334,6 @@ def sortITS(ITSs, attribute='PY'):
     """
 
     ITSs = sorted(ITSs, key=attrgetter(attribute))
-
-    return ITSs
-
-
-def add_keq(ITSs, SE_beg=2):
-    """
-    Calculate keq and SE for the different ITSs. By default calculate SE
-    starting from 2-mers.
-    """
-
-    #c1, c2, c3 = optimize(dg100, testing, target='PY')
-    c1, c2, c3 = [0.33, 0.07, 0.82]
-    c1, c2, c3 = [0.13, 0.07, 0.92]
-
-    # add the constants to the ITS objects and calculate Keq
-    for its in ITSs:
-        its.calc_keq(c1, c2, c3, SE_beg)
 
     return ITSs
 
@@ -875,18 +908,6 @@ def apRawSum(dg100, dg400):
         ax.set_ylabel(descr)
 
 
-def visualPlustest(dg100, dg400):
-    """
-    Print out dinucleotides, AP values, and Keq'z for the positions that give
-    strong correlation. Invaztigatezkthnxzzumz.
-
-    Maybe note that for 3-mers, there is a positive correlation between
-    """
-
-    topAPmers = [3,4,8]
-    keqPlus = 1
-
-
 def basic_info(ITSs):
     """
     Basic question: why is there a better correlation between PY and sum(AP)
@@ -976,12 +997,12 @@ def basic_info(ITSs):
 
     #print 'FL and TotAbort: ', spearmanr(fl, ta)
 
-    se = [i.SE for i in ITSs]
-    ap2mer = [i.abortiveProb[0] for i in ITSs]
+    #se = [i.SE for i in ITSs]
+    #ap2mer = [i.abortiveProb[0] for i in ITSs]
     ap23mer = [sum(i.abortiveProb[7:19]) for i in ITSs]
 
     #apSum = [sum([a for a in i.abortiveProb if a >0]) for i in ITSs]
-    apSum = [sum([a for a in i.abortiveProb[1:] if a >0]) for i in ITSs]
+    #apSum = [sum([a for a in i.abortiveProb[1:] if a >0]) for i in ITSs]
     #apSum = [sum(i.abortiveProb[1:]) for i in ITSs]
     #apSum = [sum(i.abortiveProb) for i in ITSs]
     # ~= [1,...,1] after normalization
@@ -1008,7 +1029,7 @@ def basic_info(ITSs):
         #print spearmanr(ap, raw)
 
 
-def get_movAv_array(dset, center, movSize, attr):
+def get_movAv_array(dset, center, movSize, attr, prePost):
     """
     Hey, it's not an average yet: you're not dividing by movSize .. but you
     could.
@@ -1030,7 +1051,16 @@ def get_movAv_array(dset, center, movSize, attr):
             movAr.append(None)  # test for negative values when plotting
 
         else:
-            movAr.append(sum(array[idx-movSize:idx+movSize+1]))
+            if prePost == 'both':
+                movAr.append(sum(array[idx-movSize:idx+movSize+1]))
+            elif prePost == 'pre':
+                #movAr.append(sum(array[idx-movSize:idx+1]))
+                movAr.append(sum(array[idx-movSize:idx]))
+            elif prePost == 'post':
+                #movAr.append(sum(array[idx+2:idx+movSize+1]))
+                movAr.append(sum(array[idx+1:idx+movSize+1]))
+            else:
+                print ":(((())))"
 
     return movAr
 
@@ -1101,11 +1131,30 @@ def moving_average_ap(dg100, dg400):
                         '{2}'.format(label, attr, movSize))
 
 
-def benjami_colors(pvals, nr_tests):
+def benjami_colors(pvals, Q, signcol, nonsigncol):
     """
+    Proceedure: sort the p-values. Then, make a new array which holds the order
+    of the sorted p-vals. Then add color based on the order and the pval.
     """
-
     colors = []
+
+    # recall that 0 implies that no test was done.
+    # you'll need to avoid this: remove all 0s
+    no_zero_pvals = [p for p in pvals if p != 0]
+
+    no_zero_pvals_sorted = sorted(no_zero_pvals)
+
+    nr_tests = len(no_zero_pvals)
+
+    for pvl in pvals:
+        if pvl == 0:
+            colors.append('k')
+        else:
+            # two index operations: first the index in the sorted
+            if pvl < ((no_zero_pvals_sorted.index(pvl)+1)/nr_tests)*Q:
+                colors.append(signcol)
+            else:
+                colors.append(nonsigncol)
 
     return colors
 
@@ -1114,19 +1163,37 @@ def moving_average_ap_keq(dg100, dg400):
 
     """
     Moving average between AP and Keq
+
+    What is the interpretation? If Keq is high in a given area the AP tends to
+    be high as well. There is a correlation in the sense that several high/low
+    Keq in a row leads to high/low AP for the corresponding x-mers.
+
+    What does it mean? How does translocation for length x RNA affect the
+    abortive probability of length x+/- 1/2 RNA? There could be nonlinear
+    effects of backtracking; backtracking could affect
+
+    Cofounder: some correlation between sum(AP) and PY. However, the
+    correlation between moving window Keq and AP remains after normalization of
+    AP to remove the PY correlation.
+
+    However, I could argue that the reason for AP - PY correlation goes through
+    the Keq.
     """
     plt.ion()
 
-    dset = dg100
+    #dset = dg100
     #dset = dg400
+    dset = dg100 + dg400
 
-    movSize = 3
+    normalize_AP(dset)
+
+    movSize = 0
 
     xmers = range(2, 21)
 
     # get a moving average window for each center_position
     # calculating from an x-mer point of view
-    plim = 0.05
+    Q = 0.05  # minimum false discovery rate
     # Use a less conservative test for the paper
 
     # the bar height will be the correlation with the above three values for
@@ -1134,34 +1201,29 @@ def moving_average_ap_keq(dg100, dg400):
     bar_height = []
     pvals = []
 
-    nr_tests = 0
-
     for mer_center_pos in xmers:
 
         attr = 'abortiveProb'
-        movAP = get_movAv_array(dset, center=mer_center_pos, movSize=movSize, attr=attr)
+        #movAP = get_movAv_array(dset, center=mer_center_pos, movSize=movSize, attr=attr)
+        movAP = get_movAv_array(dset, center=mer_center_pos, movSize=0,
+                attr=attr, prePost='both')
 
         attr = 'keq'
-        movKeq = get_movAv_array(dset, center=mer_center_pos, movSize=movSize, attr=attr)
+        movKeq = get_movAv_array(dset, center=mer_center_pos, movSize=movSize,
+                attr=attr, prePost='both')
+                #attr=attr, prePost='post')
 
         corr, pval = spearmanr(movAP, movKeq)
-
-        if not np.isnan(corr):
-            nr_tests += 1
 
         bar_height.append(corr)
         pvals.append(pval)
 
+        print mer_center_pos, corr, pval
+
     # Add colors to the bar-plots according to the benjamini hochberg method
     # sort the p-values from high to low; test against plim/
 
-    colors = benjami_colors(pvals, nr_tests)
-    colors = []
-    for pval in pvals:
-        if pval < (plim/nr_tests):
-            colors.append('g')
-        else:
-            colors.append('k')
+    colors = benjami_colors(pvals, Q=Q, nonsigncol='black', signcol='gray')
 
     # plotit
     fig, ax = plt.subplots()
@@ -1169,10 +1231,36 @@ def moving_average_ap_keq(dg100, dg400):
     ax.set_xticks(xmers)
     ax.set_xlim(xmers[0]-1, xmers[-1])
 
-    ax.set_xlabel('Center x-mer for moving average')
-    ax.set_ylabel('Moving AP vs Keq: window size: {0}'.format(movSize))
+    ax.set_xlabel('ITS position', size=10)
+    ax.set_ylabel('Correlation coefficient'.format(movSize), size=10)
 
-    debug()
+    for l in ax.get_xticklabels():
+        l.set_fontsize(9)
+    for l in ax.get_yticklabels():
+        l.set_fontsize(9)
+
+    filename = 'AP_vs_Keq'
+
+    def mm2inch(mm):
+        return float(mm)/25.4
+
+    # Should be 8.7 cm
+    # 1 inch = 25.4 mm
+    width = mm2inch(127)
+    height = mm2inch(97)
+    fig.set_size_inches(width, height)
+
+    for fdir in fig_dirs:
+        #for formt in ['pdf', 'eps', 'png']:
+        for formt in ['pdf']:
+
+            name = filename + '.' + formt
+            odir = os.path.join(fdir, formt)
+
+            if not os.path.isdir(odir):
+                os.makedirs(odir)
+
+            fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
 
 
 def main():
@@ -1180,48 +1268,45 @@ def main():
     remove_controls = True
 
     dg100 = data_handler.ReadData('dg100-new')  # read the DG100 data
-    #dg100_Old = data_handler.ReadData('dg100')  # read the DG100 data
     dg400 = data_handler.ReadData('dg400')  # read the DG100 data
+
+    ITSs = dg100
 
     if remove_controls:
         controls = ['DG133', 'DG115a', 'N25', 'N25anti']
         dg400 = [i for i in dg400 if not i.name in controls]
 
+    # lower resolution while testing
+    #testing = False
+    #testing = True
+
+    # Add keq-values by first calculating c1, c2, c3
     for ITSs in [dg100, dg400]:
-        add_keq(ITSs)
+        #c1, c2, c3 = optimize(ITSs, testing, target='PY', analysis='Normal')
+        c1, c2, c3 = [0.23, 0.07, 0.95]
+
+         #add the constants to the ITS objects and calculate Keq
+        for its in ITSs:
+            its.calc_keq(c1, c2, c3)
+
+    # Return c1, c2, c3 values obtained with cross-validation
+    #optimize(dg100, testing, target='PY', analysis='Cross Correlation')
+    #optimize(dg100, testing, target='PY', analysis='Normal')
 
     #ITSs = dg100
-    ITSs = dg400
+    #ITSs = dg400
 
     # Normalize the AP -- removes correlation between sum(PY) and sum(AP)
-    # Oddly enough changes the sign between sum(AP) and sum(KEQ)
     #normalize_AP(ITSs)
 
     # basic correlations
     #basic_info(ITSs)
 
-    # ALSO! Ignore any its object with negative AP. DOn't include those in your
-    # correlations.
-
-    # re-plot the normalized AP
-    # currently, the AP reflects sequence-global values. This makes it
-    # difficult to compare AP between itss.
-
-    #ITSs = sortITS(ITSs, 'PY')
-
-    #print('Sorted by PY:')
-    #fold_difference(ITSs)
-    ## Plot basic info (FL, PY, total RNA) for the different quantitations
-    #data_overview(ITSs)
-    #print()
-
-    ## do the same but now sorted by Keq
+    ## plot data when sorting by SE
     #ITSs = sortITS(ITSs, 'SE')
-    ##ITSs = sortITS(ITSs, 'name')
 
-    #print('Sorted by SE:')
     #fold_difference(ITSs)
-    ## Plot basic info (FL, PY, total RNA) for the different quantitations
+    ## Plot FL, PY, total RNA for the different quantitations
     #data_overview(ITSs)
 
     # plot correlation between Keq and AP and Raw
@@ -1237,161 +1322,14 @@ def main():
     # XXX bar plot of the sum of AP and the sum of raw
     #apRawSum(dg100, dg400)
 
-    # XXX moving average of AP vs PY/FL/TA and AP vs sum(Keq)
+    # XXX moving average of AP vs PY/FL/TA
     #moving_average_ap(dg100, dg400)
 
     # XXX moving average between AP and Keq
     moving_average_ap_keq(dg100, dg400)
-    # When you have these two plots -- what is your story? First you need to
-    # find out if your theory about dgdna dng rna scrunched complex works.
-    # in general XXX try to introduce energy in scrunched complex, but be
-    # explicit that there could somehow be other iniosyncrhic effects of
-    # scrunching DNA.
 
-    # OK is this a dead end? there is more fold variation within abortive RNA
-    # than within FL. However, variation in PY correlates just as much with FL
-    # as abortive RNA. We can say howver: by varying the ITS, one obtains a
-    # higher fold-variation in abortive product than in full length product,
-    # indicating that the nucleotide variation leads to greatest variation in
-    # overall aborted product. (Can I show this graphically? how important will
-    # it be?)
-
-    # RESULT: shit, it looks like variation in FL is driving variation in SE15
-    # TODO: find another way of quantifying the linear fold variation?
-    # It seems that with your current way of calculating Keq (c3=1 etc) you
-    # don't get the same order of the DG4xx promoters. That's one thing.
-    # Another is that after re-ordering according to Keq, it seems that
-    # there is more variation in FL along the Keq-dimension than in TA.
-    # This goes contrary to what you had hypothesized. It's a bit of a blow for
-    # your theory.
-
-    # TODO make this agnostic to sizes in the ITS list
-    #visual_inspection(ITSs, variable='Raw')
-
-    # RESULT: variation in abortive RNA drives variation in PY
-
-    # RESULTS: some observations (obs: they are sensitive to the first/second
-    # quantitation -- they are valid for the first and the mean(first, second):
-    # * The outlier DG434 has unusually much abortive transcript and very
-    #   little full length
-    # * The "first" 4 predicted itss have pretty high FL -- but they also have
-    #   high A, which gives them an overall low PY
-    # * After DG435 total A transcript remains more or less the same,
-    #   while the amount of FL transcript increases -- this causes the increase
-    #   in PY. Any model would actually need this raw information... lol
-
-    # Print the mean and std of FL, PY, total RNA for the different quants
-    #quant_stats(ITSs, sortby='Keq')
-
-    # Check if the 3D positions with high AP/Raw data have different DGDNA or
-    # DGRNA than the 3D positions with low AP/Raw
-
-    # Select 3D positions from check DG energies -0 -1 and -2 from the site --
-    # more minus the longer the x-mer?
-
-    # If nothing works... what is your exit strategy? Show that Keq, and
-    # neither DGBUBBle nor DGHYBRID correlate with the abortive probabilities
-
-    # 1) Use the DG100 series to get the weights
-    #testing = True  # Fast calculations
-    # c1: dna, c2: rna, c3: 3'dinuc
-
-    # 2) Use the DG400 series to correlate Keq with AP and Raw
-    # 3) Do those with low AP have DNA-bubble RNA-DNA energy up to that point?
     return ITSs
 
-    """
-    i) How does the different delta G values correlate with AP (-2, -1, 0, +1,
-    +2) around the
-
-    You need to present a story right? So let's start there. The first step
-
-    1) You found that PY correlates with Keq through optimization
-
-    2) You reason that this is because occupation of the pre-translocated state
-    increases the chance of backtracking (cite several papers, incl. 2012),
-    leading to increased abortive initiation (backed up by the fact that)
-    variation in abortive RNA drives the variation in PY (can I give a
-    percentage?)
-
-    3) Therefore, you check out the abortive probabilities. However, comparing
-    the Keq values to AP at each position gives zero correlation.
-
-    4) Therefore, you postulate that while the DG 3'end sequence may predispose
-    for the initial backtracking step, the subsequence steps of bubble collapse
-    might be sequence dependent in some different way, like through DG-DNA or
-    DG-RNADNA
-
-    5) Hey -- these variants have the same promoter -- yet their total RNA,
-    total aborted, and total FL vary between the variants. Depending on the
-    speed of the aborted rate, it takes more time to synthesize a FL transcript
-    than to abort. If transcript abortivity happens fast, you'd expect more
-    total RNA for the high-aborters. If transcript abortivity is slow, you'd
-    expect less total RNA for the high-aborters.
-
-    Can you classify them in other interesting cases? What does it mean if five
-    promoters have the same FL but different total abortive? I think it means
-    that bubble collapse happens more easily for those that have high abortive?
-    But if bubble collapse happens more easily, these promoters also
-    re-initiate faster, which may increase the FL as well.
-
-    It would be nice to have a state-driven model (Xie et al...) where one
-    could try to tweak these different values.
-
-    The AP share this assumption: that bubble collapse happens at the same rate
-    given a backtracking event. If bubble collapse is reduced in speed at a
-    given position (like for a 13 nt compared to a 4 nt -- or the other way
-    around!) then the AP is not valid any more. There may be a lot of
-    backtracking happening that is not recorded.
-
-    Can information about this be had from the GreB+ experiments? What is the
-    expected effect of GreB -- cleave to restart elongation. This means that
-    only the quickest backtracking events will pass through. If backtracking
-    was super-duper quick, GreB could not have any effect. Hence, there must be
-    some intermediary state between backtracking and bubble collapse where GreB
-    has the time to act. The half-life of this intermediary state can make a
-    big contribution on the AP.
-
-    Compare two backtracking events: both will reduce the # of FL transcript by
-    1. However, if one backtracked complex dwells long in an intermedate state,
-    the abortive transcript of length x will be less for this ITS ->
-    paradoxically giving this variant a higher PY! :S --> however, the other
-    one who collapses his bubble fast will more quicker have a new shot at
-    producing another FL, which may increase the final FL value, thereby
-    equalizing this? All this is not certain and a rigorous mathematical
-    analysis must be employed to understand it.
-
-    Can you anyway try to say something about the dwell times of the
-    backtracked complexes? Is it likely that the dwell-time depends on the free
-    energy of the RNA-DNA hybrid and the DNA-DNA bubble? A strong hybrid
-    prolongs the dwell time and a weak bubble shortens it?
-
-    There are several unknowns: does backtracking happen in a step-by-step
-    manner until collapse? Or is it with a P(distance-untill-dwell-spot)
-    distribution that varies for each position, depending on the length of the
-    position and the bubble and RNADNA energies? And from that initial
-    distance, there is yet another P(collapse) which can be possion-distributed
-    with different parameters, depending partly on the distance and partly on
-    the energies of the RNA-DNA and DNA-DNA.
-
-    Another aspect is if there is an intrinsic difference between backtracking
-    when before and after full hybrid length is reached -- full hybrid length
-    could be stabilizing, making further backtracking and bubble collapse
-    less likely -- more than can be accounted for by the free energy alone;
-    the full hybrid can act structurally stabilizing in ways unrelated to free
-    energy. But most backtracking happens before the 10-mark.. right?
-
-    Give yourself the freedom to optimize for FL, TAbortive, and TRNA, does
-    that help?
-
-    AP has adjusted for the fact that most abortive production happens early in
-    the ITS.
-
-    Let's say that for a given ITS, for the same P(backtrack), if AP varies
-    greatly, this is because of a difference in the collapsability.
-
-    To start with something, can you calculate the following:
-    """
 
 if __name__ == '__main__':
     ITSs = main()
