@@ -1189,7 +1189,8 @@ def moving_average_ap_keq(dg100, dg400):
 
     movSize = 0
 
-    xmers = range(2, 21)
+    # Ignore 2, since it's just AT and very little variation occurs.
+    xmers = range(3, 21)
 
     # get a moving average window for each center_position
     # calculating from an x-mer point of view
@@ -1283,7 +1284,7 @@ def main():
     # Add keq-values by first calculating c1, c2, c3
     for ITSs in [dg100, dg400]:
         #c1, c2, c3 = optimize(ITSs, testing, target='PY', analysis='Normal')
-        c1, c2, c3 = [0.23, 0.07, 0.95]
+        c1, c2, c3 = [0.13, 0.07, 0.81]
 
          #add the constants to the ITS objects and calculate Keq
         for its in ITSs:
@@ -1326,6 +1327,7 @@ def main():
     #moving_average_ap(dg100, dg400)
 
     # XXX moving average between AP and Keq
+    # the AP - Keq correlation depends only on DG3D, not on DGRNA-DNA etc.
     moving_average_ap_keq(dg100, dg400)
 
     return ITSs
