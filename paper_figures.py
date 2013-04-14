@@ -3,8 +3,7 @@ New, class based attempt at getting some rigour into creating figures for your
 papers. You need more flexibility in terms of subfiguring and not re-running
 simulations just to change figure data.
 
-You also need to do some new calculations based on DG3D and DGbubble and DG
-hybrid.
+A de-coupling of data generation and figure creation.
 """
 from __future__ import division
 
@@ -16,8 +15,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import optim
 import os
-from scipy.stats import spearmanr, pearsonr, nanmean, nanstd, nanmedian  # NOQA
+import cPickle as pickle  # NOQA
 from operator import attrgetter
+from scipy.stats import spearmanr, pearsonr, nanmean, nanstd, nanmedian  # NOQA
+from scipy.interpolate import InterpolatedUnivariateSpline as interpolate
+from scipy import optimize
 
 # Global variables :)
 #here = os.getcwd()  # where this script is executed from! Beware! :)
@@ -25,6 +27,46 @@ here = os.path.abspath(os.path.dirname(__file__))  # where this script is locate
 fig_dir1 = os.path.join(here, 'figures')
 fig_dir2 = '/home/jorgsk/Dropbox/The-Tome/my_papers/rna-dna-paper/figures'
 fig_dirs = (fig_dir1, fig_dir2)
+
+
+class Fit(object):
+
+    def linear_function(self, B, x):
+        """
+        Linear fit -- for comparison
+        """
+        return B[0]*x + B[1]
+
+    def linear_error(self, B, x, y):
+        """
+        """
+        return y - self.linear_function(B, x)
+
+    def sigmoid_function(self, B, x):
+        """
+        B is the parameters and x is the SE_15
+        """
+        #return B[0]/(B[1]+B[2]*np.exp(-x))
+        return (B[1]+B[2]*np.exp(-B[3]*x))/B[0]
+
+    def sigmoid_error(self, B, x, y):
+        """
+        """
+        return y - self.sigmoid_function(B, x)
+
+    def exponential_function(self, B, x):
+        """
+        B is the parameters and x is the SE_15
+        """
+
+        #return B[0] + B[1]*np.exp(B[2]*x)
+        #return B[0] + B[1]/np.exp(B[2]*x)
+        return B[1]/np.exp(B[2]*x)
+
+    def exponential_error(self, B, x, y):
+        """
+        """
+        return y - self.exponential_function(B, x)
 
 
 class SimulationResult(object):
@@ -41,21 +83,429 @@ class SimulationResult(object):
         self.simulated = False
 
 
-class PlotObject(object):
+class Calculator(object):
     """
-    Holds the the information needed to plot
+    Performs the calculations needed for the plotter. This ensures that
+    plotting and value-calculating can be run separately.
+
+    Each calculator class has a corresponding plotting class
     """
 
-    def __init__(self, x_ticks):
-        self.plotName = ''
-        self.xTicks = x_ticks
-        self.yTicks = 0
-        self.xTickFontSize = 0
-        self.xTickFontSize = 0
+    def __init__(self, ITSs, calcName='myCalc', testing=True):
 
-        self.nrSubolots = 1
+        self.ITSs = ITSs
+        self.testing = testing
 
-        self.imageSize = [1, 4]
+        self.delinResults = {}
+
+    def getDelineatorResults(self):
+        return self.delinResults
+
+    def delineatorCalc(self):
+        """
+        Add sequentially DG3D, DGRNADNA, DGDNADNA
+        Perform re-optimization.
+
+        How to store this information? How about a dictionary
+
+        Double dictionary [FalseFalseTrue][name] -> [keq1, keq2, keq3, ...]
+
+        [name] -> [keq1, keq2, keq3]
+        """
+
+        delineateResultsOrder = ['DNA', 'RNA', '3D']
+
+        # include the 3 variables sequentially
+        varCombinations = [{'DNA':False, 'RNA':False, '3D':True},
+                           {'DNA':True,  'RNA':False, '3D':True},
+                           {'DNA':True,  'RNA':True,  '3D':True}]
+
+        # set the range for which you wish to calculate correlation
+        itsMin = 2
+        itsMax = 20
+        itsRange = range(itsMin, itsMax+1)
+        if self.testing:
+            itsRange = [itsMin, 5, 10, 15, itsMax]
+
+        for combo in varCombinations:
+
+            comboKey = ''.join([str(combo[v]) for v in delineateResultsOrder])
+
+            # the optimal c1, c2, c3 associated with the variable set
+            c1, c2, c3 = optimizeParam(self.ITSs, itsRange, self.testing,
+                    analysis='Normal', variableCombo=combo)
+
+            # add the constants to the ITS objects and calculate Keq
+            for its in self.ITSs:
+                its.calc_keq(c1, c2, c3)
+
+            # calculate the correlation with PY
+            indx, corr, pvals = self.correlateSE_PY(itsRange)
+
+            self.delinResults[comboKey] = [indx, corr, pvals]
+
+    def correlateSE_PY(self, itsRange):
+        """
+        Return three lists: indices, corr-values, and p-values
+        Correlation between SE_n and PY
+        """
+
+        PY = [i.PY for i in self.ITSs]
+
+        indx = itsRange
+        corr = []
+        pvals = []
+
+        # YOU ARE HERE
+        for ind in itsRange:
+
+            SEn = [sum(i.keq[:ind]) for i in self.ITSs]
+
+            co, pv = spearmanr(SEn, PY)
+
+            corr.append(co)
+            pvals.append(pv)
+
+        return indx, corr, pvals
+
+    def dg400_validation(self):
+        """
+        Calculate the SE_n and correlate them with the experimentally measured
+        SE_n values for the DG400 library.
+        """
+
+        # 2) Calculate the PY scores for them.
+        c1, c2, c3 = (0.33, 0, 0.95)
+
+        # add the constants to the ITS objects and calculate Keq
+        for its in self.ITSs:
+            its.calc_keq(c1, c2, c3)
+
+        # get PY and PY standard deviation
+        PY = [i.PY for i in self.ITSs]
+        PYstd = [i.PY_std for i in self.ITSs]
+
+        # Get the SE15
+        SE15 = [sum(i.keq[:15]) for i in self.ITSs]
+
+        return SE15, PY, PYstd
+
+        # write all of this to an output file
+        #write_py_SE15(tested_PY, SE15)
+
+
+class Plotter(object):
+    """
+    Object that deals with plotting. Knows about the plotting parameters
+    (ticks, number of axes) and the figure and axes objects.
+
+    Contains routines for plotting onto the axes. These routines are the plots
+    that enter the paper.
+    """
+
+    def __init__(self, YaxNr=1, XaxNr=1, plotName='MyPlot'):
+
+        # initialized the matplotlib figure
+        # squeeze=False guarantees that axes will be a 2d array
+        self.figure, self.axes = plt.subplots(YaxNr, XaxNr, squeeze=False)
+
+        self.plotName = plotName
+        self.xTicks = []
+        self.yTicks = []
+        self.xTickFontSize = 8
+        self.xTickFontSize = 8
+
+        # number of sublots in the x and y direction
+        self.YaxNr = YaxNr
+        self.XaxNr = XaxNr
+        self.nrSubplots = YaxNr*XaxNr  # convenience value
+
+        # keep track of the current plot position
+        self._nextXaxNr = 0
+        self._nextYaxNr = 0
+
+    def setFigSize(self, xCm, yCm):
+
+        widthInch = mm2inch(xCm)
+        heightInch = mm2inch(yCm)
+
+        self.figure.set_size_inches(widthInch, heightInch)
+
+    def getNextAxes(self):
+        """
+        Return the next axes. The axes are cycled through from top to down,
+        from left to right. The axes for a 2X3 subplot would be returned in the
+        order x_1y_1, x_1y_2, x_2y_1, x_2y_2, x_3y_1, x_3y_2
+
+        """
+
+        # assume last axis has been reached
+        provideAx = False
+
+        # test if there is room for more subplots. Special cases of the test if
+        # one axis has only 1 entry
+        if (self.XaxNr == 1) and (self._nextYaxNr < self.YaxNr):
+            provideAx = True
+        if (self.YaxNr == 1) and (self._nextXaxNr < self.XaxNr):
+            provideAx = True
+
+        # general case: more than 1 entry in both directions
+        if self._nextXaxNr*self._nextYaxNr <= self.nrSubplots:
+            provideAx = True
+
+        if provideAx:
+            nextAx = self.axes[self._nextXaxNr, self._nextYaxNr]
+        else:
+            print('No more subplots will fit on these axes!! >:|')
+
+        # update the count for obtaining the next axis element
+        if self._nextYaxNr < self.YaxNr:
+            self._nextYaxNr += 1
+        else:
+            self._nextYaxNr = 0
+            self._nextXaxNr +=1
+
+        return nextAx
+
+    def delineatorPlot(self, delineateResults):
+        """
+        delineateResults is a double dictionary
+        Double dictionary [FalseFalseTrue][name] -> [indx, corr, pvals]
+        where the the three lists are the indices correlation and pvaleus for
+        correlation between PY and SE_indx
+
+        Where the falsetrues are in the order DNA RNA 3D
+        So the above example would be the keq values from optimizing only on 3D
+        """
+
+        ymin = -0.2  # correlation is always high
+
+        ax = self.getNextAxes()
+
+        colors = ['b', 'g', 'k']
+        lstyle = ['-', '-', '-']
+
+        # convert from dict-keys to plot labels
+        key2label = {
+                'FalseFalseTrue': '$\Delta{3D}$',
+                'TrueFalseTrue': '$\Delta{DNA-DNA}+\Delta{3D}$',
+                'TrueTrueTrue': '$\Delta{RNA-DNA}+\Delta{DNA-DNA}+\Delta{3D}$',
+                }
+
+        for key, label in key2label.items():
+            color = colors.pop()
+            ls = lstyle.pop()
+
+            # indices, correlation coefficients, and pvalues SE - PY
+            indx, corr, pvals = delineateResults[key]
+
+            # make x-axis (same as incoming index)
+            incrX = indx
+            # invert the correlation for 'upward' plot purposes
+            corr = [-c for c in corr]
+            # check for nan in corr (make it 0)
+            corr, pvals = remove_nan(corr, pvals)
+
+            ax.plot(incrX, corr, label=label, linewidth=3, color=color, ls=ls)
+
+            # interpolate pvalues (x, must increase) with correlation (y) and
+            # obtain the correlation for p = 0.05 to plot as a black
+            p_line = False
+            if p_line and label.startswith('$\Delta{RNA'):
+                # hack to get pvals and corr coeffs sorted
+                pv, co = zip(*sorted(zip(pvals, corr)))
+                f = interpolate(pv, co, k=1)
+                ax.axhline(y=f(0.05), ls='--', color='r', linewidth=3)
+
+            indxMax = indx[-1]
+            xticklabels = [str(integer) for integer in range(3, indxMax)]
+
+            #Make sure ymin has only one value behind the comma
+            ymin = float(format(ymin, '.1f'))
+            yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -1.1, -0.1)]
+
+            # legend
+            ax.legend(loc='lower right', prop={'size': 7})
+
+            # xticks
+            ax.set_xticks(range(3, indxMax))
+            #ax.set_xticklabels(xticklabels)
+            ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='odd'))
+            ax.set_xlim(3, indxMax)
+            ax.set_xlabel("RNA length, $n$", size=10)
+
+            # awkward way of setting the tick font sizes
+            for l in ax.get_xticklabels():
+                l.set_fontsize(10)
+            for l in ax.get_yticklabels():
+                l.set_fontsize(10)
+
+            ax.set_ylabel("Correlation coefficient, $r$", size=10)
+
+            ax.set_yticks(np.arange(ymin, 1.1, 0.1))
+            #ax.set_yticklabels(yticklabels)
+            ax.set_yticklabels(odd_even_spacer(yticklabels))
+            ax.set_ylim(ymin, 1.0001)
+            ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                          alpha=0.5)
+            ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                          alpha=0.5)
+
+    def dg400validater(self, dg400, SE15, PY, PYstd):
+
+        ax = self.getNextAxes()
+
+        ax.scatter(SE15, PY)
+        ax.errorbar(SE15, PY, yerr=PYstd, fmt=None)
+
+        ########### Set figure and axis properties ############
+        ax.set_xlabel('SE$_{15}$', size=12)
+        ax.set_ylabel('PY', size=12)
+
+        xmin, xmax = min(SE15), max(SE15)
+        xscale = (xmax-xmin)*0.1
+        ax.set_xlim(xmin-xscale, xmax+xscale)
+
+        ymin, ymax = min(PY), max(PY)
+        yscale_low = (ymax-ymin)*0.2
+        yscale_high = (ymax-ymin)*0.3
+        ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
+
+        # shown only every other tick
+        xticklabels_skip = odd_even_spacer(ax.get_xticks(), oddeven='odd',
+                                           integer=True)
+        ax.set_xticklabels(xticklabels_skip)
+
+        for l in ax.get_xticklabels():
+            l.set_fontsize(10)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(10)
+        #######################
+
+        fit_function = True
+        # add a polynomial or sigmoid fit
+        if fit_function:
+            self.add_fitted_function(ax, PY, SE15)
+
+        dg400dict = dict(((o.name, o) for o in dg400))
+
+        specials = ['N25', 'N25/A1anti', 'DG115a', 'DG133']
+        for name in specials:
+
+            # maybe you've already skipped these
+            if name not in dg400dict:
+                continue
+
+            SE15 = sum(dg400dict[name].keq[:15])
+            PY = dg400dict[name].PY
+
+            box_x = 30
+            box_y = 20
+
+            if name == 'N25_A1anti':
+                name = 'N25/A1anti'
+                box_x = 50
+                box_y = 30
+
+            if name == 'DG133':
+                box_x = 30
+                box_y = 20
+
+            if name == 'DG115a':
+                box_x = 5
+                box_y = -30
+
+            colr = 'yellow'
+            ax.annotate(name,
+                    xy=(SE15, PY), xytext=(box_x,box_y), textcoords='offset points',
+                        bbox=dict(boxstyle='round, pad=0.5', fc=colr,
+                                  alpha=0.5), ha='right', va='bottom',
+                        arrowprops=dict(arrowstyle='->',
+                                        connectionstyle='arc3,rad=0'), size=8)
+
+    def add_fitted_function(self, ax, PY, SE15):
+        """
+        Add a sigmoid fit to the plot
+        """
+
+        x = np.array(SE15)
+        y = np.array(PY)
+
+        # List with tuples of the differnt functions you fit to
+
+        F = Fit()
+
+        ffuncs = [('Sigmoid', F.sigmoid_error, F.sigmoid_function),
+                 ('Linear', F.linear_error, F.linear_function),
+                 ('Exponential', F.exponential_error, F.exponential_function)]
+
+        mean_y = np.mean(y)
+        B0 = [1, 3, 0.2, 0.01]
+        #B0 = [3, 10, 0.2]
+        for (fname, f_error, f_function) in ffuncs:
+            fit = optimize.leastsq(f_error, B0, args=(x, y))
+            outp_args = fit[0]
+            fit_vals = [f_function(outp_args, x_val) for x_val in x]
+
+            # residual sum of squares
+            sst = sum([(y_1 - mean_y)**2 for (y_1, f_1) in zip(y, fit_vals)])
+            # total sum of squares (proportional to variance)
+            sse = sum([(y_1 - f_1)**2 for (y_1, f_1) in zip(y, fit_vals)])
+
+            # Coefficient of determination R squared:
+            Rsq = 1 - sse/sst
+            print('{0}: coefficient of determination: {1}'.format(fname, Rsq))
+
+        # Normal least squares on sigmoid fit
+        #B0 = [1, 1, 1]
+        ##391.535639527
+        ##15.0590630587
+
+        # Normal least squares on linear fit
+        #B0 = [1, 1]
+        #fit = optimize.leastsq(linear_error, B0, args=(x, y))
+        #outp_args = fit[0]
+        #fit_vals = [linear_function(outp_args, x_val) for x_val in x]
+        ##359.388266403 total
+        ##13.8226256309 averaged
+        plt.ioff()
+
+        F = Fit()
+
+        # Normal least squares on exponential fit
+        B0 = [1, 40, 0.02, 0.01]
+        fit = optimize.leastsq(F.exponential_error, B0, args=(x, y))
+        outp_args = fit[0]
+        fit_vals = [F.exponential_function(outp_args, x_val) for x_val in x]
+
+        #B0 = [1, 3, 10, 0.01]
+        #fit = optimize.leastsq(F.sigmoid_error, B0, args=(x, y))
+        #outp_args = fit[0]
+        #fit_vals = [F.sigmoid_function(outp_args, x_val) for x_val in x]
+
+        # sort by increasing x-value
+        (sort_x, sort_fit) = zip(*sorted(zip(x, fit_vals)))
+
+        # residual sum of squares
+        sst = sum([(y_1 - mean_y)**2 for (y_1, f_1) in zip(y, fit_vals)])
+        # total sum of squares (proportional to variance)
+        sse = sum([(y_1 - f_1)**2 for (y_1, f_1) in zip(y, fit_vals)])
+
+        # Coefficient of determination R squared:
+        Rsq = 1 - sse/sst
+
+        #print('Coefficient of determination: {0}'.format(Rsq))
+
+        # odd_ least squares
+        #my_model = odr.Model(sigmoid_function)
+        #my_data = odr.Data(x,y)
+        #my_odr = odr.ODR(my_data, my_model, beta0=B0)
+        ## fit type 2 for least squares
+        #my_odr.set_job(fit_type=2)
+        #fit = my_odr.run()
+        # XXX I didn't get a nice fit this way, but keep code just in case
+
+        ax.plot(sort_x, sort_fit, linewidth=2)
 
 
 class AP(object):
@@ -65,6 +515,62 @@ class AP(object):
         self.ap = ap
         self.dgDna = dgDna
         self.dgRna = dgRna
+
+
+def odd_even_spacer(vals, oddeven='even', integer=False):
+    out = []
+    if oddeven == 'odd':
+        for val_nr, val in enumerate(vals):
+            if val_nr % 2:
+                if integer:
+                    out.append(int(val))
+                else:
+                    out.append(val)
+            else:
+                out.append(' ')
+    else:
+        for val_nr, val in enumerate(vals):
+            if not val_nr % 2:
+                if integer:
+                    out.append(int(val))
+                else:
+                    out.append(val)
+            else:
+                out.append(' ')
+
+    return out
+
+
+def remove_nan(corr, pval):
+    """
+    Replace nans in corr and pval with 0 and 1. If not dont replace anything.
+    """
+
+    if True in np.isnan(corr):
+        newcorr = []
+        for inx, truthvalue in enumerate(np.isnan(corr)):
+            if truthvalue is True:
+                newcorr.append(0)
+            else:
+                newcorr.append(corr[inx])
+
+        corr = newcorr
+
+    if True in np.isnan(pval):
+        newpval = []
+        for inx, truthvalue in enumerate(np.isnan(pval)):
+            if truthvalue is True:
+                newpval.append(1)
+            else:
+                newpval.append(pval[inx])
+
+        pval = newpval
+
+    return corr, pval
+
+
+def mm2inch(mm):
+    return float(mm)/25.4
 
 
 def visual_inspection(ITSs, variable='AP'):
@@ -120,7 +626,8 @@ def visual_inspection(ITSs, variable='AP'):
         plt.show()
 
 
-def optimize(ITSs, testing=True, target='PY', analysis='Normal'):
+def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
+        onlySignCoeff=0.05, variableCombo={'DNA':True, 'RNA':True, '3D':True}):
     """
     Optimize c1, c2, c3 to obtain max correlation with PY/FL/TA/TR
 
@@ -135,11 +642,10 @@ def optimize(ITSs, testing=True, target='PY', analysis='Normal'):
 
     # grid size
     grid_size = 20
-
     if testing:
-        grid_size = 6
+        grid_size = 8
 
-    # assume normal and no randomization or cros correlation analysis
+    # assume normal and no randomization or cross correlation analysis
     randize = 0
     crosscorr = 0
 
@@ -155,28 +661,23 @@ def optimize(ITSs, testing=True, target='PY', analysis='Normal'):
         print('Give correct analysis parameter name')
         1/0
 
-    # only use PY for correlation kthnkx
-    #targetAttr = {'PY': 'PY',
-                  #'FL': 'FL',
-                  #'TA': 'totAbort',
-                  #'TR': 'totRNA'
-                  #}
-
     # Parameter ranges you want to test out
-    c1 = np.array([1])  # insensitive to variation here
-    c2 = np.linspace(0, 1.0, grid_size)
-    c3 = np.linspace(0, 1.0, grid_size)
-    c4 = np.linspace(0, 1.0, grid_size)
+    if variableCombo['RNA']:
+        c1 = np.linspace(0, 1.0, grid_size)
+    else:
+        c1 = np.array([0])
 
-    par_ranges = (c1, c2, c3, c4)
+    if variableCombo['DNA']:
+        c2 = np.linspace(0, 1.0, grid_size)
+    else:
+        c2 = np.array([0])
 
-    its_min = 2
-    its_max = 21
-    #if testing:
-        #its_max = 15
+    if variableCombo['3D']:
+        c3 = np.linspace(0, 1.0, grid_size)
+    else:
+        c3 = np.array([0])
 
-    its_range = range(its_min, its_max)
-    #its_range = [its_min, 5, 10, 15, its_max]
+    par_ranges = (c1, c2, c3)
 
     all_results = optim.main_optim(its_range, ITSs, par_ranges, randize,
             crosscorr, normal)
@@ -191,52 +692,74 @@ def optimize(ITSs, testing=True, target='PY', analysis='Normal'):
     else:
         print('WTF mate')
 
+    # Print some output and return one value for c1, c2, and c3
+    outp = get_print_parameterValue_output(results, its_range, onlySignCoeff,
+            analysis)
+
+    return outp
+
+
+def get_print_parameterValue_output(results, its_range, onlySignCoeff, analysis):
+    """
+    Analyze and print some of the output parameter values
+
+    It's not straightforward how to calculate return parameter values c2, c3,
+    c4. You have tried to average all, and average just significant values.
+
+    Another approach could be to average the top 3 results.
+
+    Interesting: what happens if you overlay the c2, c3, c4 values with the
+    Keq-AP calculations?
+    """
+
+    # output
     outp = {}
 
     # print the mean and std of the estimated parameters
-    for param in ['c1', 'c2', 'c3', 'c4']:
+    for param in ['c1', 'c2', 'c3']:
         parvals = [results[pos].params_best[param] for pos in its_range]
         pvals = [results[pos].pvals_min for pos in its_range]
         meanpvals = [results[pos].pvals_mean for pos in its_range]
         maxcorr = [results[pos].corr_max for pos in its_range]
         meancorr = [results[pos].corr_mean for pos in its_range]
 
-        # only report parameter values which correspond to significant correlation
-        significantParvals = []
+        Parvals = []
         for ix, pval in enumerate(pvals):
-            if pval > 0.05:
+            # if set, only collect parameters corresponsing to significant
+            # correlation
+            if onlySignCoeff < 0.05:
                 continue
 
             # don't consider rna-dna until after full hybrid length is reached
             if param == 'c2' and ix < 8:
-                significantParvals.append(0)
+                Parvals.append(0)
             else:
-                significantParvals.append(parvals[ix])
+                Parvals.append(parvals[ix])
 
-        print param, significantParvals
+        print param, Parvals
 
         # ignore nan in mean and std calculations
-        mean = nanmean(significantParvals)
-        median = nanmedian(significantParvals)
-        std = nanstd(significantParvals)
+        mean = nanmean(Parvals)
+        median = nanmedian(Parvals)
+        std = nanstd(Parvals)
 
         print('{0}: {1:.2f} (mean) or {0}: {2:.2f} (median) +/- '
                 '{3:.2f}'.format(param, mean, median, std))
 
         outp[param] = mean
 
-    # print correlations
-    if analysis == 'Normal':
-        print("Normal analysis: max correlation and corresponding p-value")
+        # print correlations
+        if analysis == 'Normal':
+            print("Normal analysis: max correlation and corresponding p-value")
 
-        for nt, c, p in zip(its_range, maxcorr, pvals):
-            print nt, c, p
-    else:
-        print("Random or cross-correlation: mean correlation and pvalues")
-        for nt, c, p in zip(its_range, meancorr, meanpvals):
-            print nt, c, p
+            for nt, c, p in zip(its_range, maxcorr, pvals):
+                print nt, c, p
+        else:
+            print("Random or cross-correlation: mean correlation and pvalues")
+            for nt, c, p in zip(its_range, meancorr, meanpvals):
+                print nt, c, p
 
-    return outp['c2'], outp['c3'], outp['c4']
+    return outp['c1'], outp['c2'], outp['c3']
 
 
 def data_overview(ITSs):
@@ -1242,9 +1765,6 @@ def moving_average_ap_keq(dg100, dg400):
 
     filename = 'AP_vs_Keq'
 
-    def mm2inch(mm):
-        return float(mm)/25.4
-
     # Should be 8.7 cm
     # 1 inch = 25.4 mm
     width = mm2inch(127)
@@ -1266,7 +1786,8 @@ def moving_average_ap_keq(dg100, dg400):
 
 def main():
 
-    remove_controls = True
+    #remove_controls = True
+    remove_controls = False
 
     dg100 = data_handler.ReadData('dg100-new')  # read the DG100 data
     dg400 = data_handler.ReadData('dg400')  # read the DG100 data
@@ -1274,25 +1795,33 @@ def main():
     ITSs = dg100
 
     if remove_controls:
-        controls = ['DG133', 'DG115a', 'N25', 'N25anti']
+        controls = ['DG133', 'DG115a', 'N25', 'N25anti', 'N25/A1anti']
         dg400 = [i for i in dg400 if not i.name in controls]
 
     # lower resolution while testing
     #testing = False
     #testing = True
 
+    # set the range of values for which you wish to calculate correlation
+    #itsMin = 2
+    #itsMax = 21
+    #itsRange = range(itsMin, itsMax)
+    #if testing:
+        #itsRange = [itsMin, 5, 10, 15, itsMax]
+
     # Add keq-values by first calculating c1, c2, c3
-    for ITSs in [dg100, dg400]:
-        #c1, c2, c3 = optimize(ITSs, testing, target='PY', analysis='Normal')
-        c1, c2, c3 = [0.13, 0.07, 0.81]
+    #for ITSs in [dg100, dg400]:
+
+        #c1, c2, c3 = optimizeParam(ITSs, itsRange, testing, analysis='Normal')
+        #c1, c2, c3 = [0.13, 0.07, 0.81]
 
          #add the constants to the ITS objects and calculate Keq
-        for its in ITSs:
-            its.calc_keq(c1, c2, c3)
+        #for its in ITSs:
+            #its.calc_keq(c1, c2, c3)
 
     # Return c1, c2, c3 values obtained with cross-validation
-    #optimize(dg100, testing, target='PY', analysis='Cross Correlation')
-    #optimize(dg100, testing, target='PY', analysis='Normal')
+    #optimizeParam(dg100, itsRange,  testing, analysis='Cross Correlation')
+    #optimizeParam(dg100, itsRange, testing, analysis='Normal')
 
     #ITSs = dg100
     #ITSs = dg400
@@ -1314,21 +1843,59 @@ def main():
     # add possibility for screening for high/low dnadna dnarna values
     #keq_ap_raw(ITSs)
 
-    # XXX ap keq for all positions
+    # ap keq for all positions
     #plus_minus_keq_ap(dg100, dg400)
 
-    # XXX ap keq at each position
+    # ap keq at each position
     #position_wise_correlation_shifted(dg100, dg400)
 
-    # XXX bar plot of the sum of AP and the sum of raw
+    # bar plot of the sum of AP and the sum of raw
     #apRawSum(dg100, dg400)
 
-    # XXX moving average of AP vs PY/FL/TA
+    # moving average of AP vs PY/FL/TA
     #moving_average_ap(dg100, dg400)
 
-    # XXX moving average between AP and Keq
+    ### Below this line are figures that appear in the paper ###
+
+    # moving average between AP and Keq
     # the AP - Keq correlation depends only on DG3D, not on DGRNA-DNA etc.
-    moving_average_ap_keq(dg100, dg400)
+    #moving_average_ap_keq(dg100, dg400)
+
+    ###################### FIGURE DELINEATE + DG400 ########################
+    # A figure that combines the 'delineate' and scatter plot for DG400 figures
+
+    #testing = False
+    testing = True
+    #calcrDelin = Calculator(dg100, calcName='delineate', testing=testing)
+
+    # calcuate values for the delineate plot
+    #calcrDelin.delineatorCalc()
+    #delResults = calcrDelin.getDelineatorResults()
+
+    #pickle the results for re-usage
+    saveFilePath = 'pickledData/delineate'
+    #saveFileHandle = open(saveFilePath, 'wb')
+    #pickle.dump(delResults, saveFileHandle)
+    #saveFileHandle.close()
+
+    openFileHandle = open(saveFilePath, 'rb')
+    delResults = pickle.load(openFileHandle)
+    openFileHandle.close()
+
+    plotr = Plotter(YaxNr=1, XaxNr=2, plotName='delineate')
+    plotr.delineatorPlot(delResults)  # plot the delineate plot
+
+    # calculate values for the DG400 scatter plot
+    calcrValidation = Calculator(dg400, calcName='validation', testing=testing)
+
+    SE15, PY, PYstd = calcrValidation.dg400_validation()
+
+    plotr.dg400validater(dg400, SE15, PY, PYstd)
+
+    plt.show()
+
+    ## once you agree on all data: run them all and pickle the results. Then,
+    # you only have to rerun those where you want to change some input data.
 
     return ITSs
 

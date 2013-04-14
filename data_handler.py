@@ -186,14 +186,10 @@ class ITS(object):
         rna_dna = self.rna_dna_di[:its_len-2]
         dg3d = self.keq_delta_di_b[:its_len-2]
 
-        # the c1, c3, c4 values
-        c0 = 1
-
         # equilibrium constants at each position
         import optim
-        self.keq = optim.keq_i(RT, its_len, dg3d, dna_dna, rna_dna, c0, c1, c2, c3)
 
-        self.SE = sum(self.keq[SE_beg-2:])
+        self.keq = optim.keq_i(RT, its_len, dg3d, dna_dna, rna_dna, c1, c2, c3)
 
 
 def PYHsu(filepath):

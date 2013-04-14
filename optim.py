@@ -64,9 +64,7 @@ class Result(object):
         if params is np.nan:
             params = {'c1':[np.nan],
                       'c2':[np.nan],
-                      'c3':[np.nan],
-                      'c4':[np.nan],
-                      'c5':[np.nan]}
+                      'c3':[np.nan]}
 
         self.params_mean = dict((k, np.mean(v)) for k,v in params.items())
         self.params_std = dict((k, np.std(v)) for k,v in params.items())
@@ -204,7 +202,7 @@ def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
             continue
 
         # Get the optimal parameter values for the fitted ITSs
-        par_order = ('c1', 'c2', 'c3', 'c4')
+        par_order = ('c1', 'c2', 'c3')
         fit_ranges = [np.array([fit_result.params_best[p]])
                       for p in par_order]
 
@@ -297,8 +295,7 @@ def _multi_calc(paras, its_len, ITSs):
         # correlation
         rp, pp = spearmanr(y, SEn)
 
-        # ignore those where the correlation is a nan
-        # they get a pvalue of 0 which mezzez things up
+        # ignore parameter correlation where the correlation is a nan
         if np.isnan(rp):
             continue
 
@@ -335,11 +332,11 @@ def keq_calc(start_values, its_len, ITSs):
         rna_dna = its.rna_dna_di[:its_len-2]
         dg3d = its.keq_delta_di_b[:its_len-2]
 
-        # the c1, c3, c4 values
-        (a, b, c, d) = start_values
+        # the c1, c2, c3 values
+        (a, b, c) = start_values
 
         # equilibrium constants at each position
-        keqs = keq_i(RT, its_len, dg3d, dna_dna, rna_dna, a, b, c, d)
+        keqs = keq_i(RT, its_len, dg3d, dna_dna, rna_dna, a, b, c)
 
         SEn = sum(keqs)
 
@@ -348,7 +345,7 @@ def keq_calc(start_values, its_len, ITSs):
     return np.array(ITS_SEn)
 
 
-def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
+def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c):
     """
     NOTE!! now calculating for the backward translocation
 
@@ -409,7 +406,7 @@ def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
 
     for i in range(0, its_len-2):
 
-        KEQ = keq[i]  # already formulated for the reverse reaction
+        KEQ = keq[i]  # already formulated for back-translation
         keq_array.append(KEQ)
 
         DNA_DNA = -dna_dna[i+1]  # negative for back-translocation
@@ -421,15 +418,15 @@ def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c, d):
             RNA_DNA = 0
         else:
             # the 7 and the 8 are because of starting at +3, dinucleotides, and
-            # python indexing
+            # python indexing starting at 0
             # take the negative for back-translocation
             RNA_DNA = -(sum(rna_dna[i-7:i+1]) - sum(rna_dna[i-8:i+1]))
 
         rnadna_array.append(RNA_DNA)
 
-        exponent = (b*RNA_DNA +c*DNA_DNA +d*KEQ)/RT
+        exponent = (a*RNA_DNA +b*DNA_DNA +c*KEQ)/RT
 
-        rate = a*np.exp(-exponent)  # b, c, d positive -> forward
+        rate = np.exp(-exponent)
 
         k1[i] = rate
 
