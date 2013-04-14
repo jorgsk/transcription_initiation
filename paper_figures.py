@@ -193,6 +193,42 @@ class Calculator(object):
         # write all of this to an output file
         #write_py_SE15(tested_PY, SE15)
 
+    def PYvsSE(self, b):
+        """
+        Correlate PY with SE and return corr, pval, and indx for plotting
+
+        b is the 'best' correlating nucleotide: usually 14
+        """
+
+         #set the range of values for which you wish to calculate correlation
+        itsMin = 2
+        itsMax = 20
+        itsRange = range(itsMin, itsMax+1)
+
+        #if self.testing:
+            #itsRange = [itsMin, 5, 10, 15, itsMax]
+
+        #c1, c2, c3 = optimizeParam(self.ITSs, itsRange, self.testing,
+                #analysis='Normal')
+        c1, c2, c3 = [0.13, 0.07, 0.81]
+
+        # add the constants to the ITS objects and calculate Keq
+        for its in self.ITSs:
+            its.calc_keq(c1, c2, c3)
+
+        indx, corr, pvals = self.correlateSE_PY(itsRange)
+
+        # also return PY and PY std, and SEmax (usually SE20)
+        PYs = [i.PY for i in self.ITSs]
+        PYstd = [i.PY_std for i in self.ITSs]
+
+        # the the highest nt you tested (probably 20)
+        ntMax = max(indx)
+        SEmax = [sum(i.keq[:ntMax+1]) for i in self.ITSs]
+        SEbest = [sum(i.keq[:b]) for i in self.ITSs]
+
+        return indx, corr, pvals, PYs, PYstd, SEmax, SEbest
+
 
 class Plotter(object):
     """
@@ -203,7 +239,7 @@ class Plotter(object):
     that enter the paper.
     """
 
-    def __init__(self, YaxNr=1, XaxNr=1, plotName='MyPlot'):
+    def __init__(self, YaxNr=1, XaxNr=1, plotName='MyPlot', p_line=True):
 
         # initialized the matplotlib figure
         # squeeze=False guarantees that axes will be a 2d array
@@ -214,6 +250,9 @@ class Plotter(object):
         self.yTicks = []
         self.xTickFontSize = 8
         self.xTickFontSize = 8
+
+        # draw a pvalue=0.05 line
+        self.p_line = p_line
 
         # number of sublots in the x and y direction
         self.YaxNr = YaxNr
@@ -266,6 +305,22 @@ class Plotter(object):
             self._nextXaxNr +=1
 
         return nextAx
+
+    def addLetters(self, letters):
+        """
+        letters = ('A', 'B') will add A and B to the subplots
+        """
+
+        # reset the subplot-counter
+        self._nextXaxNr = 0
+        self._nextYaxNr = 0
+
+        for label in letters:
+            ax = self.getNextAxes()  # for the local figure
+            ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=16,
+                    fontweight='bold', va='top')
+
+    ##### Below: functions that produce plots | above: helper functions #####
 
     def delineatorPlot(self, delineateResults):
         """
@@ -507,6 +562,136 @@ class Plotter(object):
 
         ax.plot(sort_x, sort_fit, linewidth=2)
 
+    def PYvsSEscatter(self, PYs, PYstd, SEmax):
+        """
+        Plotting just the best correlation (at 14 usually)
+        """
+
+        # the index for which corr has the highest value
+        print("Spearman for ntMax (usually 20) and PY")
+        print(spearmanr(SEmax, PYs))
+        print(pearsonr(SEmax, PYs))
+
+        ax = self.getNextAxes()
+
+        # multiply by 100 for plot
+        PYs = [p*100 for p in PYs]
+        PYstd = [p*100 for p in PYstd]
+
+        ax.scatter(SEmax, PYs, color='k')
+        ax.errorbar(SEmax, PYs, yerr=PYstd, fmt=None, color='k')
+
+        ax.set_ylabel("PY", size=13)
+        ax.set_xlabel("SE$_{20}$", size=13)
+
+        ymin = -0.2
+
+        # awkward way of setting the tick sizes
+        for l in ax.get_xticklabels():
+            l.set_fontsize(11)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(11)
+
+        xmin, xmax = min(SEmax), max(SEmax)
+        xscale = (xmax-xmin)*0.1
+        ax.set_xlim(xmin-xscale, xmax+xscale)
+
+        ymin, ymax = min(PYs), max(PYs)
+        yscale_low = (ymax-ymin)*0.1
+        yscale_high = (ymax-ymin)*0.4
+        ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
+
+    def PYvsSEladder(self, indx, corr, pvals, PYs, SEbest, b, inset=False):
+        """
+        The classic ladder plot, including inset scatterplot
+        """
+
+        ax = self.getNextAxes()
+
+        # check for nan in corr (make it 0)
+        corr, pvals = remove_nan(corr, pvals)
+
+        lab = 'correlation: PY and SE$_n$)'
+
+        its_max = indx[-1]
+
+        ## the ladder plot
+        colr = 'b'
+        revCorr = [c*(-1) for c in corr]  # to get an increasing correlation
+        ax.plot(indx, revCorr, label=lab, linewidth=3, color=colr)
+
+        ## the little inset scatter plot
+        if inset and b in indx:
+
+            x = b  # typically 14
+            y = corr[b]  # typically 0.7x
+
+            # add axes within axes: add_axes[left, bottom, width, height]
+            axsmall = self.figure.add_axes([0.635, 0.71, 0.15, 0.19], axisbg='y')
+            axsmall.scatter(PYs, SEbest, s=7)
+            axsmall.text(0.035, 2100, '$r$=-{0:.2f}'.format(y), size=10)
+
+            axsmall.set_xlabel('SE$_{14}$', size=10)
+            axsmall.set_ylabel('PY', size=10)
+            axsmall.xaxis.labelpad = 1
+            axsmall.yaxis.labelpad = 1
+
+            for l in axsmall.get_xticklines() + axsmall.get_yticklines():
+                l.set_markersize(2)
+
+            # add an arrow (annotate is better than arrow for some
+            # reason)
+            ax.annotate('', xy=(x-1.5, y+0.07), xytext=[x,y+0.01],
+                                 textcoords=None,
+                                 arrowprops=dict(arrowstyle='->',
+                         connectionstyle="arc, angleA=90, armA=10, rad=10"))
+
+            ax.scatter(14, y)
+
+            axsmall.set_yticklabels([])
+            axsmall.set_xticklabels([])
+
+        if self.p_line:
+            # sort pvals and corr and interpolate
+            pv, co = zip(*sorted(zip(pvals, corr)))
+            # interpolate pvalues (x, must increase) with correlation
+            # (y) and obtain the threshold for p = 0.05
+            f = interpolate(pv[:-2], co[:-2], k=1)
+            ax.axhline(y=(-1)*f(0.05), ls='--', color='r',
+                                label='p = 0.05 threshold', linewidth=2)
+
+        ymin = 0
+        # yticks
+        yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -1.1, -0.1)]
+        yticklabels_skip = odd_even_spacer(yticklabels)
+
+        ax.set_yticks(np.arange(ymin, 1.1, 0.1))
+        ax.set_yticklabels(yticklabels_skip)
+        ax.set_ylim(ymin, 1.001)
+        ax.set_ylabel("Correlation coefficient, $r$", size=13)
+
+        # xticks
+        xticklabels = [str(integer) for integer in range(3, its_max)]
+        xticklabels_skip = odd_even_spacer(xticklabels, oddeven='odd')
+
+        ax.set_xticks(range(3, its_max))
+        ax.set_xticklabels(xticklabels_skip)
+        ax.set_xlim(3, its_max)
+        ax.set_xlabel("RNA length, $n$", size=13)
+
+        ax.legend(loc='lower right', prop={'size':9})
+
+        # awkward way of setting the tick font sizes
+        for l in ax.get_xticklabels():
+            l.set_fontsize(11)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(11)
+
+        ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      alpha=0.5)
+        ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      alpha=0.5)
+
 
 class AP(object):
     def __init__(self, keq, ap, dg3d=-1, dgDna=-1, dgRna=-1):
@@ -631,6 +816,9 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     """
     Optimize c1, c2, c3 to obtain max correlation with PY/FL/TA/TR
 
+    # equation:
+    k1 = exp(-(c1*rna_dna_i + c2*dna_dna_{i+1} + c3*Keq_{i-1}) * 1/RT)
+
     As of right now, you only have PY for DG100 ... would be interesting to get
     FL in there as well. Do you have this information? Maybe verify with Lilian.
 
@@ -643,7 +831,7 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     # grid size
     grid_size = 20
     if testing:
-        grid_size = 8
+        grid_size = 6
 
     # assume normal and no randomization or cross correlation analysis
     randize = 0
@@ -731,7 +919,7 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff, analysis)
                 continue
 
             # don't consider rna-dna until after full hybrid length is reached
-            if param == 'c2' and ix < 8:
+            if param == 'c1' and ix < 8:
                 Parvals.append(0)
             else:
                 Parvals.append(parvals[ix])
@@ -755,7 +943,7 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff, analysis)
             for nt, c, p in zip(its_range, maxcorr, pvals):
                 print nt, c, p
         else:
-            print("Random or cross-correlation: mean correlation and pvalues")
+            print("Random or cross-correlation: mean correlation and p-values")
             for nt, c, p in zip(its_range, meancorr, meanpvals):
                 print nt, c, p
 
@@ -1792,39 +1980,9 @@ def main():
     dg100 = data_handler.ReadData('dg100-new')  # read the DG100 data
     dg400 = data_handler.ReadData('dg400')  # read the DG100 data
 
-    ITSs = dg100
-
     if remove_controls:
         controls = ['DG133', 'DG115a', 'N25', 'N25anti', 'N25/A1anti']
         dg400 = [i for i in dg400 if not i.name in controls]
-
-    # lower resolution while testing
-    #testing = False
-    #testing = True
-
-    # set the range of values for which you wish to calculate correlation
-    #itsMin = 2
-    #itsMax = 21
-    #itsRange = range(itsMin, itsMax)
-    #if testing:
-        #itsRange = [itsMin, 5, 10, 15, itsMax]
-
-    # Add keq-values by first calculating c1, c2, c3
-    #for ITSs in [dg100, dg400]:
-
-        #c1, c2, c3 = optimizeParam(ITSs, itsRange, testing, analysis='Normal')
-        #c1, c2, c3 = [0.13, 0.07, 0.81]
-
-         #add the constants to the ITS objects and calculate Keq
-        #for its in ITSs:
-            #its.calc_keq(c1, c2, c3)
-
-    # Return c1, c2, c3 values obtained with cross-validation
-    #optimizeParam(dg100, itsRange,  testing, analysis='Cross Correlation')
-    #optimizeParam(dg100, itsRange, testing, analysis='Normal')
-
-    #ITSs = dg100
-    #ITSs = dg400
 
     # Normalize the AP -- removes correlation between sum(PY) and sum(AP)
     #normalize_AP(ITSs)
@@ -1855,7 +2013,33 @@ def main():
     # moving average of AP vs PY/FL/TA
     #moving_average_ap(dg100, dg400)
 
+    # XXX TODO: the basic plots are there.
+    # FIX: correspondence between nt and x-axis. probably broken.
+    # Correlation: can you get it higher like it was before?
+    # Figure size and font sizes should be set on the Plotter object, so that
+    # you can manipulate these and watch them change as you save to file.
+
+    # But all in all you did it! All figures have been transfered :)
+
     ### Below this line are figures that appear in the paper ###
+
+    ###################### FIGURE SE vs PY ########################
+    figure2 = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY', p_line=True)
+    # initialize and run correlator
+    calcr = Calculator(dg100, calcName='SE15 vs PY', testing=True)
+
+    b = 14  # the nt for which correlation is highest
+    # return the relevant data for plotting
+    indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcr.PYvsSE(b=b)
+
+    figure2.PYvsSEscatter(PYs, PYstd, SEmax)
+    figure2.PYvsSEladder(indx, corr, pvals, PYs, SEbest, b, inset=True)
+
+    plt.show()
+
+    return dg100
+
+    ###################### FIGURE KEQ vs AP ########################
 
     # moving average between AP and Keq
     # the AP - Keq correlation depends only on DG3D, not on DGRNA-DNA etc.
@@ -1891,7 +2075,6 @@ def main():
     SE15, PY, PYstd = calcrValidation.dg400_validation()
 
     plotr.dg400validater(dg400, SE15, PY, PYstd)
-
     plt.show()
 
     ## once you agree on all data: run them all and pickle the results. Then,

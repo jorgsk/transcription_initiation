@@ -307,7 +307,7 @@ def _multi_calc(paras, its_len, ITSs):
 def keq_calc(start_values, its_len, ITSs):
 
     """
-    k1 = exp(-(c2*rna_dna_i + c3*dna_dna_{i+1} + c4*Keq_{i-1}) * 1/RT)
+    k1 = exp(-(c1*rna_dna_i + c2*dna_dna_{i+1} + c3*Keq_{i-1}) * 1/RT)
 
     Dna-bubble one step ahead of the rna-dna hybrid; Keq one step behind.
     When the rna-dna reaches length 9, the you must subtract the hybrid for
