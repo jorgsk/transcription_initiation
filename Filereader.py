@@ -10,8 +10,8 @@ def run_from_ipython():
         return False
 
 if run_from_ipython():
-    from IPython.Debugger import Tracer
-    #from IPython.core.debugger import Tracer
+    #from IPython.Debugger import Tracer
+    from IPython.core.debugger import Tracer
     debug = Tracer()
 else:
     def debug():

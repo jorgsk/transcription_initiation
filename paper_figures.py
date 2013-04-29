@@ -101,24 +101,34 @@ class Calculator(object):
     def getDelineatorResults(self):
         return self.delinResults
 
-    def delineatorCalc(self):
+    def delineatorComboCalc(self):
         """
-        Add sequentially DG3D, DGRNADNA, DGDNADNA
-        Perform re-optimization.
-
-        How to store this information? How about a dictionary
-
-        Double dictionary [FalseFalseTrue][name] -> [keq1, keq2, keq3, ...]
-
-        [name] -> [keq1, keq2, keq3]
+        See the effect of combining DG3D, DGRNADNA, DGDNADNA
         """
+        import itertools
 
-        delineateResultsOrder = ['DNA', 'RNA', '3D']
+        freeEns = ['DNA', 'RNA', '3D']
 
-        # include the 3 variables sequentially
-        varCombinations = [{'DNA':False, 'RNA':False, '3D':True},
-                           {'DNA':True,  'RNA':False, '3D':True},
-                           {'DNA':True,  'RNA':True,  '3D':True}]
+        # get all unique combinations of the free energies
+        # skip the single-combinations (just 'RNA' f.ex)
+        combos = []
+        rawCombos = [set(_) for _ in itertools.product(freeEns, repeat=3)]
+        for c in rawCombos:
+            if c in combos or len(c)==1:
+                continue
+            else:
+                combos.append(c)
+
+        # create a list of true/false dicts based on the combos
+        varCombinations = []
+        for c in combos:
+            combDict = {}
+            for en in freeEns:
+                if en in c:
+                    combDict[en] = True
+                else:
+                    combDict[en] = False
+            varCombinations.append(combDict)
 
         # set the range for which you wish to calculate correlation
         itsMin = 2
@@ -126,14 +136,64 @@ class Calculator(object):
         itsRange = range(itsMin, itsMax+1)
         if self.testing:
             itsRange = [itsMin, 5, 10, 15, itsMax]
+            #itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
+
+        analysis = 'Normal'
 
         for combo in varCombinations:
 
-            comboKey = ''.join([str(combo[v]) for v in delineateResultsOrder])
+            comboKey = '_'.join([str(combo[v]) for v in freeEns])
 
-            # the optimal c1, c2, c3 associated with the variable set
-            c1, c2, c3 = optimizeParam(self.ITSs, itsRange, self.testing,
-                    analysis='Normal', variableCombo=combo)
+            result = optimizeParam(self.ITSs, itsRange, self.testing,
+                    analysis=analysis, variableCombo=combo)
+
+            onlySignCoeff=0.05
+            # Print some output and return one value for c1, c2, and c3
+            c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+                    onlySignCoeff, analysis)
+
+            # add the constants to the ITS objects and calculate Keq
+            for its in self.ITSs:
+                its.calc_keq(c1, c2, c3)
+
+            # calculate the correlation with PY
+            indx, corr, pvals = self.correlateSE_PY(itsRange)
+
+            self.delinResults[comboKey] = [indx, corr, pvals]
+
+    def delineatorCalc(self):
+        """
+        See the individual effect of DG3D, DGRNADNA, DGDNADNA
+        """
+
+        delineateResultsOrder = ['DNA', 'RNA', '3D']
+
+        # include the 3 variables sequentially
+        varCombinations = [{'DNA':False, 'RNA':False, '3D':True},
+                           {'DNA':True,  'RNA':False, '3D':False},
+                           {'DNA':False, 'RNA':True,  '3D':False}]
+
+        # set the range for which you wish to calculate correlation
+        itsMin = 2
+        itsMax = 20
+        itsRange = range(itsMin, itsMax+1)
+        if self.testing:
+            #itsRange = [itsMin, 5, 10, 15, itsMax]
+            itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
+
+        analysis = 'Normal'
+
+        for combo in varCombinations:
+
+            comboKey = '_'.join([str(combo[v]) for v in delineateResultsOrder])
+
+            result = optimizeParam(self.ITSs, itsRange, self.testing,
+                    analysis=analysis, variableCombo=combo)
+
+            onlySignCoeff=0.05
+            # Print some output and return one value for c1, c2, and c3
+            c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+                    onlySignCoeff, analysis)
 
             # add the constants to the ITS objects and calculate Keq
             for its in self.ITSs:
@@ -156,10 +216,11 @@ class Calculator(object):
         corr = []
         pvals = []
 
-        # YOU ARE HERE
+        # keq[0] corresponds to 2-nt
+        # therefore, ind=2 -> sum(i.keq[:1]) = sum(i.keq[0])
         for ind in itsRange:
 
-            SEn = [sum(i.keq[:ind]) for i in self.ITSs]
+            SEn = [sum(i.keq[:ind-1]) for i in self.ITSs]
 
             co, pv = spearmanr(SEn, PY)
 
@@ -208,9 +269,16 @@ class Calculator(object):
         #if self.testing:
             #itsRange = [itsMin, 5, 10, 15, itsMax]
 
-        #c1, c2, c3 = optimizeParam(self.ITSs, itsRange, self.testing,
-                #analysis='Normal')
-        c1, c2, c3 = [0.13, 0.07, 0.81]
+        #analysis = 'Normal'
+        #result = optimizeParam(self.ITSs, itsRange, self.testing,
+                    #analysis=analysis)
+
+        #onlySignCoeff=0.05
+        # Print some output and return one value for c1, c2, and c3
+        #c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+                #onlySignCoeff, analysis)
+        c1, c2, c3 = [0.13, 0.07, 0.91]
+        #c1, c2, c3 = [0.19, 0.12, 0.75]
 
         # add the constants to the ITS objects and calculate Keq
         for its in self.ITSs:
@@ -227,7 +295,46 @@ class Calculator(object):
         SEmax = [sum(i.keq[:ntMax+1]) for i in self.ITSs]
         SEbest = [sum(i.keq[:b]) for i in self.ITSs]
 
+        for (ind, cor) in zip(indx, corr):
+            print ind, cor
+
         return indx, corr, pvals, PYs, PYstd, SEmax, SEbest
+
+    def crossCorr(self, testing=True):
+        """
+        Cross-correlation and randomization of ITS sequences: affect on SE_n-PY
+        correlation.
+        """
+
+        # set the range of values for which you wish to calculate correlation
+        itsRange = range(2, 21)
+
+        if self.testing:
+            itsRange = [10, 15, 20]
+
+        analysis2stats = {}
+
+        for analysis in ['Normal', 'Random', 'Cross Correlation']:
+
+            result = optimizeParam(self.ITSs, itsRange, self.testing,
+                    analysis=analysis)
+
+            onlySignCoeff=0.05
+            # Print some output and return one value for c1, c2, and c3
+            c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+                            onlySignCoeff, analysis)
+
+            corr_stds = [r[1].corr_std for r in sorted(result.items())]
+
+            # add the constants to the ITS objects and calculate Keq
+            for its in self.ITSs:
+                its.calc_keq(c1, c2, c3)
+
+            indx, corr, pvals = self.correlateSE_PY(itsRange)
+
+            analysis2stats[analysis] = [indx, corr, corr_stds, pvals]
+
+        return analysis2stats
 
 
 class Plotter(object):
@@ -322,6 +429,97 @@ class Plotter(object):
 
     ##### Below: functions that produce plots | above: helper functions #####
 
+    def delineatorComboPlot(self, delineateResults):
+        """
+        delineateResults is a double dictionary
+        Double dictionary [FalseFalseTrue][name] -> [indx, corr, pvals]
+        where the the three lists are the indices correlation and pvaleus for
+        correlation between PY and SE_indx
+
+        Where the falsetrues are in the order DNA RNA 3D
+        So the above example would be the keq values from optimizing only on 3D
+        """
+
+        ymin = -0.3  # correlation is always high
+        ymax = 0.81
+
+        ax = self.getNextAxes()
+
+        colors = ['b', 'g', 'k', 'c']
+        lstyle = ['-', '--', '-.',':']
+
+        # create labels from the combinations
+        enOrder = ['$\Delta{DNA-DNA}$', '$\Delta{RNA-DNA}$', '$\Delta{3D}$']
+
+        # convert from dict-keys to plot labels. bad stuff.
+        key2label = {}
+
+        for key in delineateResults.keys():
+            for inx, t in enumerate(key.split('_')):
+                if t == 'True':
+                    if key in key2label:
+                        key2label[key] += ' + ' + enOrder[inx]
+                    else:
+                        key2label[key] = enOrder[inx]
+
+        for key, label in key2label.items():
+            color = colors.pop()
+            ls = lstyle.pop()
+
+            # indices, correlation coefficients, and pvalues SE - PY
+            indx, corr, pvals = delineateResults[key]
+
+            # make x-axis (same as incoming index)
+            incrX = indx
+            # invert the correlation for 'upward' plot purposes
+            corr = [-c for c in corr]
+            # check for nan in corr (make it 0)
+            corr, pvals = remove_nan(corr, pvals)
+
+            ax.plot(incrX, corr, label=label, linewidth=3, color=color, ls=ls)
+
+            # interpolate pvalues (x, must increase) with correlation (y) and
+            # obtain the correlation for p = 0.05 to plot as a black
+            p_line = False
+            if p_line and (label == '$\Delta{3D}$'):
+                # hack to get pvals and corr coeffs sorted
+                pv, co = zip(*sorted(zip(pvals, corr)))
+                f = interpolate(pv, co, k=1)
+                ax.axhline(y=f(0.05), ls='--', color='r', linewidth=3)
+
+            indxMax = indx[-1]
+            xticklabels = [str(integer) for integer in range(3, indxMax)]
+
+            #Make sure ymin has only one value behind the comma
+            ymin = float(format(ymin, '.1f'))
+            yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -ymax+0.1, -0.1)]
+
+            # legend
+            ax.legend(loc='upper left', prop={'size': 10})
+
+            # xticks
+            ax.set_xticks(range(3, indxMax))
+            #ax.set_xticklabels(xticklabels)
+            ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='odd'))
+            ax.set_xlim(3, indxMax)
+            ax.set_xlabel("RNA length, $n$", size=10)
+
+            # awkward way of setting the tick font sizes
+            for l in ax.get_xticklabels():
+                l.set_fontsize(10)
+            for l in ax.get_yticklabels():
+                l.set_fontsize(10)
+
+            ax.set_ylabel("Correlation coefficient, $r$", size=10)
+
+            ax.set_yticks(np.arange(ymin, ymax, 0.1))
+            ax.set_yticklabels(odd_even_spacer(yticklabels))
+            ax.set_ylim(ymin, ymax)
+            ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                          alpha=0.5)
+            ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                          alpha=0.5)
+
     def delineatorPlot(self, delineateResults):
         """
         delineateResults is a double dictionary
@@ -333,18 +531,19 @@ class Plotter(object):
         So the above example would be the keq values from optimizing only on 3D
         """
 
-        ymin = -0.2  # correlation is always high
+        ymin = -0.3  # correlation is always high
+        ymax = 0.81
 
         ax = self.getNextAxes()
 
         colors = ['b', 'g', 'k']
-        lstyle = ['-', '-', '-']
+        lstyle = ['-', '--', '-.']
 
         # convert from dict-keys to plot labels
         key2label = {
-                'FalseFalseTrue': '$\Delta{3D}$',
-                'TrueFalseTrue': '$\Delta{DNA-DNA}+\Delta{3D}$',
-                'TrueTrueTrue': '$\Delta{RNA-DNA}+\Delta{DNA-DNA}+\Delta{3D}$',
+                'False_False_True': '$\Delta{3D}$',
+                'True_False_False': '$\Delta{DNA-DNA}$',
+                'False_True_False': '$\Delta{RNA-DNA}$',
                 }
 
         for key, label in key2label.items():
@@ -366,7 +565,7 @@ class Plotter(object):
             # interpolate pvalues (x, must increase) with correlation (y) and
             # obtain the correlation for p = 0.05 to plot as a black
             p_line = False
-            if p_line and label.startswith('$\Delta{RNA'):
+            if p_line and (label == '$\Delta{3D}$'):
                 # hack to get pvals and corr coeffs sorted
                 pv, co = zip(*sorted(zip(pvals, corr)))
                 f = interpolate(pv, co, k=1)
@@ -377,10 +576,10 @@ class Plotter(object):
 
             #Make sure ymin has only one value behind the comma
             ymin = float(format(ymin, '.1f'))
-            yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -1.1, -0.1)]
+            yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -ymax+0.1, -0.1)]
 
             # legend
-            ax.legend(loc='lower right', prop={'size': 7})
+            ax.legend(loc='upper left', prop={'size': 13})
 
             # xticks
             ax.set_xticks(range(3, indxMax))
@@ -397,10 +596,9 @@ class Plotter(object):
 
             ax.set_ylabel("Correlation coefficient, $r$", size=10)
 
-            ax.set_yticks(np.arange(ymin, 1.1, 0.1))
-            #ax.set_yticklabels(yticklabels)
+            ax.set_yticks(np.arange(ymin, ymax, 0.1))
             ax.set_yticklabels(odd_even_spacer(yticklabels))
-            ax.set_ylim(ymin, 1.0001)
+            ax.set_ylim(ymin, ymax)
             ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                           alpha=0.5)
             ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
@@ -692,6 +890,89 @@ class Plotter(object):
         ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                       alpha=0.5)
 
+    def crossCorrPlot(self, analysis2stats):
+        """
+        Ladder-plot with random ITS and cross correlation
+        """
+
+        ax = self.getNextAxes()
+
+        colors = ['b', 'g', 'k']
+
+        for analysis, stats in analysis2stats.items():
+            indx, corr, corr_stds, pvals = stats
+            colr = colors.pop()
+
+            # points on x-axis for plotting -- same as its_lenghts
+            incrX = indx
+
+            # change sign for correlation to get an 'upward' plot
+            corr = [-c for c in corr]  # change sign
+
+            if analysis == 'real':
+
+                # check for nan in corr (make it 0)
+                corr, pvals = remove_nan(corr, pvals)
+
+                lab = 'correlation: PY and SE$_n$)'
+
+                ax.plot(incrX, corr, label=lab, linewidth=3, color=colr)
+
+                p_line = False
+                if p_line:
+                    # sort pvals and corr and interpolate
+                    pv, co = zip(*sorted(zip(pvals, corr)))
+                    # interpolate pvalues (x, must increase) with correlation
+                    # (y) and obtain the threshold for p = 0.05
+                    f = interpolate(pv[:-2], co[:-2], k=1)
+                    ax.axhline(y=f(0.05), ls='--', color='r',
+                                        label='p = 0.05 threshold', linewidth=2)
+
+            # if random, plot with errorbars
+            elif analysis == 'random':
+                lab = 'using random sequences'
+                ax.errorbar(incrX, corr, yerr=corr_stds, label=lab,
+                                     linewidth=2, color=colr)
+
+            elif analysis == 'cross-validated':
+                lab = 'cross-validation'
+                ax.errorbar(incrX, corr, yerr=corr_stds, label=lab,
+                                     linewidth=2, color=colr)
+
+        its_max = incrX[-1]
+
+        ymin = 0
+        # yticks
+        yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -1.1, -0.1)]
+        yticklabels_skip = odd_even_spacer(yticklabels)
+
+        ax.set_yticks(np.arange(ymin, 1.1, 0.1))
+        ax.set_yticklabels(yticklabels_skip)
+        ax.set_ylim(ymin, 1.001)
+        ax.set_ylabel("Correlation coefficient, $r$", size=13)
+
+        # xticks
+        xticklabels = [str(integer) for integer in range(3, its_max)]
+        xticklabels_skip = odd_even_spacer(xticklabels, oddeven='odd')
+
+        ax.set_xticks(range(3, its_max))
+        ax.set_xticklabels(xticklabels_skip)
+        ax.set_xlim(3, its_max)
+        ax.set_xlabel("RNA length, $n$", size=13)
+
+        ax.legend(loc='lower right', prop={'size':9})
+
+        # awkward way of setting the tick font sizes
+        for l in ax.get_xticklabels():
+            l.set_fontsize(11)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(11)
+
+        ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      alpha=0.5)
+        ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      alpha=0.5)
+
 
 class AP(object):
     def __init__(self, keq, ap, dg3d=-1, dgDna=-1, dgRna=-1):
@@ -726,32 +1007,32 @@ def odd_even_spacer(vals, oddeven='even', integer=False):
     return out
 
 
-def remove_nan(corr, pval):
+def remove_nan(corr, pvals):
     """
     Replace nans in corr and pval with 0 and 1. If not dont replace anything.
     """
 
+    newcorr = []
     if True in np.isnan(corr):
-        newcorr = []
-        for inx, truthvalue in enumerate(np.isnan(corr)):
-            if truthvalue is True:
+        for inx, anan in enumerate(np.isnan(corr)):
+            if anan:
                 newcorr.append(0)
             else:
                 newcorr.append(corr[inx])
+    else:
+        newcorr = corr
 
-        corr = newcorr
-
-    if True in np.isnan(pval):
-        newpval = []
-        for inx, truthvalue in enumerate(np.isnan(pval)):
-            if truthvalue is True:
+    newpval = []
+    if True in np.isnan(pvals):
+        for inx, anan in enumerate(np.isnan(pvals)):
+            if anan:
                 newpval.append(1)
             else:
-                newpval.append(pval[inx])
+                newpval.append(pvals[inx])
+    else:
+        newpval = pvals
 
-        pval = newpval
-
-    return corr, pval
+    return newcorr, newpval
 
 
 def mm2inch(mm):
@@ -812,7 +1093,7 @@ def visual_inspection(ITSs, variable='AP'):
 
 
 def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
-        onlySignCoeff=0.05, variableCombo={'DNA':True, 'RNA':True, '3D':True}):
+        variableCombo={'DNA':True, 'RNA':True, '3D':True}):
     """
     Optimize c1, c2, c3 to obtain max correlation with PY/FL/TA/TR
 
@@ -829,7 +1110,7 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     """
 
     # grid size
-    grid_size = 20
+    grid_size = 10
     if testing:
         grid_size = 6
 
@@ -880,42 +1161,39 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     else:
         print('WTF mate')
 
-    # Print some output and return one value for c1, c2, and c3
-    outp = get_print_parameterValue_output(results, its_range, onlySignCoeff,
-            analysis)
-
-    return outp
+    return results
 
 
 def get_print_parameterValue_output(results, its_range, onlySignCoeff, analysis):
     """
     Analyze and print some of the output parameter values
 
-    It's not straightforward how to calculate return parameter values c2, c3,
-    c4. You have tried to average all, and average just significant values.
+    It's not straightforward how to calculate return parameter values c1 c2,
+    c3. You have tried to average all, and average just significant values.
 
     Another approach could be to average the top 3 results.
 
-    Interesting: what happens if you overlay the c2, c3, c4 values with the
+    Interesting: what happens if you overlay the c1, c2, c3 values with the
     Keq-AP calculations?
     """
 
     # output
     outp = {}
 
+    pvals = [results[pos].pvals_min for pos in its_range]
+    meanpvals = [results[pos].pvals_mean for pos in its_range]
+    maxcorr = [results[pos].corr_max for pos in its_range]
+    meancorr = [results[pos].corr_mean for pos in its_range]
+
     # print the mean and std of the estimated parameters
     for param in ['c1', 'c2', 'c3']:
         parvals = [results[pos].params_best[param] for pos in its_range]
-        pvals = [results[pos].pvals_min for pos in its_range]
-        meanpvals = [results[pos].pvals_mean for pos in its_range]
-        maxcorr = [results[pos].corr_max for pos in its_range]
-        meancorr = [results[pos].corr_mean for pos in its_range]
 
         Parvals = []
         for ix, pval in enumerate(pvals):
             # if set, only collect parameters corresponsing to significant
             # correlation
-            if onlySignCoeff < 0.05:
+            if onlySignCoeff and (onlySignCoeff < 0.05):
                 continue
 
             # don't consider rna-dna until after full hybrid length is reached
@@ -936,16 +1214,16 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff, analysis)
 
         outp[param] = mean
 
-        # print correlations
-        if analysis == 'Normal':
-            print("Normal analysis: max correlation and corresponding p-value")
+    # print correlations
+    if analysis == 'Normal':
+        print("Normal analysis: max correlation and corresponding p-value")
 
-            for nt, c, p in zip(its_range, maxcorr, pvals):
-                print nt, c, p
-        else:
-            print("Random or cross-correlation: mean correlation and p-values")
-            for nt, c, p in zip(its_range, meancorr, meanpvals):
-                print nt, c, p
+        for nt, c, p in zip(its_range, maxcorr, pvals):
+            print nt, c, p
+    else:
+        print("Random or cross-correlation: mean correlation and p-values")
+        for nt, c, p in zip(its_range, meancorr, meanpvals):
+            print nt, c, p
 
     return outp['c1'], outp['c2'], outp['c3']
 
@@ -1959,17 +2237,34 @@ def moving_average_ap_keq(dg100, dg400):
     height = mm2inch(97)
     fig.set_size_inches(width, height)
 
-    for fdir in fig_dirs:
-        #for formt in ['pdf', 'eps', 'png']:
-        for formt in ['pdf']:
+    return fig, filename
 
-            name = filename + '.' + formt
-            odir = os.path.join(fdir, formt)
 
-            if not os.path.isdir(odir):
-                os.makedirs(odir)
+def pickle_wrap(data='', path='', action=''):
+    """
+    Load or save pickle-data
+    """
+    if (path == '') or (action == ''):
+        print('Must provide at least a path and an action to pickle_wrap! >:S')
+        return 0/1
 
-            fig.savefig(os.path.join(odir, name), transparent=True, format=formt)
+    if action == 'save':
+        saveHandle = open(path, 'wb')
+        pickle.dump(data, saveHandle)
+        saveHandle.close()
+
+    elif action == 'load':
+        if os.path.isfile(path):
+            loadHandle = open(path, 'rb')
+            result = pickle.load(loadHandle)
+            loadHandle.close()
+
+            return result
+        else:
+            print('{0} not found to be a valid file!'.format(path))
+    else:
+        print('Either save or load data .. duh')
+        return 0/1
 
 
 def main():
@@ -2013,74 +2308,133 @@ def main():
     # moving average of AP vs PY/FL/TA
     #moving_average_ap(dg100, dg400)
 
-    # XXX TODO: the basic plots are there.
-    # FIX: correspondence between nt and x-axis. probably broken.
-    # Correlation: can you get it higher like it was before?
-    # Figure size and font sizes should be set on the Plotter object, so that
+    # TODO (investigate once more the correlation where'd it go?)
+       #3)Figure size and font sizes should be set on the Plotter object, so that
     # you can manipulate these and watch them change as you save to file.
 
     # But all in all you did it! All figures have been transfered :)
 
-    ### Below this line are figures that appear in the paper ###
+    figures = [
+            #'Figure2',  # SE vs PY
+            #'Figure3',  # Delineate + DG400
+            #'Figure4',  # Keq vs AP
+            #'Suppl1'   # Random and cross-corrleation (supplementary)
+            'Suppl2',   # Delineate -- all combinations
+            #'Suppl3',   # PY vs sum(AP) before and after normalization
+            ]
 
-    ###################### FIGURE SE vs PY ########################
-    figure2 = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY', p_line=True)
-    # initialize and run correlator
-    calcr = Calculator(dg100, calcName='SE15 vs PY', testing=True)
+    ### XXX Below this line are figures that appear in the paper XXX ###
 
-    b = 14  # the nt for which correlation is highest
-    # return the relevant data for plotting
-    indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcr.PYvsSE(b=b)
+    # Reuse calculations: good for tweaking plots
+    calculateAgain = False
 
-    figure2.PYvsSEscatter(PYs, PYstd, SEmax)
-    figure2.PYvsSEladder(indx, corr, pvals, PYs, SEbest, b, inset=True)
+    # collect the figures you want to save to file
+    saveMe = {}
 
-    plt.show()
+    testing = True
+    #testing = False
+    for fig in figures:
+
+        ##################### FIGURE SE vs PY ########################
+        if fig == 'Figure2':
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY', p_line=True)
+            # initialize and run correlator
+            calcr = Calculator(dg100, calcName='SE15 vs PY', testing=True)
+
+            b = 13  # the nt for which correlation is highest
+            # return the relevant data for plotting
+            indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcr.PYvsSE(b=b)
+
+            plotr.PYvsSEscatter(PYs, PYstd, SEmax)
+            plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, b, inset=True)
+
+            saveMe[fig] = plotr.figure
+
+            return dg100
+
+        ###################### FIGURE KEQ vs AP ########################
+        if fig == 'Figure4':
+            # moving average between AP and Keq
+            # the AP - Keq correlation depends only on DG3D, not on DGRNA-DNA etc.
+            fig4, filename = moving_average_ap_keq(dg100, dg400)
+            saveMe[filename] = fig4
+
+        ###################### FIGURE DELINEATE + DG400 ########################
+        # A figure that combines the 'delineate' and scatter plot for DG400 figures
+        if fig == 'Figure3':
+
+            filePath = 'pickledData/delineate'
+            if not os.path.isfile(filePath) or calculateAgain:
+                calcrDelin = Calculator(dg100, calcName='delineate', testing=testing)
+                calcrDelin.delineatorCalc()
+                delResults = calcrDelin.getDelineatorResults()
+
+                # pickle the results for re-usage
+                pickle_wrap(data=delResults, path=filePath, action='save')
+
+            else:
+                delResults = pickle_wrap(path=filePath, action='load')
+
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName='delineate')
+            plotr.delineatorPlot(delResults)  # plot the delineate plot
+
+            # calculate values for the DG400 scatter plot
+            calcrValidation = Calculator(dg400, calcName='validation', testing=testing)
+
+            SE15, PY, PYstd = calcrValidation.dg400_validation()
+
+            plotr.dg400validater(dg400, SE15, PY, PYstd)
+            plt.show()
+
+            saveMe[fig] = plotr.figure
+
+        ###################### FIGURE Cross-corr and Random ########################
+        # Used to be in the main paper, now supplementary
+        if fig == 'Suppl1':
+            calcr = Calculator(dg100, calcName='Cross-corr and Random',
+                    testing=testing)
+            # what you need for plotting
+            #analysis2stats = calcr.crossCorr()
+
+            # pickle the results for re-usage
+            saveFilePath = 'pickledData/crossCorrRandom'
+            #saveFileHandle = open(saveFilePath, 'wb')
+            #pickle.dump(analysis2stats, saveFileHandle)
+            #saveFileHandle.close()
+
+            openFileHandle = open(saveFilePath, 'rb')
+            analysis2stats = pickle.load(openFileHandle)
+            openFileHandle.close()
+
+            # plot :)
+            plotr = Plotter(YaxNr=1, XaxNr=1, plotName='ccAndRandom')
+            plotr.crossCorrPlot(analysis2stats)
+
+        ###################### FIGURE All combinations of DGs ########################
+        # Supplementary to justify that you're using the whole model
+        # TODO find out why all 3 are worse than just 2
+        # compare with paper figure.
+        # proceed with TODO list kthnx.
+        if fig == 'Suppl2':
+
+            filePath = 'pickledData/suppl2_delineateCombo'
+            #calculateAgain = True
+            if not os.path.isfile(filePath) or calculateAgain:
+                calcr = Calculator(dg100, calcName='delineateCombo', testing=testing)
+                calcr.delineatorComboCalc()
+                results = calcr.getDelineatorResults()
+
+                # pickle the results for re-usage
+                pickle_wrap(data=results, path=filePath, action='save')
+
+            else:
+                results = pickle_wrap(path=filePath, action='load')
+
+            plotr = Plotter(YaxNr=1, XaxNr=1, plotName='delineate combo')
+            plotr.delineatorComboPlot(results)
+            plt.show()
 
     return dg100
-
-    ###################### FIGURE KEQ vs AP ########################
-
-    # moving average between AP and Keq
-    # the AP - Keq correlation depends only on DG3D, not on DGRNA-DNA etc.
-    #moving_average_ap_keq(dg100, dg400)
-
-    ###################### FIGURE DELINEATE + DG400 ########################
-    # A figure that combines the 'delineate' and scatter plot for DG400 figures
-
-    #testing = False
-    testing = True
-    #calcrDelin = Calculator(dg100, calcName='delineate', testing=testing)
-
-    # calcuate values for the delineate plot
-    #calcrDelin.delineatorCalc()
-    #delResults = calcrDelin.getDelineatorResults()
-
-    #pickle the results for re-usage
-    saveFilePath = 'pickledData/delineate'
-    #saveFileHandle = open(saveFilePath, 'wb')
-    #pickle.dump(delResults, saveFileHandle)
-    #saveFileHandle.close()
-
-    openFileHandle = open(saveFilePath, 'rb')
-    delResults = pickle.load(openFileHandle)
-    openFileHandle.close()
-
-    plotr = Plotter(YaxNr=1, XaxNr=2, plotName='delineate')
-    plotr.delineatorPlot(delResults)  # plot the delineate plot
-
-    # calculate values for the DG400 scatter plot
-    calcrValidation = Calculator(dg400, calcName='validation', testing=testing)
-
-    SE15, PY, PYstd = calcrValidation.dg400_validation()
-
-    plotr.dg400validater(dg400, SE15, PY, PYstd)
-    plt.show()
-
-    ## once you agree on all data: run them all and pickle the results. Then,
-    # you only have to rerun those where you want to change some input data.
-
-    return ITSs
 
 
 if __name__ == '__main__':

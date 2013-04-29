@@ -22,6 +22,7 @@ import time
 import Energycalc as Ec
 import Workhouse
 import Filereader
+import data_handler
 import Models
 from glob import glob
 
@@ -30,10 +31,11 @@ from operator import itemgetter
 import multiprocessing
 
 # Make numpy easier to read
-np.set_printoptions(precision=2) # nr. of decimals after ,
-np.set_printoptions(suppress=True) # don't show warnings (Ithink)
+np.set_printoptions(precision=2)  # nr. of decimals after ,
+np.set_printoptions(suppress=True)  # don't show warnings (Ithink)
 
 from numpy import dot
+
 
 def run_from_ipython():
     try:
@@ -43,8 +45,8 @@ def run_from_ipython():
         return False
 
 if run_from_ipython():
-    from IPython.Debugger import Tracer
-    #from IPython.core.debugger import Tracer
+    #from IPython.Debugger import Tracer
+    from IPython.core.debugger import Tracer
     debug = Tracer()
 else:
     def debug():
@@ -54,6 +56,7 @@ else:
 #matplotlib.rc('font', family='serif')  # Setting font family in plot text
 
 # Locations of input data
+hsu1 = 'minimum_model/csvHsu'
 hsu2 = '/Hsu/csvHsuNewPY'
 hsu3 = '/Hsu/csvHsuOmit3'
 hsu4 = '/Hsu/csvHsu2008'
@@ -703,6 +706,7 @@ def PurineLadder(ITSs):
     pur15s = [itr.sequence[:15].count('A') + itr.sequence[:15].count('G') for itr in ITSs]
     fck_corr = spearmanr(en15s, pur15s)
 
+
 def ReadAndFixData():
     """ Read Hsu paper-data and Hsu normalized data. """
 
@@ -712,7 +716,7 @@ def ReadAndFixData():
 
     # Selecting the dataset you want to use
     #
-    lazt = Filereader.PYHsu(hsu1) # Unmodified Hsu data
+    ITSs = data_handler.PYHsu(hsu1)  # Unmodified Hsu data
     #lazt = Filereader.PYHsu(hsu2) # Normalized Hsu data by scaling
     #lazt = Filereader.PYHsu(hsu3) # Normalized Hsu data by omitting experiment3
     #lazt = Filereader.PYHsu(hsu4) # 2007 data, skipping N25, N25anti
@@ -721,8 +725,8 @@ def ReadAndFixData():
 
     # Selecting the columns I want from Hsu. Removing all st except PYst.
     # list=[Name 0, Sequence 1, PY 2, PYstd 3, RPY 4, RIFT 5, APR 6, MSAT 7, R 8]
-    lizt = [[row[0], row[1], row[2], row[3], row[4], row[6], row[8], row[10],
-             row[11]] for row in lazt]
+    #lizt = [[row[0], row[1], row[2], row[3], row[4], row[6], row[8], row[10],
+             #row[11]] for row in lazt]
 
     # name seq PY X X X X X X
     # From Stepanova 2009
@@ -735,13 +739,14 @@ def ReadAndFixData():
 
     # Making a list of instances of the ITS class. Each instance is an itr.
     # Storing Name, sequence, and PY.
-    ITSs = []
-    for row in lizt:
+    #ITSs = []
+    #for row in lizt:
 
-        ITSs.append(ITS(row[1], row[0], row[2], row[3], row[6], row[7]))
-        #ITSs.append(ITS(row[1][5:], row[0], row[2], row[3], row[6], row[7]))
+        #ITSs.append(ITS(row[1], row[0], row[2], row[3], row[6], row[7]))
+        ##ITSs.append(ITS(row[1][5:], row[0], row[2], row[3], row[6], row[7]))
 
     return ITSs
+
 
 def genome_wide():
     """
@@ -4246,7 +4251,6 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
         hedr = 'Nr random samples: {0}\n\n{1}\n'.format(randomize, descr)
         fig.suptitle(hedr)
 
-
     if len(axes > 1):
         for i, label in enumerate(('A', 'B')):
             ax = axes[i]
@@ -4254,6 +4258,7 @@ def print_scrunch_ladder_compare(results, rand_results, retrof_results,
                     fontweight='bold', va='top')
 
     return fig, axes
+
 
 def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
                          par_ranges, p_line, its_max, its_range, ymin, ymax,
@@ -4314,7 +4319,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
             incrX = its_range
 
             # change sign for correlation to get an 'upward' plot
-            corr = [-c for c in corr] # change sign
+            corr = [-c for c in corr]  # change sign
 
             if name == 'real':
 
@@ -4322,6 +4327,11 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
                 corr, pvals = remove_nan(corr, pvals)
 
                 lab = 'correlation: PY and SE$_n$)'
+
+                for indx, corr in zip(incrX, corr):
+                    print indx, corr
+
+                debug()
 
                 ax.plot(incrX, corr, label=lab, linewidth=3, color=colr)
 
@@ -4409,6 +4419,7 @@ def print_scrunch_ladder(results, rand_results, retrof_results, randomize,
 
     if in_axes[0] == 0:
         return fig, axes
+
 
 def odd_even_spacer(vals, oddeven='even', integer=False):
     out = []
@@ -5943,7 +5954,7 @@ def three_param_control_A(ITSs, testing, p_line, par, in_axes=False, ax_nr=0):
 
     c2 = np.array([0.33]) # 
     c3 = np.array([0.11]) #
-    c4 = np.array([5.40]) #
+    c4 = np.array([0.70]) #
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6135,7 +6146,7 @@ def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
 
     # grid size
     grid_size = 15
-    rands = 0 # for cross-validating and random sequences
+    rands = 0  # for cross-validating and random sequences
 
     if testing:
         grid_size = 8
@@ -6149,15 +6160,17 @@ def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
 
     # Parameter ranges you want to test out
     # free it up
-    c1 = np.array([par['K']]) # insensitive to variation here
+    c1 = np.array([par['K']])  # insensitive to variation here
 
     #c2 = np.linspace(0, 1.0, grid_size)
     #c3 = np.linspace(0, 1.0, grid_size)
     #c4 = np.linspace(0, 1.0, grid_size)
 
-    c2 = np.array([0.33]) # 15 runs
-    c3 = np.array([0]) # 15 runs
-    c4 = np.array([0.95]) # 15 runs
+    c2 = np.array([0.07])  # 15 runs
+    c3 = np.array([0.13])  # 15 runs
+    c4 = np.array([0.91])  # 15 runs
+
+    #c1, c2, c3 = [0.19, 0.12, 0.75]
 
     par_ranges = (c1, c2, c3, c4)
 
@@ -6199,9 +6212,9 @@ def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
         print('{0}: {1:.2f} +/- {2:.2f}'.format(param, mean, std))
 
     # ladder plot
-    ymin = 0 # correlation is always high
-    ymax = 1.0 # correlation is always high
-    randomize = rands # you didn't randomize
+    ymin = 0  # correlation is always high
+    ymax = 1.0  # correlation is always high
+    randomize = rands  # you didn't randomize
 
     # add a mini-scatter to illustrate what the graph is all aboot
     inset_plot = True
@@ -6215,15 +6228,15 @@ def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
     if not in_axes:
         axxes = [list(axes)]
     else:
-        axxes = [list(axes), list(in_axes)] # first is for the single figure, second
+        axxes = [list(axes), list(in_axes)]  # first is for the single figure, second
     #is for both
     # you must make as a list in order to be able to test the values for truth
     # or false
 
     maxnuc = its_max
     # make a scatter plot and put in first plot position
-    print_scrunch_scatter(results, rand_results, randomize, par_ranges, PYs,
-                            PY_std, pos=maxnuc, in_axes=axxes, ax_nr=0)
+    #print_scrunch_scatter(results, rand_results, randomize, par_ranges, PYs,
+                            #PY_std, pos=maxnuc, in_axes=axxes, ax_nr=0)
 
     # make a ladder plot and put in the second position
     print_scrunch_ladder(results, rand_results, retrof_results, randomize,
@@ -6233,7 +6246,7 @@ def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
 
     # Add A and B if two plots
     for i, label in enumerate(('A', 'B')):
-        ax = axes[i] # for the local figure
+        ax = axes[i]  # for the local figure
         ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=16,
                 fontweight='bold', va='top')
 
@@ -6244,6 +6257,7 @@ def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
     fig.tight_layout()
 
     return fig
+
 
 def linear_model(ITSs, results, PYs):
     """
@@ -6816,10 +6830,10 @@ def paper_figures(ITSs):
 
     ## Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     #cross-reference. Return either one or two figures.
-    ladder_name = 'three_param_model_AB' + append
-    fig_back = three_param_AB(ITSs, testing, p_line, global_params)
+    #ladder_name = 'three_param_model_AB' + append
+    #fig_back = three_param_AB(ITSs, testing, p_line, global_params)
 
-    figs.append((fig_back, ladder_name))
+    #figs.append((fig_back, ladder_name))
 
     ###Figure 2.5 -> Three-parameter model with controls
     #ladder_control_name = 'three_param_control_AB' + append
@@ -6844,11 +6858,11 @@ def paper_figures(ITSs):
 
     #Figure 4 -> Predicted VS actual PY
     #ax_nr = 3
-    evaluation_name = 'Predicted_vs_measured' + append
-    #fig_evaluation = predicted_vs_measured(ITSs, in_axes=axes1, ax_nr=ax_nr)
-    fig_evaluation = predicted_vs_measured(ITSs)
-    fig_evaluation.tight_layout()
-    figs.append((fig_evaluation, evaluation_name))
+    #evaluation_name = 'Predicted_vs_measured' + append
+    ##fig_evaluation = predicted_vs_measured(ITSs, in_axes=axes1, ax_nr=ax_nr)
+    #fig_evaluation = predicted_vs_measured(ITSs)
+    #fig_evaluation.tight_layout()
+    #figs.append((fig_evaluation, evaluation_name))
 
     ### Figure 5 -> Selection pressures
     #predicted_name = 'Selection_pressure' + append

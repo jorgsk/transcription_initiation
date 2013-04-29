@@ -173,9 +173,9 @@ class ITS(object):
         self.totAbortMean = np.mean(self.totAbort.values(), axis=0)
         self.totRNAMean = np.mean(self.totRNA.values(), axis=0)
 
-    def calc_keq(self, c1, c2, c3, SE_beg=2):
+    def calc_keq(self, c1, c2, c3):
         """
-        Calculate Keq_i for each i in [3,20]
+        Calculate Keq_i for each i in [2,20]
 
         """
 

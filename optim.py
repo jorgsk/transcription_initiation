@@ -19,7 +19,7 @@ class Result(object):
     """
     Placeholder for results for plotting
     These are results from the simulation for a given its_length; they are the
-    top 20 correlation coefficients, pvals, fitted parameters (c1, c2, c3, c4)
+    top 20 correlation coefficients, pvals, fitted parameters (c1, c2, c3)
     and the final values
 
     You get in slightly different things here for Normal and Random results.
@@ -57,7 +57,7 @@ class Result(object):
         self.SEn_min = np.min(SEn)
 
         # The parameters are not so easy to do something with; the should be
-        # supplied in a dictionray [c1,c2,c3,c4] = arrays; so make mean, std,
+        # supplied in a dictionray [c1,c2,c3] = arrays; so make mean, std,
         # min, max for them as well
 
         # handle nan
@@ -66,6 +66,7 @@ class Result(object):
                       'c2':[np.nan],
                       'c3':[np.nan]}
 
+        # extract mean, std etc
         self.params_mean = dict((k, np.mean(v)) for k,v in params.items())
         self.params_std = dict((k, np.std(v)) for k,v in params.items())
         self.params_max = dict((k, np.max(v)) for k,v in params.items())
@@ -94,8 +95,6 @@ def main_optim(its_range, ITSs, ranges, randize, crosscorr, normal):
     results_crosscorr = {}
 
     for its_len in its_range:
-
-        print its_len
 
         # 'normal' results (full dataset)
         if normal:
@@ -267,7 +266,7 @@ def core_optim_wrapper(its_len, ITSs, ranges):
     pvals = np.array([c[3] for c in top_hits])
 
     # Return parameters in a dictionary form
-    # pars[c1, c2, c3, c4] = [array]
+    # pars[c1, c2, c3] = [array]
     params = {}
     for par_nr in range(1, len(ranges)+1):
         params['c{0}'.format(par_nr)] = [p[par_nr-1] for p in pars]
@@ -442,8 +441,8 @@ def average_rand_result(rand_results):
     from sub-optimal results.
     """
 
-    new_corr, new_pvals, new_params = [], [], {'c1':[], 'c2':[],
-                                               'c3':[], 'c4':[]}
+    new_corr, new_pvals = [], []
+    new_params = {'c1':[], 'c2':[], 'c3':[]}
 
     # Add the values from the X random versions
 
@@ -451,7 +450,7 @@ def average_rand_result(rand_results):
     # want the best ones
     for res_obj in rand_results:
 
-        # check if this is a NaN object; skip it
+        # check if this is a NaN object; skip it if so
         if res_obj.corr[0] is np.nan:
             continue
 
