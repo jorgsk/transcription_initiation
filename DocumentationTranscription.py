@@ -716,7 +716,7 @@ def ReadAndFixData():
 
     # Selecting the dataset you want to use
     #
-    ITSs = data_handler.PYHsu(hsu1)  # Unmodified Hsu data
+    #ITSs = data_handler.PYHsu(hsu1)  # Unmodified Hsu data
     #lazt = Filereader.PYHsu(hsu2) # Normalized Hsu data by scaling
     #lazt = Filereader.PYHsu(hsu3) # Normalized Hsu data by omitting experiment3
     #lazt = Filereader.PYHsu(hsu4) # 2007 data, skipping N25, N25anti
@@ -6166,9 +6166,9 @@ def three_param_AB(ITSs, testing, p_line, par, in_axes=False):
     #c3 = np.linspace(0, 1.0, grid_size)
     #c4 = np.linspace(0, 1.0, grid_size)
 
-    c2 = np.array([0.07])  # 15 runs
-    c3 = np.array([0.13])  # 15 runs
-    c4 = np.array([0.91])  # 15 runs
+    c2 = np.array([0.17])  # 15 runs
+    c3 = np.array([0.00])  # 15 runs
+    c4 = np.array([0.93])  # 15 runs
 
     #c1, c2, c3 = [0.19, 0.12, 0.75]
 
@@ -6830,10 +6830,12 @@ def paper_figures(ITSs):
 
     ## Figure 1 and 2 -> Three-parameter model with parameter estimation but no
     #cross-reference. Return either one or two figures.
-    #ladder_name = 'three_param_model_AB' + append
-    #fig_back = three_param_AB(ITSs, testing, p_line, global_params)
+    ladder_name = 'three_param_model_AB' + append
+    fig_back = three_param_AB(ITSs, testing, p_line, global_params)
 
-    #figs.append((fig_back, ladder_name))
+    plt.show()
+
+    figs.append((fig_back, ladder_name))
 
     ###Figure 2.5 -> Three-parameter model with controls
     #ladder_control_name = 'three_param_control_AB' + append
@@ -8606,7 +8608,7 @@ def keq_reader():
 
 
 def main():
-    ITSs = ReadAndFixData() # read raw data
+    ITSs = ReadAndFixData()  # read raw data
 
     #abortive_initiation_fromwhere(ITSs)
 

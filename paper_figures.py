@@ -95,13 +95,68 @@ class Calculator(object):
 
         self.ITSs = ITSs
         self.testing = testing
-
+        self.name = calcName
         self.delinResults = {}
+        self.results = None
 
-    def getDelineatorResults(self):
-        return self.delinResults
+    def calc(self, *args, **kwargs):
+        """
+        Run simulations according to calc.name
+        """
 
-    def delineatorComboCalc(self):
+        if self.name == 'delineatorComboCalc':
+            self.results = self._delineatorComboCalc(*args, **kwargs)
+
+        if self.name == 'delineatorCalc':
+            self.results = self._delineatorCalc(*args, **kwargs)
+
+        if self.name == 'correlateSE_PY':
+            self.results = self._correlateSE_PY(*args, **kwargs)
+
+        if self.name == 'PYvsSE':
+            self.results = self._PYvsSE(*args, **kwargs)
+
+        if self.name == 'dg400_validation':
+            self.results = self._dg400_validation(*args, **kwargs)
+
+        if self.name == 'crossCorr':
+            self.results = self._crossCorr(*args, **kwargs)
+
+        if self.name == 'normalizedAP':
+            self.results = self._normalizedAP(*args, **kwargs)
+
+    def fetch(self):
+        """
+        Retrieve simulation results
+        """
+        return self.results
+
+    def _normalizedAP(self, dg100, dg400):
+        """
+        Return dict {dg100/400: PY, sum(Keq), sum(AP), sum(APnorm)}
+
+        """
+        outp = {
+                'dg100': {'PY':[], 'keq': [], 'sumAP': [], 'sumAPnorm': []},
+                'dg400': {'PY':[], 'keq': [], 'sumAP': [], 'sumAPnorm': []}
+                }
+
+        # calculate keq values using latest parameter values
+        c1, c2, c3 = [0.13, 0, 0.93]
+
+        for dset, name in [(dg100, 'dg100'), (dg400, 'dg400')]:
+            for its in dset:
+                its.calc_keq(c1, c2, c3)
+                outp[name]['keq'].append(sum(its.keq))
+                outp[name]['PY'].append(its.PY)
+                apS = sum([v for v in its.abortiveProb if v > 0])
+                outp[name]['sumAP'].append(apS)
+                apSnorm = sum([v for v in its.abortiveProb/apS if v > 0])
+                outp[name]['sumAPnorm'].append(apSnorm)
+
+        return outp
+
+    def _delineatorComboCalc(self):
         """
         See the effect of combining DG3D, DGRNADNA, DGDNADNA
         """
@@ -135,8 +190,9 @@ class Calculator(object):
         itsMax = 20
         itsRange = range(itsMin, itsMax+1)
         if self.testing:
-            itsRange = [itsMin, 5, 10, 15, itsMax]
+            #itsRange = [itsMin, 5, 10, 15, itsMax]
             #itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
+            itsRange = range(itsMin, itsMax+1)
 
         analysis = 'Normal'
 
@@ -161,7 +217,7 @@ class Calculator(object):
 
             self.delinResults[comboKey] = [indx, corr, pvals]
 
-    def delineatorCalc(self):
+    def _delineatorCalc(self):
         """
         See the individual effect of DG3D, DGRNADNA, DGDNADNA
         """
@@ -180,6 +236,7 @@ class Calculator(object):
         if self.testing:
             #itsRange = [itsMin, 5, 10, 15, itsMax]
             itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
+            itsRange = range(itsMin, itsMax+1)
 
         analysis = 'Normal'
 
@@ -204,7 +261,7 @@ class Calculator(object):
 
             self.delinResults[comboKey] = [indx, corr, pvals]
 
-    def correlateSE_PY(self, itsRange):
+    def _correlateSE_PY(self, itsRange):
         """
         Return three lists: indices, corr-values, and p-values
         Correlation between SE_n and PY
@@ -229,7 +286,7 @@ class Calculator(object):
 
         return indx, corr, pvals
 
-    def dg400_validation(self):
+    def _dg400_validation(self):
         """
         Calculate the SE_n and correlate them with the experimentally measured
         SE_n values for the DG400 library.
@@ -254,12 +311,13 @@ class Calculator(object):
         # write all of this to an output file
         #write_py_SE15(tested_PY, SE15)
 
-    def PYvsSE(self, b):
+    def _PYvsSE(self, topNuc, coeff=False):
         """
         Correlate PY with SE and return corr, pval, and indx for plotting
 
-        b is the 'best' correlating nucleotide: usually 14
+        topNuc is the 'best' correlating nucleotide position
         """
+        debug()
 
          #set the range of values for which you wish to calculate correlation
         itsMin = 2
@@ -269,15 +327,17 @@ class Calculator(object):
         #if self.testing:
             #itsRange = [itsMin, 5, 10, 15, itsMax]
 
-        #analysis = 'Normal'
-        #result = optimizeParam(self.ITSs, itsRange, self.testing,
-                    #analysis=analysis)
+        if coeff:
+            c1, c2, c3 = coeff
+        else:
+            analysis = 'Normal'
+            onlySignCoeff=0.05
+            result = optimizeParam(self.ITSs, itsRange, self.testing,
+                        analysis=analysis)
+            c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+                    onlySignCoeff, analysis)
 
-        #onlySignCoeff=0.05
-        # Print some output and return one value for c1, c2, and c3
-        #c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
-                #onlySignCoeff, analysis)
-        c1, c2, c3 = [0.13, 0.07, 0.91]
+        # std = [0.20, 0.21, 0.39]
         #c1, c2, c3 = [0.19, 0.12, 0.75]
 
         # add the constants to the ITS objects and calculate Keq
@@ -293,14 +353,14 @@ class Calculator(object):
         # the the highest nt you tested (probably 20)
         ntMax = max(indx)
         SEmax = [sum(i.keq[:ntMax+1]) for i in self.ITSs]
-        SEbest = [sum(i.keq[:b]) for i in self.ITSs]
+        SEbest = [sum(i.keq[:topNuc]) for i in self.ITSs]
 
         for (ind, cor) in zip(indx, corr):
             print ind, cor
 
         return indx, corr, pvals, PYs, PYstd, SEmax, SEbest
 
-    def crossCorr(self, testing=True):
+    def _crossCorr(self, testing=True):
         """
         Cross-correlation and randomization of ITS sequences: affect on SE_n-PY
         correlation.
@@ -428,6 +488,19 @@ class Plotter(object):
                     fontweight='bold', va='top')
 
     ##### Below: functions that produce plots | above: helper functions #####
+
+    def normalizedApPlot(self, results):
+
+        axL = self.getNextAxes()
+        axR = self.getNextAxes()
+
+        axL.scatter(results['dg100']['keq'], results['dg100']['sumAP'])
+        axL.set_xlabel('SE_20')
+        axL.set_ylabel('Sum of abortive probabilities')
+
+        axR.scatter(results['dg100']['keq'], results['dg100']['sumAPnorm'])
+        axL.set_xlabel('SE_20')
+        axL.set_ylabel('Sum of normalized abortive probabilities')
 
     def delineatorComboPlot(self, delineateResults):
         """
@@ -721,7 +794,6 @@ class Plotter(object):
         #fit_vals = [linear_function(outp_args, x_val) for x_val in x]
         ##359.388266403 total
         ##13.8226256309 averaged
-        plt.ioff()
 
         F = Fit()
 
@@ -1110,7 +1182,7 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     """
 
     # grid size
-    grid_size = 10
+    grid_size = 15
     if testing:
         grid_size = 6
 
@@ -2318,39 +2390,42 @@ def main():
             #'Figure2',  # SE vs PY
             #'Figure3',  # Delineate + DG400
             #'Figure4',  # Keq vs AP
-            #'Suppl1'   # Random and cross-corrleation (supplementary)
-            'Suppl2',   # Delineate -- all combinations
-            #'Suppl3',   # PY vs sum(AP) before and after normalization
+            #'Suppl1',   # Random and cross-corrleation (supplementary)
+            #'Suppl2',   # Delineate -- all combinations
+            'Suppl3',   # PY vs sum(AP) before and after normalization
             ]
 
     ### XXX Below this line are figures that appear in the paper XXX ###
 
     # Reuse calculations: good for tweaking plots
-    calculateAgain = False
+    #calculateAgain = False
+    calculateAgain = True
 
     # collect the figures you want to save to file
     saveMe = {}
 
-    testing = True
-    #testing = False
+    plt.ion()
+    #testing = True
+    testing = False
     for fig in figures:
 
         ##################### FIGURE SE vs PY ########################
         if fig == 'Figure2':
-            plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY', p_line=True)
-            # initialize and run correlator
-            calcr = Calculator(dg100, calcName='SE15 vs PY', testing=True)
+            calcr = Calculator(dg100, calcName='PYvsSE', testing=testing)
 
-            b = 13  # the nt for which correlation is highest
+            topNuc = 13  # the nt for which correlation is highest
             # return the relevant data for plotting
-            indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcr.PYvsSE(b=b)
+            coeff = [0.14, 0.00, 0.93]  # median of 20 runs
+            calcr.calc(topNuc, coeff=coeff)
+            results = calcr.fetch()
 
+            indx, corr, pvals, PYs, PYstd, SEmax, SEbest = results
+
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY', p_line=True)
             plotr.PYvsSEscatter(PYs, PYstd, SEmax)
-            plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, b, inset=True)
+            plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc, inset=True)
 
             saveMe[fig] = plotr.figure
-
-            return dg100
 
         ###################### FIGURE KEQ vs AP ########################
         if fig == 'Figure4':
@@ -2364,13 +2439,13 @@ def main():
         if fig == 'Figure3':
 
             filePath = 'pickledData/delineate'
+            #calculateAgain = True
             if not os.path.isfile(filePath) or calculateAgain:
-                calcrDelin = Calculator(dg100, calcName='delineate', testing=testing)
-                calcrDelin.delineatorCalc()
-                delResults = calcrDelin.getDelineatorResults()
+                calc = Calculator(dg100, calcName='delineatorCalc', testing=testing)
+                calc.calc()
 
                 # pickle the results for re-usage
-                pickle_wrap(data=delResults, path=filePath, action='save')
+                pickle_wrap(data=calc.fetch(), path=filePath, action='save')
 
             else:
                 delResults = pickle_wrap(path=filePath, action='load')
@@ -2379,42 +2454,36 @@ def main():
             plotr.delineatorPlot(delResults)  # plot the delineate plot
 
             # calculate values for the DG400 scatter plot
-            calcrValidation = Calculator(dg400, calcName='validation', testing=testing)
+            calc = Calculator(dg400, calcName='dg400_validation', testing=testing)
 
-            SE15, PY, PYstd = calcrValidation.dg400_validation()
+            calc.calc()
+            SE15, PY, PYstd = calc.fetch()
 
             plotr.dg400validater(dg400, SE15, PY, PYstd)
-            plt.show()
 
             saveMe[fig] = plotr.figure
 
         ###################### FIGURE Cross-corr and Random ########################
         # Used to be in the main paper, now supplementary
         if fig == 'Suppl1':
-            calcr = Calculator(dg100, calcName='Cross-corr and Random',
-                    testing=testing)
-            # what you need for plotting
-            #analysis2stats = calcr.crossCorr()
 
-            # pickle the results for re-usage
-            saveFilePath = 'pickledData/crossCorrRandom'
-            #saveFileHandle = open(saveFilePath, 'wb')
-            #pickle.dump(analysis2stats, saveFileHandle)
-            #saveFileHandle.close()
+            filePath = 'pickledData/crossCorrRandom'
 
-            openFileHandle = open(saveFilePath, 'rb')
-            analysis2stats = pickle.load(openFileHandle)
-            openFileHandle.close()
+            if not os.path.isfile(filePath) or calculateAgain:
+                calc = Calculator(dg100, calcName='crossCorr', testing=testing)
+                calcr.calc()
+                results = calcr.fetch()
+
+                pickle_wrap(data=results, path=filePath, action='save')
+            else:
+                results = pickle_wrap(path=filePath, action='load')
 
             # plot :)
             plotr = Plotter(YaxNr=1, XaxNr=1, plotName='ccAndRandom')
-            plotr.crossCorrPlot(analysis2stats)
+            plotr.crossCorrPlot(results)
 
         ###################### FIGURE All combinations of DGs ########################
         # Supplementary to justify that you're using the whole model
-        # TODO find out why all 3 are worse than just 2
-        # compare with paper figure.
-        # proceed with TODO list kthnx.
         if fig == 'Suppl2':
 
             filePath = 'pickledData/suppl2_delineateCombo'
@@ -2432,7 +2501,17 @@ def main():
 
             plotr = Plotter(YaxNr=1, XaxNr=1, plotName='delineate combo')
             plotr.delineatorComboPlot(results)
-            plt.show()
+
+        ###################### FIGURE All combinations of DGs ########################
+        # Supplementary to justify that you're using the whole model
+        if fig == 'Suppl3':
+            filePath = 'pickledData/suppl3_normalizedAP'
+            calcr = Calculator(dg100, calcName='normalizedAP', testing=testing)
+            calcr.calc(dg100, dg400)
+            results = calcr.fetch()
+
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName='normalizedAPcomparison')
+            plotr.normalizedApPlot(results)
 
     return dg100
 
