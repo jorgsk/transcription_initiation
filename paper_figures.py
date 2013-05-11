@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import optim
 import os
 import cPickle as pickle  # NOQA
+import copy
 from operator import attrgetter
 from scipy.stats import spearmanr, pearsonr, nanmean, nanstd, nanmedian  # NOQA
 from scipy.interpolate import InterpolatedUnivariateSpline as interpolate
@@ -91,51 +92,166 @@ class Calculator(object):
     Each calculator class has a corresponding plotting class
     """
 
-    def __init__(self, ITSs, calcName='myCalc', testing=True):
+    def __init__(self, dg100, dg400, calcName, testing, dset, coeffs, topNuc):
 
-        self.ITSs = ITSs
+        self.coeffs = coeffs
+        self.topNuc = topNuc
+        # horrible thing
+        # you want the ability to let dg100 and dg400 both be dset, but you
+        # also want dg100 and dg400 to always be available! how horrible. you
+        # should solve this by sending an extra keyword 'dgxxx' to the method
+        # in question, but now's not the time
+        if dset:
+            self.ITSs = dset
+        else:
+            self.ITSs = dg100
+        self.dg100 = dg100
+        self.dg400 = dg400
         self.testing = testing
         self.name = calcName
         self.results = None
 
-    def calc(self, *args, **kwargs):
+    def calc(self):
         """
         Run simulations according to calc.name
         """
 
-        if self.name == 'delineateCombo':
-            self.results = self._delineatorComboCalc(*args, **kwargs)
+        # call the method by its name
+        methodByName = getattr(Calculator, self.name)
+        self.results = methodByName(self)
 
-        if self.name == 'delineate':
-            self.results = self._delineatorCalc(*args, **kwargs)
-
-        if self.name == 'correlateSE_PY':
-            self.results = self._correlateSE_PY(*args, **kwargs)
-
-        if self.name == 'PYvsSE':
-            self.results = self._PYvsSE(*args, **kwargs)
-
-        if self.name == 'dg400_validation':
-            self.results = self._dg400_validation(*args, **kwargs)
-
-        if self.name == 'crossCorrRandom':
-            self.results = self._crossCorr(*args, **kwargs)
-
-        if self.name == 'normalizedAP':
-            self.results = self._normalizedAP(*args, **kwargs)
-
-        if self.name == 'cumulativeAbortive':
-            self.results = self._cumulativeAbortive(*args, **kwargs)
-
-    def fetch(self):
-        """
-        Retrieve simulation results
-        """
         return self.results
 
-    def _cumulativeAbortive(self):
+    def AP_vs_Keq(self):
+        # you're modifying it so make a copy
+        dset = copy.deepcopy(self.dg100 + self.dg400)
+
+        c1, c2, c3 = self.coeffs
+        for its in dset:
+            its.calc_keq(c1, c2, c3)
+
+        normalize_AP(dset)
+        movSize = 0  # effectively NOT a moving winding, but nt-2-nt comparison
+
+        # Ignore 2, since it's just AT and very little variation occurs.
+        xmers = range(3, 21)
+        # the bar height will be the correlation with the above three values for
+        # each moving average center position
+        bar_height = []
+        pvals = []
+
+        for mer_center_pos in xmers:
+
+            attr = 'abortiveProb'
+            #movAP = get_movAv_array(dset, center=mer_center_pos, movSize=movSize, attr=attr)
+            movAP = get_movAv_array(dset, center=mer_center_pos, movSize=0,
+                    attr=attr, prePost='both')
+
+            attr = 'keq'
+            movKeq = get_movAv_array(dset, center=mer_center_pos, movSize=movSize,
+                    attr=attr, prePost='both')
+                    #attr=attr, prePost='post')
+
+            corr, pval = spearmanr(movAP, movKeq)
+
+            bar_height.append(corr)
+            pvals.append(pval)
+
+            print mer_center_pos, corr, pval
+
+        result = xmers, bar_height, pvals, movSize
+
+        return result
+
+    def megaFig(self):
+
+        return False
+
+    def AP_Keq_examples(self):
+        """
+        Do AP and Keq calculations for one DG100, one DG400, and average for
+        DG100 and DG400
+
+        Return dict with keys as plot indices
+        """
+
+        # calculate keq values using latest parameter values
+        c1, c2, c3 = self.coeffs
+
+        # calc keq for all
+        for its in self.dg100 + self.dg400:
+            its.calc_keq(c1, c2, c3)
+
+        output = {}
+        # How to return in a way that is easy for plotting?
+        # The whole dictionary approach is getting tedious.
+        # Can you use tuples as keys? yes!
+        dg1xx = 'DG164'
+        dg4xx = 'DG444'
+        dg100Obj = [d for d in self.dg100 if d.name == dg1xx][0]
+        dg400Obj = [d for d in self.dg400 if d.name == dg4xx][0]
+
+        row = 0  # AP
+        for col in range(4):
+            key = (row, col)
+            if col == 0:
+                data = dg100Obj.abortiveProb
+                data_std = dg100Obj.abortiveProb_std
+
+                output[key] = (data, data_std, dg1xx, 'AP')
+
+            if col == 1:
+                data = dg400Obj.abortiveProb
+                data_std = dg400Obj.abortiveProb_std
+
+                output[key] = (data, data_std, dg4xx, 'AP')
+
+            if col == 2:
+                data = np.mean([d.abortiveProb for d in self.dg100], axis=0)
+                data_std = np.std([d.abortiveProb for d in self.dg100], axis=0)
+
+                output[key] = (data, data_std, 'DG100 library', 'AP')
+
+            if col == 3:
+                data = np.mean([d.abortiveProb for d in self.dg400], axis=0)
+                data_std = np.std([d.abortiveProb for d in self.dg400], axis=0)
+
+                output[key] = (data, data_std, 'DG400 library', 'AP')
+
+        row = 1  # Keq
+        for col in range(4):
+            key = (row, col)
+            if col == 0:
+                data = dg100Obj.keq
+                data_std = []
+
+                output[key] = (data, data_std, dg1xx, 'Keq')
+
+            if col == 1:
+                data = dg400Obj.keq
+                data_std = []
+
+                output[key] = (data, data_std, dg4xx, 'Keq')
+
+            if col == 2:
+                data = np.mean([d.keq for d in self.dg100], axis=0)
+                data_std = np.std([d.keq for d in self.dg100], axis=0)
+
+                output[key] = (data, data_std, 'DG100 library', 'Keq')
+
+            if col == 3:
+                data = np.mean([d.keq for d in self.dg400], axis=0)
+                data_std = np.std([d.keq for d in self.dg400], axis=0)
+
+                output[key] = (data, data_std, 'DG400 library', 'Keq')
+
+        return output
+
+    def cumulativeAbortive(self):
         """
         Calculate the cumulative amount of abortive product
+
+        TODO update with flexible dg100 dg400
         """
 
         cumlRawProd = []
@@ -148,7 +264,7 @@ class Calculator(object):
 
         return cumlRawProd, cumlAP
 
-    def _normalizedAP(self, dg100, dg400):
+    def normalizedAP(self):
         """
         Return dict {dg100/400: PY, sum(Keq), sum(AP), sum(APnorm)}
 
@@ -161,7 +277,7 @@ class Calculator(object):
         # calculate keq values using latest parameter values
         c1, c2, c3 = [0.13, 0, 0.93]
 
-        for dset, name in [(dg100, 'dg100'), (dg400, 'dg400')]:
+        for dset, name in [(self.dg100, 'dg100'), (self.dg400, 'dg400')]:
             for its in dset:
                 its.calc_keq(c1, c2, c3)
                 outp[name]['keq'].append(sum(its.keq))
@@ -173,7 +289,7 @@ class Calculator(object):
 
         return outp
 
-    def _delineatorComboCalc(self):
+    def delineateCombo(self):
         """
         See the effect of combining DG3D, DGRNADNA, DGDNADNA
         """
@@ -232,13 +348,13 @@ class Calculator(object):
                 its.calc_keq(c1, c2, c3)
 
             # calculate the correlation with PY
-            indx, corr, pvals = self._correlateSE_PY(itsRange)
+            corr, pvals = self.correlateSE_PY(itsRange)
 
-            delinResults[comboKey] = [indx, corr, pvals]
+            delinResults[comboKey] = [itsRange, corr, pvals]
 
         return delinResults
 
-    def _delineatorCalc(self):
+    def delineate(self):
         """
         See the individual effect of DG3D, DGRNADNA, DGDNADNA
         """
@@ -280,13 +396,13 @@ class Calculator(object):
                 its.calc_keq(c1, c2, c3)
 
             # calculate the correlation with PY
-            indx, corr, pvals = self._correlateSE_PY(itsRange)
+            corr, pvals = self.correlateSE_PY(itsRange)
 
-            delinResults[comboKey] = [indx, corr, pvals]
+            delinResults[comboKey] = [itsRange, corr, pvals]
 
         return delinResults
 
-    def _correlateSE_PY(self, itsRange):
+    def correlateSE_PY(self, itsRange):
         """
         Return three lists: indices, corr-values, and p-values
         Correlation between SE_n and PY
@@ -294,7 +410,6 @@ class Calculator(object):
 
         PY = [i.PY for i in self.ITSs]
 
-        indx = itsRange
         corr = []
         pvals = []
 
@@ -309,34 +424,38 @@ class Calculator(object):
             corr.append(co)
             pvals.append(pv)
 
-        return indx, corr, pvals
+        return corr, pvals
 
-    def _dg400_validation(self):
+    def dg400_validation(self):
         """
         Calculate the SE_n and correlate them with the experimentally measured
         SE_n values for the DG400 library.
         """
 
-        # 2) Calculate the PY scores for them.
-        c1, c2, c3 = (0.33, 0, 0.95)
+        if self.coeffs:
+            c1, c2, c3 = self.coeffs
 
+        else:
+            print("omg no!")
+
+        c1, c2, c3 = self.coeffs
         # add the constants to the ITS objects and calculate Keq
-        for its in self.ITSs:
+        for its in self.dg400:
             its.calc_keq(c1, c2, c3)
 
         # get PY and PY standard deviation
-        PY = [i.PY for i in self.ITSs]
-        PYstd = [i.PY_std for i in self.ITSs]
+        PY = [i.PY for i in self.dg400]
+        PYstd = [i.PY_std for i in self.dg400]
 
         # Get the SE15
-        SE15 = [sum(i.keq[:15]) for i in self.ITSs]
+        SE15 = [sum(i.keq[:15]) for i in self.dg400]
 
         return SE15, PY, PYstd
 
         # write all of this to an output file
         #write_py_SE15(tested_PY, SE15)
 
-    def _PYvsSE(self, topNuc, coeff=False):
+    def PYvsSE(self):
         """
         Correlate PY with SE and return corr, pval, and indx for plotting
 
@@ -351,8 +470,8 @@ class Calculator(object):
         #if self.testing:
             #itsRange = [itsMin, 5, 10, 15, itsMax]
 
-        if coeff:
-            c1, c2, c3 = coeff
+        if self.coeffs:
+            c1, c2, c3 = self.coeffs
         else:
             analysis = 'Normal'
             onlySignCoeff=0.05
@@ -361,14 +480,12 @@ class Calculator(object):
             c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
                     onlySignCoeff, analysis)
 
-        # std = [0.20, 0.21, 0.39]
-        #c1, c2, c3 = [0.19, 0.12, 0.75]
-
         # add the constants to the ITS objects and calculate Keq
         for its in self.ITSs:
             its.calc_keq(c1, c2, c3)
 
-        indx, corr, pvals = self._correlateSE_PY(itsRange)
+        corr, pvals = self.correlateSE_PY(itsRange)
+        indx = itsRange
 
         # also return PY and PY std, and SEmax (usually SE20)
         PYs = [i.PY for i in self.ITSs]
@@ -377,14 +494,14 @@ class Calculator(object):
         # the the highest nt you tested (probably 20)
         ntMax = max(indx)
         SEmax = [sum(i.keq[:ntMax+1]) for i in self.ITSs]
-        SEbest = [sum(i.keq[:topNuc]) for i in self.ITSs]
+        SEbest = [sum(i.keq[:self.topNuc]) for i in self.ITSs]
 
         for (ind, cor) in zip(indx, corr):
             print ind, cor
 
-        return indx, corr, pvals, PYs, PYstd, SEmax, SEbest
+        return self.topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest
 
-    def _crossCorr(self, testing=True):
+    def crossCorrRandom(self, testing=True):
         """
         Cross-correlation and randomization of ITS sequences: affect on SE_n-PY
         correlation.
@@ -394,7 +511,8 @@ class Calculator(object):
         itsRange = range(2, 21)
 
         if self.testing:
-            itsRange = [10, 15, 20]
+            #itsRange = [5, 7, 10, 13, 15, 18, 20]
+            itsRange = range(2, 21)
 
         analysis2stats = {}
 
@@ -403,18 +521,28 @@ class Calculator(object):
             result = optimizeParam(self.ITSs, itsRange, self.testing,
                     analysis=analysis)
 
-            onlySignCoeff=0.05
-            # Print some output and return one value for c1, c2, and c3
-            c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
-                            onlySignCoeff, analysis)
-
             corr_stds = [r[1].corr_std for r in sorted(result.items())]
+            indx = itsRange
 
-            # add the constants to the ITS objects and calculate Keq
-            for its in self.ITSs:
-                its.calc_keq(c1, c2, c3)
+            # if normal, pick the median c1, c2, c3 values as for Figure 2
+            if analysis == 'Normal':
+                # Print some output and return one value for c1, c2, and c3
+                onlySignCoeff = 0.05
+                c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+                                onlySignCoeff, analysis)
 
-            indx, corr, pvals = self._correlateSE_PY(itsRange)
+                # add the constants to the ITS objects and calculate Keq with
+                # the new c1, c2, and c3 mean values
+                for its in self.ITSs:
+                    its.calc_keq(c1, c2, c3)
+
+                corr, pvals = self.correlateSE_PY(itsRange)
+
+            # if random or cross-correlation, pick the average of the best
+            # results for each nucleotide
+            else:
+                corr = [r[1].corr_mean for r in sorted(result.items())]
+                pvals = [r[1].pvals_mean for r in sorted(result.items())]
 
             analysis2stats[analysis] = [indx, corr, corr_stds, pvals]
 
@@ -430,17 +558,20 @@ class Plotter(object):
     that enter the paper.
     """
 
-    def __init__(self, YaxNr=1, XaxNr=1, plotName='MyPlot', p_line=True):
+    def __init__(self, YaxNr=1, XaxNr=1, shareX=False, shareY=False,
+                    plotName='MyPlot', p_line=True):
 
         # initialized the matplotlib figure
         # squeeze=False guarantees that axes will be a 2d array
-        self.figure, self.axes = plt.subplots(YaxNr, XaxNr, squeeze=False)
+        self.figure, self.axes = plt.subplots(YaxNr, XaxNr, squeeze=False,
+                sharex=shareX, sharey=shareY)
+        #self.figure, self.axes = plt.subplots(YaxNr, XaxNr, squeeze=False,
+                #sharex=True)
 
         self.plotName = plotName
         self.xTicks = []
         self.yTicks = []
-        self.xTickFontSize = 8
-        self.xTickFontSize = 8
+        self.fontSize = 8
 
         # draw a pvalue=0.05 line
         self.p_line = p_line
@@ -520,7 +651,67 @@ class Plotter(object):
 
     ##### Below: functions that produce plots | above: helper functions #####
 
-    def moving_average_ap_keq(self, dg100, dg400, coeff):
+    def AP_Keq_examplesPlot(self, results):
+        """
+        """
+
+        for indices, (data, data_std, descr, PYorKeq) in results.items():
+
+            ax = self.axes[indices]
+
+            # plot error bars if present
+            if data_std != []:
+                ax.bar(range(2, len(data)+2), data, yerr=data_std,
+                        align='center')
+            else:
+                ax.bar(range(2, len(data)+2), data, align='center')
+
+            # set x labels
+            if indices[0] == 1:
+                ax.set_xlabel('ITS nucleotide')
+
+            # set y labels
+            if indices[1] == 0:
+                ax.set_ylabel(PYorKeq)
+
+            # set title
+            if indices[0] == 0:
+                ax.set_title(descr)
+
+            # set xlim
+            ax.set_xlim(1, 21.5)
+
+            # set yticks and ylim
+            # if AP
+            if PYorKeq == 'AP':
+                ax.set_ylim(0, 0.71)
+
+                if indices[1] == 0:
+                    # y ticks
+                    yticks = np.arange(0, 0.8, 0.1)
+                    ax.set_yticks(yticks)
+                else:
+                    ax.set_yticklabels([])
+
+            # if Keq
+            if PYorKeq == 'Keq':
+                ax.set_ylim(0, 3.1)
+
+                if indices[1] == 0:
+                    # y ticks
+                    yticks = np.arange(0, 5, 1)
+                    ax.set_yticks(yticks)
+                else:
+                    ax.set_yticklabels([])
+
+            # set grid
+            ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                          alpha=0.5)
+
+            # make sure grid falls under bars
+            ax.axes.set_axisbelow(True)
+
+    def moving_average_ap_keq(self, results):
         """
         Moving average between AP and Keq
 
@@ -539,50 +730,12 @@ class Plotter(object):
         However, I could argue that the reason for AP - PY correlation goes through
         the Keq.
         """
-
-        #dset = dg100
-        #dset = dg400
-        dset = dg100 + dg400
-
-        c1, c2, c3 = coeff
-        for its in dset:
-            its.calc_keq(c1, c2, c3)
-
-        normalize_AP(dset)
-
-        movSize = 0
-
-        # Ignore 2, since it's just AT and very little variation occurs.
-        xmers = range(3, 21)
+        xmers, bar_height, pvals, movSize = results
 
         # get a moving average window for each center_position
         # calculating from an x-mer point of view
         Q = 0.05  # minimum false discovery rate
         # Use a less conservative test for the paper
-
-        # the bar height will be the correlation with the above three values for
-        # each moving average center position
-        bar_height = []
-        pvals = []
-
-        for mer_center_pos in xmers:
-
-            attr = 'abortiveProb'
-            #movAP = get_movAv_array(dset, center=mer_center_pos, movSize=movSize, attr=attr)
-            movAP = get_movAv_array(dset, center=mer_center_pos, movSize=0,
-                    attr=attr, prePost='both')
-
-            attr = 'keq'
-            movKeq = get_movAv_array(dset, center=mer_center_pos, movSize=movSize,
-                    attr=attr, prePost='both')
-                    #attr=attr, prePost='post')
-
-            corr, pval = spearmanr(movAP, movKeq)
-
-            bar_height.append(corr)
-            pvals.append(pval)
-
-            print mer_center_pos, corr, pval
 
         # Add colors to the bar-plots according to the benjamini hochberg method
         # sort the p-values from high to low; test against plim/
@@ -691,11 +844,8 @@ class Plotter(object):
             ax.set_xlim(3, indxMax)
             ax.set_xlabel("RNA length, $n$", size=10)
 
-            # awkward way of setting the tick font sizes
-            for l in ax.get_xticklabels():
-                l.set_fontsize(10)
-            for l in ax.get_yticklabels():
-                l.set_fontsize(10)
+            #  setting the tick font sizes
+            ax.tick_params(labelsize=10)
 
             ax.set_ylabel("Correlation coefficient, $r$", size=10)
 
@@ -723,8 +873,8 @@ class Plotter(object):
 
         ax = self.getNextAxes()
 
-        colors = ['b', 'g', 'k']
-        lstyle = ['-', '--', '-.']
+        colors = ['k', 'g', 'b']
+        lstyle = ['--', '-.', '-']
 
         # convert from dict-keys to plot labels
         key2label = {
@@ -775,11 +925,8 @@ class Plotter(object):
             ax.set_xlim(3, indxMax)
             ax.set_xlabel("RNA length, $n$", size=10)
 
-            # awkward way of setting the tick font sizes
-            for l in ax.get_xticklabels():
-                l.set_fontsize(10)
-            for l in ax.get_yticklabels():
-                l.set_fontsize(10)
+            # setting the tick font sizes
+            ax.tick_params(labelsize=10)
 
             ax.set_ylabel("Correlation coefficient, $r$", size=10)
 
@@ -816,10 +963,7 @@ class Plotter(object):
                                            integer=True)
         ax.set_xticklabels(xticklabels_skip)
 
-        for l in ax.get_xticklabels():
-            l.set_fontsize(10)
-        for l in ax.get_yticklabels():
-            l.set_fontsize(10)
+        ax.tick_params(labelsize=10)
         #######################
 
         fit_function = True
@@ -842,9 +986,9 @@ class Plotter(object):
             box_x = 30
             box_y = 20
 
-            if name == 'N25_A1anti':
+            if name == 'N25_A1anti' or name == 'N25/A1anti':
                 name = 'N25/A1anti'
-                box_x = -50
+                box_x = 5
                 box_y = -30
 
             if name == 'DG133':
@@ -968,21 +1112,18 @@ class Plotter(object):
         ax.set_ylabel("PY", size=13)
         ax.set_xlabel("SE$_{20}$", size=13)
 
-        ymin = -0.2
+        ymin = -0.1
 
-        # awkward way of setting the tick sizes
-        for l in ax.get_xticklabels():
-            l.set_fontsize(11)
-        for l in ax.get_yticklabels():
-            l.set_fontsize(11)
+        # setting the tick number sizes
+        ax.tick_params(labelsize=11)
 
         xmin, xmax = min(SEmax), max(SEmax)
-        xscale = (xmax-xmin)*0.1
+        xscale = (xmax-xmin)*0.06
         ax.set_xlim(xmin-xscale, xmax+xscale)
 
         ymin, ymax = min(PYs), max(PYs)
-        yscale_low = (ymax-ymin)*0.1
-        yscale_high = (ymax-ymin)*0.4
+        yscale_low = (ymax-ymin)*0.03
+        yscale_high = (ymax-ymin)*0.34
         ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
 
     def cumulativeAbortive(self, cumulRaw, cumulAp, corr):
@@ -1036,10 +1177,11 @@ class Plotter(object):
 
         # correlation between correlation coeffieicnet and cumul prob?
         corr[0] = 0
-        print spearmanr(np.array(corr)*(-1), cumulApNorm)
+        print spearmanr(np.array(corr)*(-1), cumulRawNorm)
         print('High linear correlation between increase in correlation and'
-               ' cumulative probability to abort transcription initiation.')
-        print pearsonr(np.array(corr)*(-1), cumulApNorm)
+               ' cumulative probability to abort transcription initiation.'
+               ' But this is not a good measure ... youll need to do bettrr ')
+        print pearsonr(np.array(corr)*(-1), cumulRawNorm)
 
     def PYvsSEladder(self, indx, corr, pvals, PYs, SEbest, b, inset=False):
         """
@@ -1160,9 +1302,8 @@ class Plotter(object):
                 # check for nan in corr (make it 0)
                 corr, pvals = remove_nan(corr, pvals)
 
-                lab = 'correlation: PY and SE$_n$)'
-
-                ax.plot(incrX, corr, label=lab, linewidth=3, color=colr)
+                lab = 'correlation: PY and SE$_n$'
+                ax.plot(incrX, corr, label=lab, linewidth=3, color=colr, marker='s')
 
                 p_line = False
                 if p_line:
@@ -1178,21 +1319,22 @@ class Plotter(object):
             elif analysis == 'Random':
                 lab = 'using random sequences'
                 ax.errorbar(incrX, corr, yerr=corr_stds, label=lab,
-                                     linewidth=2, color=colr)
+                                     linewidth=2, color=colr, marker='*')
 
             elif analysis == 'Cross Correlation':
                 lab = 'cross-validation'
                 ax.errorbar(incrX, corr, yerr=corr_stds, label=lab,
-                                     linewidth=2, color=colr)
+                                     linewidth=2, color=colr, marker='x')
 
         its_max = incrX[-1]
 
-        ymin = 0
+        ymin = -0.5
+        ymax = 1.0
         # yticks
-        yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -1.1, -0.1)]
+        yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -ymax, -0.1)]
         yticklabels_skip = odd_even_spacer(yticklabels)
 
-        ax.set_yticks(np.arange(ymin, 1.1, 0.1))
+        ax.set_yticks(np.arange(ymin, ymax, 0.1))
         ax.set_yticklabels(yticklabels_skip)
         ax.set_ylim(ymin, 1.001)
         ax.set_ylabel("Correlation coefficient, $r$", size=13)
@@ -1206,13 +1348,10 @@ class Plotter(object):
         ax.set_xlim(3, its_max)
         ax.set_xlabel("RNA length, $n$", size=13)
 
-        ax.legend(loc='lower right', prop={'size':9})
+        ax.legend(loc='upper left', prop={'size':10})
 
-        # awkward way of setting the tick font sizes
-        for l in ax.get_xticklabels():
-            l.set_fontsize(11)
-        for l in ax.get_yticklabels():
-            l.set_fontsize(11)
+        # setting the tick font sizes
+        ax.tick_params(labelsize=12)
 
         ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                       alpha=0.5)
@@ -1357,21 +1496,22 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     # grid size
     grid_size = 15
     if testing:
-        grid_size = 6
+        grid_size = 5
 
     # assume normal and no randomization or cross correlation analysis
     randize = 0
     crosscorr = 0
 
-    if analysis == 'Normal':
-        normal = True
-    elif analysis == 'Random':
+    # defalt: normal analysis
+    normal = True
+
+    if analysis == 'Random':
         randize = grid_size
         normal = False
     elif analysis == 'Cross Correlation':
         crosscorr = grid_size
         normal = False
-    else:
+    elif analysis != 'Normal':
         print('Give correct analysis parameter name')
         1/0
 
@@ -1396,17 +1536,8 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     all_results = optim.main_optim(its_range, ITSs, par_ranges, randize,
             crosscorr, normal)
 
-    # extract the results where the full dataset has been used
-    if analysis == 'Normal':
-        results = all_results[0]
-    elif analysis == 'Random':
-        results = all_results[1]
-    elif analysis == 'Cross Correlation':
-        results = all_results[2]
-    else:
-        print('WTF mate')
-
-    return results
+    # return results for requested analysis type ('normal' by default)
+    return all_results[analysis]
 
 
 def get_print_parameterValue_output(results, its_range, onlySignCoeff, analysis):
@@ -2297,67 +2428,75 @@ def get_movAv_array(dset, center, movSize, attr, prePost):
 def moving_average_ap(dg100, dg400):
     """
     Define a moving average size movSize and correlate each moving average
-    window with the PY/FL/TA
+    window of either abortive probability or raw abortive product with the PY/FL/TA
+
+    The results are insteresting: dg100 and dg400 have slightly different
+    profiles
     """
 
-    #dset = dg100
-    dset = dg400
-
-    movSize = 1
-
-    py = [i.PY for i in dset]
-    fl = [i.fullLengthMean for i in dset]
-    ta = [i.totAbortMean for i in dset]
-
+    movSize = 0
     xmers = range(2, 21)
-    attr = 'abortiveProb'
-
-    # get a moving average window for each center_position
-    # calculating from an x-mer point of view
+    #attr = 'abortiveProb'
+    attr = 'rawDataMean'
     plim = 0.05
-    # Use a less conservative test for the paper
 
-    for label, meas in [('PY', py), ('FL', fl), ('TotalAbort', ta)]:
-    #for label, meas in [('FL', fl), ('TotalAbort', ta)]:
+    #for title, dset in [('DG100', dg100), ('DG400', dg400),
+            #('DG100 + DG400', dg100+dg400)]:
+    for title, dset in [('DG100', dg100), ('DG400', dg400)]:
 
-        # the bar height will be the correlation with the above three values for
-        # each moving average center position
-        bar_height = []
-        pvals = []
+        py = [i.PY for i in dset]
+        #fl = [i.fullLengthMean for i in dset]
+        #ta = [i.totAbortMean for i in dset]
 
-        nr_tests = 0
+        # get a moving average window for each center_position
+        # calculating from an x-mer point of view
+        # Use a less conservative test for the paper
 
-        for mer_center_pos in xmers:
-            movArr = get_movAv_array(dset, center=mer_center_pos,
-                    movSize=movSize, attr=attr)
+        #for label, meas in [('PY', py), ('FL', fl), ('TotalAbort', ta)]:
+        for label, meas in [('PY', py)]:
+        #for label, meas in [('FL', fl), ('TotalAbort', ta)]:
 
-            corr, pval = spearmanr(meas, movArr)
+            # the bar height will be the correlation with the above three values for
+            # each moving average center position
+            bar_height = []
+            pvals = []
 
-            if not np.isnan(corr):
-                nr_tests += 1
+            nr_tests = 0
 
-            bar_height.append(corr)
-            pvals.append(pval)
+            for mer_center_pos in xmers:
+                movArr = get_movAv_array(dset, center=mer_center_pos,
+                        movSize=movSize, attr=attr, prePost='both')
 
-        # if no tests passed, make to 1 to avoid division by zero
-        if nr_tests == 0:
-            nr_tests = 1
+                corr, pval = spearmanr(meas, movArr)
 
-        colors = []
-        for pval in pvals:
-            if pval < (plim/nr_tests):
-                colors.append('g')
-            else:
-                colors.append('k')
+                if not np.isnan(corr):
+                    nr_tests += 1
 
-        fig, ax = plt.subplots()
-        ax.bar(left=xmers, height=bar_height, align='center', color=colors)
-        ax.set_xticks(xmers)
-        ax.set_xlim(xmers[0]-1, xmers[-1])
+                bar_height.append(corr)
+                pvals.append(pval)
 
-        ax.set_xlabel('Center x-mer for moving average')
-        ax.set_ylabel('{0} -- {1}: window size: '
-                        '{2}'.format(label, attr, movSize))
+            # if no tests passed, make to 1 to avoid division by zero
+            if nr_tests == 0:
+                nr_tests = 1
+
+            colors = []
+            for pval in pvals:
+                if pval < (plim/nr_tests):
+                    colors.append('g')
+                else:
+                    colors.append('k')
+
+            fig, ax = plt.subplots()
+            ax.bar(left=xmers, height=bar_height, align='center', color=colors)
+            ax.set_xticks(xmers)
+            ax.set_xlim(xmers[0]-1, xmers[-1])
+
+            ax.set_xlabel('Nucleotide')
+            ax.set_ylabel('Correlation coefficient')
+            #ax.set_title('{0} -- {1}: window size: '
+                            #'{2}'.format(label, attr, movSize))
+            ax.set_title('{0}: Correlations between sum of abortive product at each ITS'
+                    ' position and PY'.format(title))
 
 
 def benjami_colors(pvals, Q, signcol, nonsigncol):
@@ -2415,6 +2554,88 @@ def pickle_wrap(data='', path='', action=''):
         return 0/1
 
 
+def abortive_bar(dg100, dg400):
+    """
+    Simply a bar-plot showing the amount of abortive product
+    """
+
+    fig, axes = plt.subplots(2)
+
+    xmers = range(2, 21)
+    attr = 'rawDataMean'
+
+    for ax_nr, (title, dset) in enumerate([('DG100', dg100), ('DG400', dg400)]):
+
+        ax = axes[ax_nr]
+
+        bar_height = []
+
+        for nc in xmers:
+            bar_height.append(sum([getattr(i, attr)[nc-2] for i in dset]))
+
+        ax.bar(left=xmers, height=bar_height, align='center')
+        ax.set_xticks(xmers)
+        ax.set_xlim(xmers[0]-1, xmers[-1])
+
+        ax.set_xlabel('Nucleotide')
+        ax.set_ylabel('Abortive product')
+        ax.set_title(title)
+
+    fig.suptitle('Sum of abortive product at each nucleotide position')
+
+
+def doFigureCalculations(pickDir, figures, calculateAgain, testing, dg100,
+                            dg400):
+    """
+    Perform all calculations necessary for plotting. Each figure can have
+    several 'plot' functions.
+    """
+
+    def calcWrapper(name, dset=False, coeff=False, topNuc=False):
+        """
+        Wrapper for calculating and returning plot data. Pickling if necessary.
+        """
+
+        filePath = os.path.join(pickDir, name)
+
+        if not os.path.isfile(filePath) or calculateAgain:
+            calcr = Calculator(dg100, dg400, name, testing, dset, coeff,
+                                topNuc)
+            results = calcr.calc()
+
+            # pickle the results for re-usage
+            pickle_wrap(data=results, path=filePath, action='save')
+
+        else:
+            results = pickle_wrap(path=filePath, action='load')
+
+        return results
+
+    # Dictionary that maps figures to calculations
+    fig2calc = {
+            'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
+            'Figure2': ['PYvsSE', 'cumulativeAbortive'],
+            'Figure3': ['delineate', 'dg400_validation'],
+            'Figure4': ['AP_vs_Keq'],
+            'Suppl1':  ['crossCorrRandom'],
+            'Suppl2':  ['delineateCombo'],
+            'Suppl3':  ['normalizedAP'],
+            'Suppl4':  ['AP_Keq_examples']
+            }
+
+    # Prepare the figures
+    # Return the result of the sub calc through calcResults
+    calcResults = {}
+
+    for fig in figures:
+        for subCalcName in fig2calc[fig]:
+            coeff = [0.14, 0.00, 0.93]  # median of 20 runs
+            calcResults[subCalcName] = calcWrapper(subCalcName, topNuc=13,
+                                                    coeff=coeff)
+
+    return calcResults
+
+
 def main():
 
     #remove_controls = True
@@ -2426,6 +2647,7 @@ def main():
     if remove_controls:
         controls = ['DG133', 'DG115a', 'N25', 'N25anti', 'N25/A1anti']
         dg400 = [i for i in dg400 if not i.name in controls]
+        #dg100 = [i for i in dg100 if not i.name in controls]
 
     # Normalize the AP -- removes correlation between sum(PY) and sum(AP)
     #normalize_AP(ITSs)
@@ -2453,8 +2675,14 @@ def main():
     # bar plot of the sum of AP and the sum of raw
     #apRawSum(dg100, dg400)
 
+    # abortive bar plot
+    #plt.ion()
+    #abortive_bar(dg100, dg400)
+
     # moving average of AP vs PY/FL/TA
     #moving_average_ap(dg100, dg400)
+
+    #return dg100
 
     # TODO (investigate once more the correlation where'd it go?)
        #3)Figure size and font sizes should be set on the Plotter object, so that
@@ -2463,48 +2691,48 @@ def main():
     # But all in all you did it! All figures have been transfered :)
 
     figures = [
-            #'Figure2',  # SE vs PY
+            'Figure2',  # SE vs PY
             'Figure3',  # Delineate + DG400
-            #'Figure4',  # Keq vs AP
-            #'Suppl1',   # Random and cross-corrleation (supplementary)
-            #'Suppl2',   # Delineate -- all combinations
-            #'Suppl3',   # PY vs sum(AP) before and after normalization
+            'Figure4',  # Keq vs AP
+            'Suppl1',   # Random and cross-corrleation (supplementary)
+            'Suppl2',   # Delineate -- all combinations
+            'Suppl3',   # PY vs sum(AP) before and after normalization
+            'Suppl4',   # Examples of Keq and AP for 4 variants
+            'megaFig',  # One big figure for the first 4 plots
             ]
 
     ### XXX Below this line are figures that appear in the paper XXX ###
 
     # Reuse calculations: good for tweaking plots
-    calculateAgain = False
-    #calculateAgain = True
+    #calculateAgain = False
+    calculateAgain = True
 
     # collect the figures you want to save to file
     saveMe = {}
 
+    # save your calculations here for reuse
     pickDir = 'pickledData'
 
-    plt.ion()
+    #plt.ion()
     plt.ioff()
-    #testing = True
-    testing = False
+    testing = True
+    #testing = False
+
+    # Do calculations
+    calcResults = doFigureCalculations(pickDir, figures, calculateAgain,
+                                        testing, dg100, dg400)
+
+    # Do plotting
     for fig in figures:
 
-        plotr, calcr = None, None
+        plotr = None
         ##################### FIGURE SE vs PY ########################
         if fig == 'Figure2':
-            calcr = Calculator(dg100, calcName='PYvsSE', testing=testing)
 
-            topNuc = 13  # the nt for which correlation is highest
-            # return the relevant data for plotting
-            coeff = [0.14, 0.00, 0.93]  # median of 20 runs
-            calcr.calc(topNuc, coeff=coeff)
-            results1 = calcr.fetch()
-
-            indx, corr, pvals, PYs, PYstd, SEmax, SEbest = results1
-
-            # compare with cumulative amount of abortive probability
-            calcr = Calculator(dg100, calcName='cumulativeAbortive')
-            calcr.calc()
-            results2 = calcr.fetch()
+            # standard PY vs SEn
+            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsSE']
+            # cumulative amount of abortive probability
+            results2 = calcResults['cumulativeAbortive']
 
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY', p_line=True)
             plotr.PYvsSEscatter(PYs, PYstd, SEmax)
@@ -2512,22 +2740,27 @@ def main():
             plotr.cumulativeAbortive(*results2, corr=corr)
 
             # Should be 8.7 cm
-            plt.tight_layout()
-            plotr.setFigSize(16, 10)
+            #plt.tight_layout()
+            plotr.setFigSize(22, 11)
+            plotr.figure.subplots_adjust(left=0.05, top=0.97, right=0.93)
+                    #, bottom=None, right=None, top=None,
+                #wspace=None, hspace=None)
 
             saveMe['PYvsSE'] = plotr.figure
 
         ###################### FIGURE KEQ vs AP ########################
         if fig == 'Figure4':
+            """
+            No calc object for this one, cheating.
+            """
 
             name = 'AP_vs_Keq'
-
+            results = calcResults[name]
             # moving average between AP and Keq
             # the AP - Keq correlation depends only on DG3D, not on DGRNA-DNA etc.
-
             plotr = Plotter(YaxNr=1, XaxNr=1, plotName='SE15 vs PY', p_line=True)
-            coeff = [0.14, 0.00, 0.93]  # median of 20 runs
-            plotr.moving_average_ap_keq(dg100, dg400, coeff=coeff)
+
+            plotr.moving_average_ap_keq(results)
 
             plotr.setFigSize(12, 6)
             plt.tight_layout()
@@ -2539,28 +2772,13 @@ def main():
         if fig == 'Figure3':
 
             name = 'delineate'
-
-            filePath = os.path.join(pickDir, name)
-            if not os.path.isfile(filePath) or calculateAgain:
-                calcr = Calculator(dg100, calcName=name, testing=testing)
-                calcr.calc()
-
-                # pickle the results for re-usage
-                results = calcr.fetch()
-                pickle_wrap(results, path=filePath, action='save')
-
-            else:
-                results = pickle_wrap(path=filePath, action='load')
+            # delineation of effects of different energies
+            delinResults = calcResults[name]
+            # the DG400 scatter plot
+            SE15, PY, PYstd = calcResults['dg400_validation']
 
             plotr = Plotter(YaxNr=1, XaxNr=2)
-            plotr.delineatorPlot(results)  # plot the delineate plot
-
-            # calculate values for the DG400 scatter plot
-            calc = Calculator(dg400, calcName='dg400_validation', testing=testing)
-
-            calc.calc()
-            SE15, PY, PYstd = calc.fetch()
-
+            plotr.delineatorPlot(delinResults)  # plot the delineate plot
             plotr.dg400validater(dg400, SE15, PY, PYstd)
 
             # Should be 8.7 cm
@@ -2575,20 +2793,12 @@ def main():
 
             name = 'crossCorrRandom'
 
-            filePath = os.path.join(pickDir, name)
+            # cross corrrlation and random
+            results = calcResults[name]
 
-            if not os.path.isfile(filePath) or calculateAgain:
-                calcr = Calculator(dg100, calcName=name, testing=testing)
-                calcr.calc()
-                results = calcr.fetch()
-
-                pickle_wrap(data=results, path=filePath, action='save')
-            else:
-                results = pickle_wrap(path=filePath, action='load')
-
-            # plot :)
             plotr = Plotter(YaxNr=1, XaxNr=1)
             plotr.crossCorrPlot(results)
+            plotr.setFigSize(13, 12)
 
             saveMe[name] = plotr.figure
 
@@ -2597,42 +2807,45 @@ def main():
         if fig == 'Suppl2':
 
             name = 'delineateCombo'
-            filePath = os.path.join(pickDir, name)
-            #calculateAgain = True
-            if not os.path.isfile(filePath) or calculateAgain:
-                calcr = Calculator(dg100, calcName=name, testing=testing)
-                calcr.calc()
-                results = calcr.fetch()
-
-                # pickle the results for re-usage
-                pickle_wrap(data=results, path=filePath, action='save')
-
-            else:
-                results = pickle_wrap(path=filePath, action='load')
+            # all combinations of all DGs
+            results = calcResults[name]
 
             plotr = Plotter(YaxNr=1, XaxNr=1, plotName='delineate combo')
             plotr.delineatorComboPlot(results)
 
             saveMe[name] = plotr.figure
 
-        ###################### FIGURE All combinations of DGs ########################
-        # Supplementary to justify that you're using the whole model
+        ###################### FIGURE AP normalized ########################
+        # Showing the effect of AP normalization
         if fig == 'Suppl3':
-            name = 'normalizedAP'
 
-            filePath = os.path.join(pickDir, name)
-            calcr = Calculator(dg100, calcName=name, testing=testing)
-            calcr.calc(dg100, dg400)
-            results = calcr.fetch()
+            name = 'normalizedAP'
+            results = calcResults[name]
 
             plotr = Plotter(YaxNr=1, XaxNr=2)
             plotr.normalizedApPlot(results)
 
             saveMe[name] = plotr.figure
 
-        # make sure that these are only used once
+        ###################### FIGURE Keq AP examples ########################
+        # 2x4 figure: 2 first are Keq and AP examples for 2 selected promoters
+        # DG1XX, DG4XX. Last two are average Keq and AP for dg100 and dg400
+        # libaries
+        if fig == 'Suppl4':
+            name = 'AP_Keq_examples'
+
+            # AP and Keq for two examples and mean for DG100 and DG400
+            results = calcResults[name]
+
+            plotr = Plotter(YaxNr=2, XaxNr=4)
+            plotr.AP_Keq_examplesPlot(results)
+
+            plotr.setFigSize(30, 10)
+            #plotr.figure.tight_layout()
+            saveMe[name] = plotr.figure
+
+        # make sure that these variables are only used once
         del plotr
-        del calcr
 
     # save figures as pdf
     for fName, figure in saveMe.items():

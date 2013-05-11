@@ -20,7 +20,7 @@ class Result(object):
     Placeholder for results for plotting
     These are results from the simulation for a given its_length; they are the
     top 20 correlation coefficients, pvals, fitted parameters (c1, c2, c3)
-    and the final values
+    and the final values.
 
     You get in slightly different things here for Normal and Random results.
 
@@ -90,35 +90,33 @@ def main_optim(its_range, ITSs, ranges, randize, crosscorr, normal):
     if type(its_range) is int:
         its_range = range(its_range, its_range+1)
 
-    results = {}
-    results_random = {}
-    results_crosscorr = {}
+    results = {'Normal':{}, 'Random':{}, 'Cross Correlation':{}}
 
+    # Get the first iteration of results based on a wide parameter range
     for its_len in its_range:
+
+        # assume no analysis of this type
+        normal_obj = False
+        random_obj = False
+        crosscorr_obj = False
 
         # 'normal' results (full dataset)
         if normal:
             normal_obj = core_optim_wrapper(its_len, ITSs, ranges)
-        else:
-            normal_obj = False
 
         # Randomize
         if randize:
             random_obj = randomize_wrapper(its_len, ITSs, ranges, randize)
-        else:
-            random_obj = False
 
         # Cross correlation
         if crosscorr:
             crosscorr_obj = crosscorr_wrapper(its_len, ITSs, ranges, crosscorr)
-        else:
-            crosscorr_obj = False
 
-        results[its_len] = normal_obj
-        results_crosscorr[its_len] = crosscorr_obj
-        results_random[its_len] = random_obj
+        results['Normal'][its_len] = normal_obj
+        results['Random'][its_len] = random_obj
+        results['Cross Correlation'][its_len] = crosscorr_obj
 
-    return results, results_random, results_crosscorr
+    return results
 
 
 def ITS_RandomSplit(ITSs):
@@ -162,9 +160,13 @@ def ITSgenerator():
 
 
 def randomize_wrapper(its_len, ITSs, ranges, randomize=0):
+    """
+    Generate random ITS sequences and do the simulation with them
+    Return the average of the best scores you obtained
+    """
 
-    rand_results = []
-    for _ in range(randomize):
+    randResults = []
+    for dummy in range(randomize):
 
         ITS_random = randomize_ITS_sequence(ITSs)
 
@@ -175,9 +177,12 @@ def randomize_wrapper(its_len, ITSs, ranges, randomize=0):
             continue
 
         else:
-            rand_results.append(rand_result)
+            randResults.append(rand_result)
 
-    return average_rand_result(rand_results)
+    # select the average of the top correlations to report
+    avrgdResults = average_rand_result(randResults)
+
+    return avrgdResults
 
 
 def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
@@ -260,6 +265,8 @@ def core_optim_wrapper(its_len, ITSs, ranges):
         return Result()
 
     # now make separate corr, pvals, params, and SEn arrays from these
+    # these corr values represent corr(sum(SEn[:its_len], PY)) for the
+    # different c1, c2 ,c3 combinations
     SEn = np.array(top_hits[0][0])  # only get SEn for the top top
     pars = [c[1] for c in top_hits]
     corr = np.array([c[2] for c in top_hits])
@@ -447,7 +454,7 @@ def average_rand_result(rand_results):
     # Add the values from the X random versions
 
     # You don't want all 20 saved outcomes from each random version, you just
-    # want the best ones
+    # want the best ones. By best, I mean highest and lowest correlation.
     for res_obj in rand_results:
 
         # check if this is a NaN object; skip it if so
@@ -460,11 +467,13 @@ def average_rand_result(rand_results):
         for k, v in res_obj.params.items():
             new_params[k].append(v[0])
 
+    print('Top result')
+    print new_corr
     # Check if new_corr is empty (means all results were NaN)
     if new_corr == []:
-        return Result()
+        result = Result()
     else:
         # make a new result object
-        new_res = Result(new_corr, new_pvals, new_params, res_obj.SEn)
+        result = Result(new_corr, new_pvals, new_params, res_obj.SEn)
 
-        return new_res
+    return result
