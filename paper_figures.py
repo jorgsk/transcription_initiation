@@ -10,8 +10,12 @@ from __future__ import division
 ########### Make a debug function ##########
 from ipdb import set_trace as debug  # NOQA
 
+# Another debugger?
+#from pudb import set_trace
+
 import data_handler
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import optim
 import os
@@ -123,6 +127,7 @@ class Calculator(object):
         return self.results
 
     def AP_vs_Keq(self):
+
         # you're modifying it so make a copy
         dset = copy.deepcopy(self.dg100 + self.dg400)
 
@@ -130,42 +135,40 @@ class Calculator(object):
         for its in dset:
             its.calc_keq(c1, c2, c3)
 
-        normalize_AP(dset)
         movSize = 0  # effectively NOT a moving winding, but nt-2-nt comparison
 
         # Ignore 2, since it's just AT and very little variation occurs.
         xmers = range(3, 21)
         # the bar height will be the correlation with the above three values for
         # each moving average center position
-        bar_height = []
-        pvals = []
 
-        for mer_center_pos in xmers:
+        result = {}
+        for norm in ['Non-Normalized', 'Normalized']:
+            # in the second loop
+            if norm == 'Normalized':
+                normalize_AP(dset)
 
-            attr = 'abortiveProb'
-            #movAP = get_movAv_array(dset, center=mer_center_pos, movSize=movSize, attr=attr)
-            movAP = get_movAv_array(dset, center=mer_center_pos, movSize=0,
-                    attr=attr, prePost='both')
+            bar_height = []
+            pvals = []
 
-            attr = 'keq'
-            movKeq = get_movAv_array(dset, center=mer_center_pos, movSize=movSize,
-                    attr=attr, prePost='both')
-                    #attr=attr, prePost='post')
+            for mer_center_pos in xmers:
 
-            corr, pval = spearmanr(movAP, movKeq)
+                attr = 'abortiveProb'
+                movAP = get_movAv_array(dset, center=mer_center_pos,
+                        movSize=movSize, attr=attr, prePost='both')
 
-            bar_height.append(corr)
-            pvals.append(pval)
+                attr = 'keq'
+                movKeq = get_movAv_array(dset, center=mer_center_pos,
+                        movSize=movSize, attr=attr, prePost='both')
 
-            print mer_center_pos, corr, pval
+                corr, pval = spearmanr(movAP, movKeq)
 
-        result = xmers, bar_height, pvals, movSize
+                bar_height.append(corr)
+                pvals.append(pval)
+
+            result[norm] = xmers, bar_height, pvals, movSize
 
         return result
-
-    def megaFig(self):
-
-        return False
 
     def AP_Keq_examples(self):
         """
@@ -450,7 +453,7 @@ class Calculator(object):
         # Get the SE15
         SE15 = [sum(i.keq[:15]) for i in self.dg400]
 
-        return SE15, PY, PYstd
+        return self.dg400, SE15, PY, PYstd
 
         # write all of this to an output file
         #write_py_SE15(tested_PY, SE15)
@@ -544,6 +547,12 @@ class Calculator(object):
                 corr = [r[1].corr_mean for r in sorted(result.items())]
                 pvals = [r[1].pvals_mean for r in sorted(result.items())]
 
+                print analysis
+                onlySignCoeff = 0.95  # doesn't make sense really
+                c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+                                onlySignCoeff, analysis)
+                debug()
+
             analysis2stats[analysis] = [indx, corr, corr_stds, pvals]
 
         return analysis2stats
@@ -559,19 +568,19 @@ class Plotter(object):
     """
 
     def __init__(self, YaxNr=1, XaxNr=1, shareX=False, shareY=False,
-                    plotName='MyPlot', p_line=True):
+                    plotName='MyPlot', p_line=True, labSize=12, tickLabelSize=10,
+                    lineSize=2, tickLength=3, tickWidth=1):
 
-        # initialized the matplotlib figure
         # squeeze=False guarantees that axes will be a 2d array
         self.figure, self.axes = plt.subplots(YaxNr, XaxNr, squeeze=False,
-                sharex=shareX, sharey=shareY)
-        #self.figure, self.axes = plt.subplots(YaxNr, XaxNr, squeeze=False,
-                #sharex=True)
+                                              sharex=shareX, sharey=shareY)
 
         self.plotName = plotName
-        self.xTicks = []
-        self.yTicks = []
-        self.fontSize = 8
+        self.labSize = labSize
+        self.tickLabelSize = tickLabelSize
+        self.lineSize = lineSize
+        self.tickLength = tickLength
+        self.tickWidth = tickWidth
 
         # draw a pvalue=0.05 line
         self.p_line = p_line
@@ -600,8 +609,8 @@ class Plotter(object):
         Return the next axes. The axes are cycled through from top to down,
         from left to right. The axes for a 2X3 subplot would be returned in the
         order x_1y_1, x_1y_2, x_2y_1, x_2y_2, x_3y_1, x_3y_2
-
         """
+        #set_trace()
 
         # assume last axis has been reached
         provideAx = False
@@ -622,12 +631,13 @@ class Plotter(object):
             self._thisXaxNr = self._nextXaxNr
             self._thisYaxNr = self._nextYaxNr
 
-            nextAx = self.axes[self._thisXaxNr, self._thisYaxNr]
+            nextAx = self.axes[self._thisYaxNr, self._thisXaxNr]
         else:
             print('No more subplots will fit on these axes!! >:|')
 
         # update the count for obtaining the next axis element
-        if self._nextYaxNr < self.YaxNr:
+        # this proceedure selects elements column by column
+        if self._nextYaxNr < (self.YaxNr-1):
             self._nextYaxNr += 1
         else:
             self._nextYaxNr = 0
@@ -635,7 +645,7 @@ class Plotter(object):
 
         return nextAx
 
-    def addLetters(self, letters):
+    def addLetters(self, letters=('A', 'B'), positions=False):
         """
         letters = ('A', 'B') will add A and B to the subplots
         """
@@ -644,10 +654,20 @@ class Plotter(object):
         self._nextXaxNr = 0
         self._nextYaxNr = 0
 
-        for label in letters:
-            ax = self.getNextAxes()  # for the local figure
-            ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=16,
-                    fontweight='bold', va='top')
+        if not positions:
+            for label in letters:
+                ax = self.getNextAxes()  # for the local figure
+                ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=12,
+                        fontweight='bold', va='top')
+        else:
+            for pos, label in zip(positions, letters):
+                ax = self.getNextAxes()  # for the local figure
+                if pos == 'UL':
+                    ax.text(0.03, 0.97, label, transform=ax.transAxes, fontsize=12,
+                            fontweight='bold', va='top')
+                elif pos == 'UR':
+                    ax.text(0.85, 0.97, label, transform=ax.transAxes, fontsize=12,
+                            fontweight='bold', va='top')
 
     ##### Below: functions that produce plots | above: helper functions #####
 
@@ -711,7 +731,7 @@ class Plotter(object):
             # make sure grid falls under bars
             ax.axes.set_axisbelow(True)
 
-    def moving_average_ap_keq(self, results):
+    def moving_average_ap_keq(self, results, xlab=True, xticks=True):
         """
         Moving average between AP and Keq
 
@@ -748,26 +768,103 @@ class Plotter(object):
         ax.set_xticks(xmers)
         ax.set_xlim(xmers[0]-1, xmers[-1])
 
-        ax.set_xlabel('ITS position', size=10)
-        ax.set_ylabel('Correlation coefficient'.format(movSize), size=10)
+        # labels
+        if xlab:
+            ax.set_xlabel('ITS position', size=self.labSize)
+        ax.set_ylabel('Correlation: Keq and AP', size=6)
 
-        for l in ax.get_xticklabels():
-            l.set_fontsize(9)
-        for l in ax.get_yticklabels():
-            l.set_fontsize(9)
+        # ticks
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
+                width=self.tickWidth)
+
+        # X: show only positions with significant positions or 5, 10, 15, 20
+        xIndx = []
+        for inx, colr in enumerate(colors, start=3):
+            if (inx%2 == 0):
+                xIndx.append(str(inx))
+            else:
+                xIndx.append('')
+
+        if xticks:
+            ax.set_xticklabels(xIndx)
+        else:
+            ax.set_xticklabels([])
+
+        # Y: show every other tick with a label
+        yIndx = [g for g in np.arange(-0.2, 0.8, 0.2)]
+        ax.set_yticks(yIndx)
+
+        return ax
+
+    def sumAP_SE20(self, results, norm=True, xlab=True, xticks=True):
+
+        ax = self.getNextAxes()
+
+        keq = results['dg100']['keq'] + results['dg400']['keq']
+        #keq = results['dg400']['keq']
+        if norm:
+            sumAP = results['dg100']['sumAPnorm'] + results['dg400']['sumAPnorm']
+            #sumAP = results['dg400']['sumAPnorm']
+        else:
+            sumAP = results['dg100']['sumAP'] + results['dg400']['sumAP']
+            #sumAP = results['dg400']['sumAP']
+
+        ax.scatter(keq, sumAP, c='b')
+        print('Spearmanr keq and sum AP')
+        if norm:
+            print('Normalized')
+        else:
+            print('Not normalized')
+        print pearsonr(keq, sumAP)
+
+        # labels
+        if xlab:
+            ax.set_xlabel('SE$_{20}$', size=self.labSize)
+        ax.set_ylabel('Sum of AP', size=7)
+
+        # ticks
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
+                width=self.tickWidth)
+
+        if not xticks:
+            ax.set_xticklabels([])
+
+        if norm:
+            yrang = np.arange(0.996, 1.004, 0.002)
+        else:
+            yrang = np.arange(0.5, 5, 1)
+            ax.set_ylim(0.8, 4.8)
+
+        ax.set_yticks(yrang)
+        y_formatter = matplotlib.ticker.ScalarFormatter(useOffset=False)
+        ax.yaxis.set_major_formatter(y_formatter)
 
     def normalizedApPlot(self, results):
 
         axL = self.getNextAxes()
         axR = self.getNextAxes()
 
-        axL.scatter(results['dg100']['keq'], results['dg100']['sumAP'])
-        axL.set_xlabel('SE_20')
-        axL.set_ylabel('Sum of abortive probabilities')
+        keq100 = results['dg100']['keq']
+        sumAP100 = results['dg100']['sumAP']
+        sumAP100norm = results['dg100']['sumAPnorm']
+        print('DG100: Correlation sum(AP) and SE_20')
+        print(spearmanr(keq100, sumAP100))
 
-        axR.scatter(results['dg100']['keq'], results['dg100']['sumAPnorm'])
-        axL.set_xlabel('SE_20')
-        axL.set_ylabel('Sum of normalized abortive probabilities')
+        keq400 = results['dg400']['keq']
+        sumAP400 = results['dg400']['sumAP']
+        sumAP400norm = results['dg400']['sumAPnorm']
+        print('DG400: Correlation sum(AP) and SE_20')
+        print(spearmanr(keq400, sumAP400))
+
+        axL.scatter(keq100, sumAP100, c='b')
+        axL.scatter(keq400, sumAP400, c='g')
+        axL.set_xlabel('SE$_{20}$')
+        axL.set_ylabel('Sum AP')
+
+        axR.scatter(keq100, sumAP100norm, c='b')
+        axR.scatter(keq400, sumAP400norm, c='b')
+        axL.set_xlabel('SE$_{20}$')
+        axL.set_ylabel('Sum AP')
 
     def delineatorComboPlot(self, delineateResults):
         """
@@ -835,7 +932,7 @@ class Plotter(object):
             yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -ymax+0.1, -0.1)]
 
             # legend
-            ax.legend(loc='upper left', prop={'size': 10})
+            ax.legend(loc='center right', prop={'size': 7})
 
             # xticks
             ax.set_xticks(range(3, indxMax))
@@ -847,7 +944,7 @@ class Plotter(object):
             #  setting the tick font sizes
             ax.tick_params(labelsize=10)
 
-            ax.set_ylabel("Correlation coefficient, $r$", size=10)
+            ax.set_ylabel("Correlation: Keq and AP", size=10)
 
             ax.set_yticks(np.arange(ymin, ymax, 0.1))
             ax.set_yticklabels(odd_even_spacer(yticklabels))
@@ -869,12 +966,12 @@ class Plotter(object):
         """
 
         ymin = -0.3  # correlation is always high
-        ymax = 0.81
+        ymax = 0.74
 
         ax = self.getNextAxes()
 
         colors = ['k', 'g', 'b']
-        lstyle = ['--', '-.', '-']
+        dashes = [(1,1,1,1,1), (1,3,1,3,1,3), False]
 
         # convert from dict-keys to plot labels
         key2label = {
@@ -885,7 +982,7 @@ class Plotter(object):
 
         for key, label in key2label.items():
             color = colors.pop()
-            ls = lstyle.pop()
+            dash = dashes.pop()
 
             # indices, correlation coefficients, and pvalues SE - PY
             indx, corr, pvals = delineateResults[key]
@@ -897,7 +994,12 @@ class Plotter(object):
             # check for nan in corr (make it 0)
             corr, pvals = remove_nan(corr, pvals)
 
-            ax.plot(incrX, corr, label=label, linewidth=3, color=color, ls=ls)
+            if dash:
+                ax.plot(incrX, corr, label=label, linewidth=self.lineSize,
+                        color=color, dashes=dash)
+            else:
+                ax.plot(incrX, corr, label=label, linewidth=self.lineSize,
+                        color=color)
 
             # interpolate pvalues (x, must increase) with correlation (y) and
             # obtain the correlation for p = 0.05 to plot as a black
@@ -909,45 +1011,57 @@ class Plotter(object):
                 ax.axhline(y=f(0.05), ls='--', color='r', linewidth=3)
 
             indxMax = indx[-1]
-            xticklabels = [str(integer) for integer in range(3, indxMax)]
 
             #Make sure ymin has only one value behind the comma
             ymin = float(format(ymin, '.1f'))
             yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -ymax+0.1, -0.1)]
 
             # legend
-            ax.legend(loc='upper left', prop={'size': 9})
+            ax.legend(bbox_to_anchor=(0.41, 0.63, 0.4, 0.15), loc='best',
+                        prop={'size':4.4}, handlelength=3)
 
             # xticks
-            ax.set_xticks(range(3, indxMax))
-            #ax.set_xticklabels(xticklabels)
-            ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='odd'))
-            ax.set_xlim(3, indxMax)
-            ax.set_xlabel("RNA length, $n$", size=10)
+            ax.set_xticks(range(3, indxMax+1))
+
+            xtickLabels = []
+            for i in range(3, indxMax+1):
+                if i%5 == 0:
+                    xtickLabels.append(str(i))
+                else:
+                    xtickLabels.append('')
+
+            ax.set_xticklabels(xtickLabels)
+
+            ax.set_xlim(3, indxMax+1)
+            ax.set_xlabel("RNA length, $n$", size=self.labSize)
 
             # setting the tick font sizes
-            ax.tick_params(labelsize=10)
+            ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
+                    width=self.tickWidth)
 
-            ax.set_ylabel("Correlation coefficient, $r$", size=10)
+            ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize)
 
             ax.set_yticks(np.arange(ymin, ymax, 0.1))
-            ax.set_yticklabels(odd_even_spacer(yticklabels))
+            ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
             ax.set_ylim(ymin, ymax)
             ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                           alpha=0.5)
             ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                           alpha=0.5)
 
-    def dg400validater(self, dg400, SE15, PY, PYstd):
+    def dg400validater(self, dg400, SE15, PY, PYstd, fit_function=False):
 
         ax = self.getNextAxes()
 
-        ax.scatter(SE15, PY)
+        print("DG400 correalation SE15 PY")
+        print spearmanr(SE15, PY)
+
+        ax.scatter(SE15, PY, s=12)
         ax.errorbar(SE15, PY, yerr=PYstd, fmt=None)
 
         ########### Set figure and axis properties ############
-        ax.set_xlabel('SE$_{15}$', size=12)
-        ax.set_ylabel('PY', size=12)
+        ax.set_xlabel('SE$_{15}$', size=self.labSize)
+        ax.set_ylabel('PY', size=self.labSize)
 
         xmin, xmax = min(SE15), max(SE15)
         xscale = (xmax-xmin)*0.1
@@ -957,16 +1071,12 @@ class Plotter(object):
         yscale_low = (ymax-ymin)*0.2
         yscale_high = (ymax-ymin)*0.3
         ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
+        ax.set_yticks(np.linspace(0, 0.3, 4))
 
-        # shown only every other tick
-        xticklabels_skip = odd_even_spacer(ax.get_xticks(), oddeven='odd',
-                                           integer=True)
-        ax.set_xticklabels(xticklabels_skip)
+        # tick parameters
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
+                width=self.tickWidth)
 
-        ax.tick_params(labelsize=10)
-        #######################
-
-        fit_function = True
         # add a polynomial or sigmoid fit
         if fit_function:
             self.add_fitted_function(ax, PY, SE15)
@@ -983,21 +1093,21 @@ class Plotter(object):
             SE15 = sum(dg400dict[name].keq[:15])
             PY = dg400dict[name].PY
 
-            box_x = 30
-            box_y = 20
+            box_x = 20
+            box_y = 10
 
             if name == 'N25_A1anti' or name == 'N25/A1anti':
                 name = 'N25/A1anti'
-                box_x = 5
-                box_y = -30
+                box_x = -12
+                box_y = -14
 
             if name == 'DG133':
-                box_x = 30
+                box_x = 20
                 box_y = 20
 
             if name == 'DG115a':
                 box_x = 5
-                box_y = -30
+                box_y = -20
 
             colr = 'yellow'
             ax.annotate(name,
@@ -1005,7 +1115,7 @@ class Plotter(object):
                         bbox=dict(boxstyle='round, pad=0.5', fc=colr,
                                   alpha=0.5), ha='right', va='bottom',
                         arrowprops=dict(arrowstyle='->',
-                                        connectionstyle='arc3,rad=0'), size=8)
+                                        connectionstyle='arc3,rad=0'), size=4)
 
     def add_fitted_function(self, ax, PY, SE15):
         """
@@ -1106,25 +1216,28 @@ class Plotter(object):
         PYs = [p*100 for p in PYs]
         PYstd = [p*100 for p in PYstd]
 
-        ax.scatter(SEmax, PYs, color='k')
+        ax.scatter(SEmax, PYs, color='k', s=15)
         ax.errorbar(SEmax, PYs, yerr=PYstd, fmt=None, color='k')
 
-        ax.set_ylabel("PY", size=13)
-        ax.set_xlabel("SE$_{20}$", size=13)
+        ax.set_ylabel("PY", size=self.labSize)
+        ax.set_xlabel("SE$_{20}$", size=self.labSize)
 
         ymin = -0.1
 
         # setting the tick number sizes
-        ax.tick_params(labelsize=11)
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
+                width=self.tickWidth)
 
         xmin, xmax = min(SEmax), max(SEmax)
         xscale = (xmax-xmin)*0.06
         ax.set_xlim(xmin-xscale, xmax+xscale)
 
         ymin, ymax = min(PYs), max(PYs)
-        yscale_low = (ymax-ymin)*0.03
+        #yscale_low = (ymax-ymin)*0.03
         yscale_high = (ymax-ymin)*0.34
-        ax.set_ylim(ymin-yscale_low, ymax+yscale_high)
+        ax.set_ylim(0, ymax+yscale_high)
+
+        return ax
 
     def cumulativeAbortive(self, cumulRaw, cumulAp, corr):
         """
@@ -1132,7 +1245,8 @@ class Plotter(object):
         ladder.
         """
 
-        mainAx = self.axes[self._thisXaxNr, self._thisYaxNr]
+        # use the current axis
+        mainAx = self.axes[self._thisYaxNr, self._thisXaxNr]
 
         cumulRawNorm = np.array(cumulRaw)/cumulRaw[-1]
         cumulApNorm = np.array(cumulAp)/cumulAp[-1]
@@ -1145,20 +1259,23 @@ class Plotter(object):
 
         if choice == 'AP':
             # cumulApNorm starts with 2. make it start with 3 using [1:]
-            cumlAx.plot(np.arange(xlim[0], xlim[1]+1), cumulApNorm[1:], ls='--',
+            cumlAx.plot(np.arange(xlim[0]-1, xlim[1]+1), cumulApNorm, ls='--',
                     linewidth=2, color='g')
 
-            cumlAx.set_ylabel('Cumulative abortive probability', size=13,
+            cumlAx.set_ylabel('Cumulative abortive probability', size=9,
                     color='green')
 
         else:
-            cumlAx.plot(np.arange(xlim[0], xlim[1]+1), cumulRawNorm[1:], ls='--',
-                    linewidth=2, color='g')
+            cumlAx.plot(np.arange(xlim[0]-1, xlim[1]+1), cumulRawNorm, ls='-',
+                    linewidth=1, color='g')
+                    #linewidth=1, color='g', marker='D', markersize=3)
 
-            cumlAx.set_ylabel('Cumulative abortive product', size=13,
-                    color='green')
+            cumlAx.set_ylabel('Abortive product (cumulative %)',
+                    size=7, color='green')
 
-        cumlAx.tick_params(axis='y', labelsize=11, colors='green')
+        # tick parameters
+        cumlAx.tick_params(axis='y', labelsize=self.tickLabelSize, length=self.tickLength,
+                width=self.tickWidth, colors='green')
 
         yrange = np.arange(0,1.1,0.1)
         yticklabels_skip = odd_even_spacer(yrange)
@@ -1167,13 +1284,18 @@ class Plotter(object):
         cumlAx.set_yticklabels(yticklabels_skip)
 
         its_max = int(cumlAx.get_xlim()[-1])
-        cumlAx.set_xticks(range(3, its_max + 1))
+        cumlAx.set_xticks(range(2, its_max + 1))
 
-        xticklabels = [str(integer) for integer in range(3, its_max + 1)]
-        xticklabels_skip = odd_even_spacer(xticklabels, oddeven='odd')
-        cumlAx.set_xticklabels(xticklabels_skip)
+        xtickLabels = []
+        for i in range(2, its_max+1):
+            if i%5 == 0:
+                xtickLabels.append(str(i))
+            else:
+                xtickLabels.append('')
 
-        cumlAx.set_xlim(3-0.2, its_max + 0.3)
+        cumlAx.set_xticklabels(xtickLabels)
+
+        cumlAx.set_xlim(2-0.3, its_max + 0.3)
 
         # correlation between correlation coeffieicnet and cumul prob?
         corr[0] = 0
@@ -1198,7 +1320,8 @@ class Plotter(object):
         ## the ladder plot
         colr = 'b'
         revCorr = [c*(-1) for c in corr]  # to get an increasing correlation
-        ax.plot(indx, revCorr, linewidth=3, color=colr, marker='s')
+        ax.plot(indx, revCorr, linewidth=self.lineSize, color=colr, marker='s',
+                markersize=3)
 
         ## the little inset scatter plot
         if inset and b in indx:
@@ -1207,12 +1330,12 @@ class Plotter(object):
             y = -corr[x-2]  # adjust for starting from 2
 
             # add axes within axes: add_axes[left, bottom, width, height]
-            axsmall = self.figure.add_axes([0.575, 0.69, 0.14, 0.165], axisbg='y')
-            axsmall.scatter(PYs, SEbest, s=7)
-            axsmall.text(0.035, 2100, '$r$=-{0:.2f}'.format(y), size=10)
+            axsmall = self.figure.add_axes([0.61, 0.77, 0.14, 0.16], axisbg='y')
+            axsmall.scatter(PYs, SEbest, s=2)
+            #axsmall.text(0.035, 2100, '$r$=-{0:.2f}'.format(y), size=10)
 
-            axsmall.set_xlabel('SE$_{13}$', size=11)
-            axsmall.set_ylabel('PY', size=11)
+            axsmall.set_xlabel('SE$_{13}$', size=6)
+            axsmall.set_ylabel('PY', size=6)
             axsmall.xaxis.labelpad = 1
             axsmall.yaxis.labelpad = 1
 
@@ -1228,12 +1351,13 @@ class Plotter(object):
 
             # add an arrow (annotate is better than arrow for some
             # reason)
-            ax.annotate('', xy=(x-1.7, y+0.12), xytext=[x,y+0.01],
-                                 textcoords=None,
-                                 arrowprops=dict(arrowstyle='->',
-                         connectionstyle="arc, angleA=90, armA=45, rad=20"))
+            # XXX damn thing does not change well with general figure changes
+            #ax.annotate('', xy=(x-1.7, y+0.12), xytext=[x,y+0.01],
+                                 #textcoords=None,
+                                 #arrowprops=dict(arrowstyle='->',
+                         #connectionstyle="arc, angleA=90, armA=45, rad=20"))
 
-            ax.scatter(b, y, s=85)
+            ax.scatter(b, y, s=20)
 
             axsmall.set_yticklabels([])
             axsmall.set_xticklabels([])
@@ -1256,27 +1380,37 @@ class Plotter(object):
         ax.set_yticklabels(yticklabels_skip)
         ylim0 = -0.05
         ax.set_ylim(ylim0, 1.001)
-        ax.set_ylabel("Correlation between PY and SE$_n$", size=13, color='blue')
-
-        # xticks
-        xticklabels = [str(integer) for integer in range(3, its_max)]
-        xticklabels_skip = odd_even_spacer(xticklabels, oddeven='odd')
-
-        ax.set_xticks(range(3, its_max))
-        ax.set_xticklabels(xticklabels_skip)
-        ax.set_xlim(3, its_max)
-        ax.set_xlabel("RNA length, $n$", size=13)
-
-        ax.legend(loc='lower right', prop={'size':10})
+        ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize, color='blue')
 
         # set tick label size
-        ax.tick_params(labelsize=11)
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
+                width=self.tickWidth)
         ax.tick_params(axis='y', colors='blue')
+
+        # xticks
+        xtickLabels = []
+        for i in range(3, its_max):
+            if i%5 == 0:
+                xtickLabels.append(str(i))
+            else:
+                xtickLabels.append('')
+
+        ax.set_xticks(range(3, its_max))
+        ax.set_xticklabels(xtickLabels)
+        #ax.set_xticklabels([])
+        ax.set_xlim(3, its_max)
+        ax.set_xlabel("RNA length, $n$", size=self.labSize)
+
+        # bbox_to_anchor= x, y, width, height
+        ax.legend(bbox_to_anchor=(0.8, 0.1, 0.2, 0.1), loc='best',
+                    prop={'size':4.5})
 
         ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                       alpha=0.5)
         ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                       alpha=0.5)
+
+        return ax
 
     def crossCorrPlot(self, analysis2stats):
         """
@@ -1302,8 +1436,9 @@ class Plotter(object):
                 # check for nan in corr (make it 0)
                 corr, pvals = remove_nan(corr, pvals)
 
-                lab = 'correlation: PY and SE$_n$'
-                ax.plot(incrX, corr, label=lab, linewidth=3, color=colr, marker='s')
+                lab = 'Correlation: PY and SE$_n$'
+                ax.plot(incrX, corr, label=lab, linewidth=self.lineSize,
+                        color=colr, marker='s')
 
                 p_line = False
                 if p_line:
@@ -1317,14 +1452,14 @@ class Plotter(object):
 
             # if random, plot with errorbars
             elif analysis == 'Random':
-                lab = 'using random sequences'
+                lab = 'random sequences'
                 ax.errorbar(incrX, corr, yerr=corr_stds, label=lab,
-                                     linewidth=2, color=colr, marker='*')
+                                     linewidth=self.lineSize, color=colr, marker='*')
 
             elif analysis == 'Cross Correlation':
                 lab = 'cross-validation'
                 ax.errorbar(incrX, corr, yerr=corr_stds, label=lab,
-                                     linewidth=2, color=colr, marker='x')
+                                     linewidth=self.lineSize, color=colr, marker='x')
 
         its_max = incrX[-1]
 
@@ -1337,7 +1472,7 @@ class Plotter(object):
         ax.set_yticks(np.arange(ymin, ymax, 0.1))
         ax.set_yticklabels(yticklabels_skip)
         ax.set_ylim(ymin, 1.001)
-        ax.set_ylabel("Correlation coefficient, $r$", size=13)
+        ax.set_ylabel("Correlation: Keq and AP", size=13)
 
         # xticks
         xticklabels = [str(integer) for integer in range(3, its_max)]
@@ -1496,7 +1631,7 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     # grid size
     grid_size = 15
     if testing:
-        grid_size = 5
+        grid_size = 6
 
     # assume normal and no randomization or cross correlation analysis
     randize = 0
@@ -2584,7 +2719,7 @@ def abortive_bar(dg100, dg400):
     fig.suptitle('Sum of abortive product at each nucleotide position')
 
 
-def doFigureCalculations(pickDir, figures, calculateAgain, testing, dg100,
+def doFigureCalculations(fig2calc, pickDir, figures, calculateAgain, testing, dg100,
                             dg400):
     """
     Perform all calculations necessary for plotting. Each figure can have
@@ -2610,19 +2745,6 @@ def doFigureCalculations(pickDir, figures, calculateAgain, testing, dg100,
             results = pickle_wrap(path=filePath, action='load')
 
         return results
-
-    # Dictionary that maps figures to calculations
-    fig2calc = {
-            'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
-            'Figure2': ['PYvsSE', 'cumulativeAbortive'],
-            'Figure3': ['delineate', 'dg400_validation'],
-            'Figure4': ['AP_vs_Keq'],
-            'Suppl1':  ['crossCorrRandom'],
-            'Suppl2':  ['delineateCombo'],
-            'Suppl3':  ['normalizedAP'],
-            'Suppl4':  ['AP_Keq_examples']
-            }
-
     # Prepare the figures
     # Return the result of the sub calc through calcResults
     calcResults = {}
@@ -2684,28 +2806,36 @@ def main():
 
     #return dg100
 
-    # TODO (investigate once more the correlation where'd it go?)
-       #3)Figure size and font sizes should be set on the Plotter object, so that
-    # you can manipulate these and watch them change as you save to file.
-
-    # But all in all you did it! All figures have been transfered :)
-
     figures = [
-            'Figure2',  # SE vs PY
-            'Figure3',  # Delineate + DG400
-            'Figure4',  # Keq vs AP
-            'Suppl1',   # Random and cross-corrleation (supplementary)
-            'Suppl2',   # Delineate -- all combinations
-            'Suppl3',   # PY vs sum(AP) before and after normalization
-            'Suppl4',   # Examples of Keq and AP for 4 variants
-            'megaFig',  # One big figure for the first 4 plots
+            #'megaFig',  # One big figure for the first 4 plots
+            #'Figure2',  # SE vs PY
+            #'Figure3',  # Delineate + DG400
+            #'Figure4',  # Keq vs AP
+            'FigureX',  # 2x2 Keq vs AP, effect of normalization
+            #'Suppl1',   # Random and cross-corrleation (supplementary)
+            #'Suppl2',   # Delineate -- all combinations
+            #'Suppl3',   # PY vs sum(AP) before and after normalization
+            #'Suppl4',   # Examples of Keq and AP for 4 variants
             ]
+
+    # Dictionary that maps figures to calculations
+    fig2calc = {
+            'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
+            'Figure2': ['PYvsSE', 'cumulativeAbortive'],
+            'Figure3': ['delineate', 'dg400_validation'],
+            'Figure4': ['AP_vs_Keq'],
+            'FigureX': ['AP_vs_Keq', 'normalizedAP'],
+            'Suppl1':  ['crossCorrRandom'],
+            'Suppl2':  ['delineateCombo'],
+            'Suppl3':  ['normalizedAP'],
+            'Suppl4':  ['AP_Keq_examples']
+            }
 
     ### XXX Below this line are figures that appear in the paper XXX ###
 
     # Reuse calculations: good for tweaking plots
-    #calculateAgain = False
-    calculateAgain = True
+    calculateAgain = False
+    #calculateAgain = True
 
     # collect the figures you want to save to file
     saveMe = {}
@@ -2719,13 +2849,41 @@ def main():
     #testing = False
 
     # Do calculations
-    calcResults = doFigureCalculations(pickDir, figures, calculateAgain,
-                                        testing, dg100, dg400)
+    calcResults = doFigureCalculations(fig2calc, pickDir, figures,
+                                       calculateAgain, testing, dg100, dg400)
 
     # Do plotting
     for fig in figures:
 
         plotr = None
+
+        ##################### 4 main plots in one #######################
+        if fig == 'megaFig':
+
+            plotr = Plotter(YaxNr=1, XaxNr=4, plotName='OneBigFig2', p_line=True)
+
+            # The first two plots
+            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsSE']
+            resCumulAb = calcResults['cumulativeAbortive']
+            plotr.PYvsSEscatter(PYs, PYstd, SEmax)
+            plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc, inset=True)
+            plotr.cumulativeAbortive(*resCumulAb, corr=corr)
+
+            # The next two plots
+            resDelin = calcResults['delineate']
+            calcdDG400, SE15, PY, PYstd = calcResults['dg400_validation']
+            plotr.delineatorPlot(resDelin)  # plot the delineate plot
+            plotr.dg400validater(calcdDG400, SE15, PY, PYstd)
+
+            # why does this give a worse result than Fig2 and Fig3 next to each
+            # other? Makes no sense.
+            plotr.figure.subplots_adjust(left=0.06, top=0.95, right=0.99,
+                    bottom=0.20, wspace=0.5)
+
+            plotr.setFigSize(18, 5)
+
+            saveMe[fig] = plotr.figure
+
         ##################### FIGURE SE vs PY ########################
         if fig == 'Figure2':
 
@@ -2734,31 +2892,66 @@ def main():
             # cumulative amount of abortive probability
             results2 = calcResults['cumulativeAbortive']
 
-            plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY', p_line=True)
-            plotr.PYvsSEscatter(PYs, PYstd, SEmax)
-            plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc, inset=True)
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY',
+                    p_line=True, labSize=8, tickLabelSize=6, lineSize=2,
+                    tickLength=2, tickWidth=0.5)
+
+            ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEmax)
+            ax_lad = plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc,
+                                        inset=False)
+            # XXX plot settings for ax_lad are reset below
             plotr.cumulativeAbortive(*results2, corr=corr)
 
             # Should be 8.7 cm
+            plotr.setFigSize(8.7, 4.5)
             #plt.tight_layout()
-            plotr.setFigSize(22, 11)
-            plotr.figure.subplots_adjust(left=0.05, top=0.97, right=0.93)
-                    #, bottom=None, right=None, top=None,
-                #wspace=None, hspace=None)
+            plotr.figure.subplots_adjust(left=0.08, top=0.93, right=0.89,
+                    bottom=0.172, wspace=0.5)
+            #plotr.figure.subplots_adjust(wspace=0.45)
+            # make the correlation label come closer
+            ax_lad.yaxis.labelpad = 1
+            ax_scatr.yaxis.labelpad = 1
+
+            plotr.addLetters()
 
             saveMe['PYvsSE'] = plotr.figure
+
+        ###################### FIGURE DELINEATE + DG400 ########################
+        # A figure that combines the 'delineate' and scatter plot for DG400 figures
+        if fig == 'Figure3':
+
+            # delineation of effects of different energies
+            delinResults = calcResults['delineate']
+            # the DG400 scatter plot
+            calcdDG400, SE15, PY, PYstd = calcResults['dg400_validation']
+
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
+                    p_line=True, labSize=9, tickLabelSize=7, lineSize=1.5,
+                    tickLength=2, tickWidth=0.5)
+
+            plotr.delineatorPlot(delinResults)  # plot the delineate plot
+            plotr.dg400validater(calcdDG400, SE15, PY, PYstd)
+
+            # Should be 8.7 cm
+            plotr.setFigSize(8.7, 4.7)
+            plotr.figure.subplots_adjust(left=0.13, top=0.98, right=0.99,
+                    bottom=0.18, wspace=0.4)
+
+            plotr.addLetters()
+
+            saveMe['Delineate_And_DG400'] = plotr.figure
 
         ###################### FIGURE KEQ vs AP ########################
         if fig == 'Figure4':
             """
-            No calc object for this one, cheating.
+            AP vs Keq correlation.
             """
 
             name = 'AP_vs_Keq'
-            results = calcResults[name]
+            results = calcResults[name]['Normalized']
             # moving average between AP and Keq
             # the AP - Keq correlation depends only on DG3D, not on DGRNA-DNA etc.
-            plotr = Plotter(YaxNr=1, XaxNr=1, plotName='SE15 vs PY', p_line=True)
+            plotr = Plotter(YaxNr=1, XaxNr=1, plotName='SE15 vs PY')
 
             plotr.moving_average_ap_keq(results)
 
@@ -2767,25 +2960,44 @@ def main():
 
             saveMe[name] = plotr.figure
 
-        ###################### FIGURE DELINEATE + DG400 ########################
-        # A figure that combines the 'delineate' and scatter plot for DG400 figures
-        if fig == 'Figure3':
+        ###################### FIGURE KEQ vs AP advanced ########################
+        if fig == 'FigureX':
 
-            name = 'delineate'
-            # delineation of effects of different energies
-            delinResults = calcResults[name]
-            # the DG400 scatter plot
-            SE15, PY, PYstd = calcResults['dg400_validation']
+            """
+            Display the sum(AP), SE_20 correlation as well as the nt-2-nt
+            correlation (which doesn't match as well).
 
-            plotr = Plotter(YaxNr=1, XaxNr=2)
-            plotr.delineatorPlot(delinResults)  # plot the delineate plot
-            plotr.dg400validater(dg400, SE15, PY, PYstd)
+            Show that the nt-2-nt correlation persists after normalizing
+            """
+            plotr = Plotter(YaxNr=2, XaxNr=2, plotName=fig,
+                    p_line=True, labSize=8, tickLabelSize=6, lineSize=2,
+                    tickLength=2, tickWidth=0.5)
 
-            # Should be 8.7 cm
-            plt.tight_layout()
-            plotr.setFigSize(16, 10)
+            resAPvsKeqNorm = calcResults['AP_vs_Keq']['Normalized']
+            resAPvsKeqNonNorm = calcResults['AP_vs_Keq']['Non-Normalized']
+            resNormalizedAP = calcResults['normalizedAP']
 
-            saveMe[name] = plotr.figure
+            plotr.sumAP_SE20(resNormalizedAP, norm=False, xlab=False,
+                    xticks=False)
+            plotr.sumAP_SE20(resNormalizedAP, norm=True)
+
+            axM1 = plotr.moving_average_ap_keq(resAPvsKeqNonNorm, xlab=False,
+                    xticks=False)
+            axM2 = plotr.moving_average_ap_keq(resAPvsKeqNorm)
+
+            plotr.setFigSize(8.7, 6.5)
+            #plt.tight_layout()
+            plotr.figure.subplots_adjust(left=0.13, top=0.97, right=0.98,
+                    bottom=0.12, wspace=0.35, hspace=0.1)
+
+            axM1.yaxis.labelpad = 0.1
+            axM2.yaxis.labelpad = 0.1
+
+            letters = ('A', 'B', 'C', 'D')
+            positions = ['UL', 'UL', 'UR', 'UR']
+            plotr.addLetters(letters, positions)
+
+            saveMe[fig] = plotr.figure
 
         ###################### FIGURE Cross-corr and Random ########################
         # Used to be in the main paper, now supplementary
@@ -2796,9 +3008,12 @@ def main():
             # cross corrrlation and random
             results = calcResults[name]
 
-            plotr = Plotter(YaxNr=1, XaxNr=1)
+            plotr = Plotter(YaxNr=1, XaxNr=1, lineSize=3, tickLabelSize=7)
             plotr.crossCorrPlot(results)
-            plotr.setFigSize(13, 12)
+            plotr.setFigSize(12, 9)
+
+            plotr.figure.subplots_adjust(left=0.14, top=0.97, right=0.98,
+                    bottom=0.12, wspace=0.35, hspace=0.1)
 
             saveMe[name] = plotr.figure
 
@@ -2812,6 +3027,7 @@ def main():
 
             plotr = Plotter(YaxNr=1, XaxNr=1, plotName='delineate combo')
             plotr.delineatorComboPlot(results)
+            plotr.setFigSize(12, 9)
 
             saveMe[name] = plotr.figure
 
@@ -2825,6 +3041,7 @@ def main():
             plotr = Plotter(YaxNr=1, XaxNr=2)
             plotr.normalizedApPlot(results)
 
+            plotr.setFigSize(12, 6)
             saveMe[name] = plotr.figure
 
         ###################### FIGURE Keq AP examples ########################
@@ -2840,9 +3057,12 @@ def main():
             plotr = Plotter(YaxNr=2, XaxNr=4)
             plotr.AP_Keq_examplesPlot(results)
 
-            plotr.setFigSize(30, 10)
+            plotr.setFigSize(8.7*2, 5)
             #plotr.figure.tight_layout()
             saveMe[name] = plotr.figure
+
+            #plotr.figure.subplots_adjust(left=0.14, top=0.97, right=0.98,
+                    #bottom=0.12, wspace=0.35, hspace=0.1)
 
         # make sure that these variables are only used once
         del plotr
@@ -2858,7 +3078,8 @@ def main():
                     os.makedirs(odir)
 
                 fpath = os.path.join(odir, fName) + '.' + formt
-                figure.savefig(fpath, transparent=True, format=formt)
+                figure.savefig(fpath, transparent=True, format=formt,
+                        bbox_inches='tight', pad_inches=0)
 
     return dg100
 
