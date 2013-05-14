@@ -138,7 +138,7 @@ class Calculator(object):
         movSize = 0  # effectively NOT a moving winding, but nt-2-nt comparison
 
         # Ignore 2, since it's just AT and very little variation occurs.
-        xmers = range(3, 21)
+        xmers = range(2, 21)
         # the bar height will be the correlation with the above three values for
         # each moving average center position
 
@@ -766,12 +766,12 @@ class Plotter(object):
         ax = self.getNextAxes()  # for the local figure
         ax.bar(left=xmers, height=bar_height, align='center', color=colors)
         ax.set_xticks(xmers)
-        ax.set_xlim(xmers[0]-1, xmers[-1])
+        ax.set_xlim(xmers[0]-1, xmers[-1]+1)
 
         # labels
         if xlab:
             ax.set_xlabel('ITS position', size=self.labSize)
-        ax.set_ylabel('Correlation: Keq and AP', size=6)
+        ax.set_ylabel('Correlation: Keq and AP', size=self.labSize)
 
         # ticks
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -779,7 +779,7 @@ class Plotter(object):
 
         # X: show only positions with significant positions or 5, 10, 15, 20
         xIndx = []
-        for inx, colr in enumerate(colors, start=3):
+        for inx, colr in enumerate(colors, start=2):
             if (inx%2 == 0):
                 xIndx.append(str(inx))
             else:
@@ -793,6 +793,7 @@ class Plotter(object):
         # Y: show every other tick with a label
         yIndx = [g for g in np.arange(-0.2, 0.8, 0.2)]
         ax.set_yticks(yIndx)
+        ax.set_ylim(-0.15, 0.65)
 
         return ax
 
@@ -809,7 +810,7 @@ class Plotter(object):
             sumAP = results['dg100']['sumAP'] + results['dg400']['sumAP']
             #sumAP = results['dg400']['sumAP']
 
-        ax.scatter(keq, sumAP, c='b')
+        ax.scatter(keq, sumAP, c='gray')
         print('Spearmanr keq and sum AP')
         if norm:
             print('Normalized')
@@ -820,7 +821,7 @@ class Plotter(object):
         # labels
         if xlab:
             ax.set_xlabel('SE$_{20}$', size=self.labSize)
-        ax.set_ylabel('Sum of AP', size=7)
+        ax.set_ylabel('Sum of AP', size=self.labSize)
 
         # ticks
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -833,9 +834,9 @@ class Plotter(object):
             yrang = np.arange(0.996, 1.004, 0.002)
         else:
             yrang = np.arange(0.5, 5, 1)
-            ax.set_ylim(0.8, 4.8)
+            ax.set_yticks(yrang)
+            ax.set_ylim(0.7, 4.6)
 
-        ax.set_yticks(yrang)
         y_formatter = matplotlib.ticker.ScalarFormatter(useOffset=False)
         ax.yaxis.set_major_formatter(y_formatter)
 
@@ -2760,6 +2761,10 @@ def doFigureCalculations(fig2calc, pickDir, figures, calculateAgain, testing, dg
 
 def main():
 
+    # Reuse calculations: good for tweaking plots
+    calculateAgain = False
+    #calculateAgain = True
+
     #remove_controls = True
     remove_controls = False
 
@@ -2811,7 +2816,8 @@ def main():
             #'Figure2',  # SE vs PY
             #'Figure3',  # Delineate + DG400
             #'Figure4',  # Keq vs AP
-            'FigureX',  # 2x2 Keq vs AP, effect of normalization
+            #'FigureX',  # 2x2 Keq vs AP, effect of normalization
+            'FigureX2',  # 1x2 Keq vs AP
             #'Suppl1',   # Random and cross-corrleation (supplementary)
             #'Suppl2',   # Delineate -- all combinations
             #'Suppl3',   # PY vs sum(AP) before and after normalization
@@ -2825,6 +2831,7 @@ def main():
             'Figure3': ['delineate', 'dg400_validation'],
             'Figure4': ['AP_vs_Keq'],
             'FigureX': ['AP_vs_Keq', 'normalizedAP'],
+            'FigureX2': ['AP_vs_Keq', 'normalizedAP'],
             'Suppl1':  ['crossCorrRandom'],
             'Suppl2':  ['delineateCombo'],
             'Suppl3':  ['normalizedAP'],
@@ -2832,10 +2839,6 @@ def main():
             }
 
     ### XXX Below this line are figures that appear in the paper XXX ###
-
-    # Reuse calculations: good for tweaking plots
-    calculateAgain = False
-    #calculateAgain = True
 
     # collect the figures you want to save to file
     saveMe = {}
@@ -2959,6 +2962,35 @@ def main():
             plt.tight_layout()
 
             saveMe[name] = plotr.figure
+
+        if fig == 'FigureX2':
+
+            """
+            Display the sum(AP), SE_20 correlation as well as the nt-2-nt
+            correlation (which doesn't match as well).
+            """
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
+                    p_line=True, labSize=9, tickLabelSize=6, lineSize=2,
+                    tickLength=2, tickWidth=0.5)
+
+            resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
+            resAP = calcResults['normalizedAP']
+
+            plotr.sumAP_SE20(resAP, norm=False)
+            axM1 = plotr.moving_average_ap_keq(resAPvsKeq)
+
+            plotr.setFigSize(8.7, 6)
+            #plt.tight_layout()
+            plotr.figure.subplots_adjust(left=0.13, top=0.90, right=0.95,
+                    bottom=0.21, wspace=0.35)
+
+            axM1.yaxis.labelpad = 0.1
+
+            letters = ('A', 'B')
+            positions = ['UL', 'UR']
+            plotr.addLetters(letters, positions)
+
+            saveMe[fig] = plotr.figure
 
         ###################### FIGURE KEQ vs AP advanced ########################
         if fig == 'FigureX':
