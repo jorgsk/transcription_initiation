@@ -191,6 +191,25 @@ class ITS(object):
 
         self.keq = optim.keq_i(RT, its_len, dg3d, dna_dna, rna_dna, c1, c2, c3)
 
+    def calc_AbortiveYield(self):
+        """
+        Calculate abortive to productive ratio
+
+        """
+        if not self.sane():
+            return
+
+        # store the PY for each quantitation
+        self._AYraw = {}
+
+        for quant in self.quantitations:
+
+            totalRNA = sum(self.rawData[quant]) + self.fullLength[quant]
+            self._AYraw[quant] = self.rawData[quant]/totalRNA
+
+        self.AY = np.mean([py for py in self._PYraw.values()])
+        self.AY_std = np.std([py for py in self._PYraw.values()])
+
 
 def PYHsu(filepath):
     import csv
@@ -293,6 +312,7 @@ def read_raw(path, files, dset, skipN25=False):
         itsObj.calc_AP()
         itsObj.calc_PY()
         itsObj.averageRawDataAndFL()
+        itsObj.calc_AbortiveYield()
         itsObj.labels = labels
 
     return ITSs

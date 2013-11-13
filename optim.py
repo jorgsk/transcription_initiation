@@ -18,15 +18,30 @@ import time
 class Result(object):
     """
     Placeholder for results for plotting
-    These are results from the simulation for a given its_length; they are the
-    top 20 correlation coefficients, pvals, fitted parameters (c1, c2, c3)
-    and the final values.
+    These are results from the simulation for a given its_length; for Normal
+    simulations, they are the top 20 correlation coefficients, pvals, fitted
+    parameters (c1, c2, c3) and the final values. By top 20 is meant from the
+    top 20 parameter combinations.
 
-    You get in slightly different things here for Normal and Random results.
+    You get in slightly different things here for Normal, Random, and
+    cross-correlated results.
 
-    Normal results are the (max) 20 best for each its-length. Random results are
-    the X*20 best. For random, mean and std are what's interesting (the mean and
-    std of the best for each random sample)
+    Normal results are the (max) 20 best for each its-length (you present
+    corr_max).
+
+    Random results are the X*20 best, where X is the number of times random
+    sequences are generated for each its-length. For Random results, mean and
+    std are what's interesting (the mean and std of the best for each random
+    sample)
+
+    Cross-correlated results have len(corr)=X, where X is the number of
+    re-samplings of half the dataset. Corr now represent the optimal
+    correlations for each of the resamplings: each of these values are the
+    result of sampling 50% of the dataset, getting optimal parameters, and
+    correlating the remaining 50% using those parameters. The question
+    becomes how to represent these 'X cross-correlated correlation scores, and
+    their parameter values!'
+
     """
     def __init__(self, corr=[np.nan], pvals=np.nan, params=np.nan,
                  SEn=np.nan):
@@ -38,15 +53,18 @@ class Result(object):
 
         # calculate the mean, std, max, and min values for correlation
         # coefficients, pvalues, and SEn
+        self.corr_median = np.median(corr)
         self.corr_mean = np.mean(corr)
         self.corr_std = np.std(corr)
         max_indx = np.abs(corr).argmax()  # correlation may be negative
 
+        # corr max may be nan
         if len(corr) == 1 and np.isnan(corr[0]):
             self.corr_max = np.nan
         else:
             self.corr_max = corr[max_indx]
 
+        self.pvals_median = np.median(pvals)
         self.pvals_mean = np.mean(pvals)
         self.pvals_std = np.std(pvals)
         self.pvals_min = np.min(pvals)
@@ -67,18 +85,21 @@ class Result(object):
                       'c3':[np.nan]}
 
         # extract mean, std etc
+        self.params_median = dict((k, np.median(v)) for k,v in params.items())
         self.params_mean = dict((k, np.mean(v)) for k,v in params.items())
         self.params_std = dict((k, np.std(v)) for k,v in params.items())
         self.params_max = dict((k, np.max(v)) for k,v in params.items())
         self.params_min = dict((k, np.min(v)) for k,v in params.items())
 
         # You need the parameters for the highest correlation coefficient, since
-        # that's what you're going to plot (but also plot the mean and std)
-        # You rely on that v is sorted in the same order as corr
+        # that's what you're going to plot for Normal results
+        # You rely on that v is sorted in the same order as corr ... relying on
+        # sorting, whachagot next for me.
+        # This value is not relevant for cross corr or random.
         self.params_best = dict((k, v[0]) for k,v in params.items())
 
 
-def main_optim(its_range, ITSs, ranges, randize, crosscorr, normal):
+def main_optim(its_range, ITSs, ranges, analysisInfo):
     """
 
     Call the core optimialization wrapper but treat different analysis cases
@@ -101,15 +122,17 @@ def main_optim(its_range, ITSs, ranges, randize, crosscorr, normal):
         crosscorr_obj = False
 
         # 'normal' results (full dataset)
-        if normal:
+        if analysisInfo['Normal']['run']:
             normal_obj = core_optim_wrapper(its_len, ITSs, ranges)
 
         # Randomize
-        if randize:
+        if analysisInfo['Random']['run']:
+            randize = analysisInfo['Random']['value']
             random_obj = randomize_wrapper(its_len, ITSs, ranges, randize)
 
         # Cross correlation
-        if crosscorr:
+        if analysisInfo['CrossCorr']['run']:
+            crosscorr = analysisInfo['CrossCorr']['value']
             crosscorr_obj = crosscorr_wrapper(its_len, ITSs, ranges, crosscorr)
 
         results['Normal'][its_len] = normal_obj
@@ -180,7 +203,7 @@ def randomize_wrapper(its_len, ITSs, ranges, randomize=0):
             randResults.append(rand_result)
 
     # select the average of the top correlations to report
-    avrgdResults = average_rand_result(randResults)
+    avrgdResults = pick_top_results(randResults)
 
     return avrgdResults
 
@@ -191,6 +214,24 @@ def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
     Optimialization is performed on one half of the ITSs and the correlation is
     obtained from the second half using the parameters obtained from the first
     half.
+
+    This proceedure is done 'crosscor' times for each function call
+    (presumeably being done for each its-length, and more importantly for each
+    parameter combination).
+
+    The point is to compare with normal parameter runs: you have to defend your
+    method: oh, you're checking the whole parameter space and picking the best
+    correlation! How impudent.
+
+    This is one answer: the cross correlation approach: for each its-len,
+    'crosscorr' times this is done: split your ITSs in half. for one half, find
+    the parameter values that give optimal correlation. Then, use those
+    parameter values to get a (one only) correlation and p-value for the
+    correlation between the SE_i (sum of Keq values) and the PY.
+
+    You thus end up with 'crosscorr' optimal values: how to select the best of
+    these? Select the median, or the mean?
+
     """
 
     retro_results = []
@@ -201,7 +242,7 @@ def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
 
         fit_result = core_optim_wrapper(its_len, ITS_fit, ranges)
 
-        # Skip if you don't get a result (should B OK with large ranges)
+        # Skip if you don't get a result (should not be a problem with large ranges)
         if not fit_result:
             continue
 
@@ -220,7 +261,8 @@ def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
             retro_results.append(control_result)
 
     # average the results (keeping mean and std) and return
-    return average_rand_result(retro_results)
+    # cross corr results
+    return pick_top_results(retro_results)
 
 
 def core_optim_wrapper(its_len, ITSs, ranges):
@@ -257,7 +299,11 @@ def core_optim_wrapper(its_len, ITSs, ranges):
                             for p in divide], [])
 
     # All_results is a list of tuples on the following form: ((SEn, par, rp, pp))
-    # Sort them on the pearson/spearman correlation pvalue, 'pp' and pick top 20
+    # Sort them on the pearson/spearman correlation pvalue, 'pp' and pick top
+    # 20 (since you can potentially have thousands of results if there are many
+    # parameter combinations -- but we're only interested in the best results
+    # in any case... right? is that true for cross-correlation and
+    # randomization too?
     top_hits = sorted(all_results, key=itemgetter(3))[:20]
 
     # if top_hits is empty, return NaNs results (created by default)
@@ -439,23 +485,34 @@ def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c):
     return k1
 
 
-def average_rand_result(rand_results):
+def pick_top_results(several_results):
     """
     Keep only the top scores for each of the results in the sample. Those top
     scores will then be used to make a new object with the average and std of
     those scores. That object is then returned. This makes these objects
     different from the 'normal' result objects, where the std and mean are
     from sub-optimal results.
+
+    Note: when coming from crossCorr (that's bad design..) each res_obj in the
+    rand_results will only have one (1) value in .corr and .pvals -- it's the
+    correlation obtained with group1's optimal parameters on group2.
+
+    Note: when comming from randomize, each res_obj will have the normal top 20
+    correlations for all the parameter combinations. Here, we select from all X
+    randizes the topp correlation coefficient, pvals, and parameter values.
+    Intersting, what are the parameter values for random? Not 0 since we're
+    going from 0 to 1 ... should it be 0.5? I dunno, might be a bias there.
     """
 
     new_corr, new_pvals = [], []
     new_params = {'c1':[], 'c2':[], 'c3':[]}
 
-    # Add the values from the X random versions
-
     # You don't want all 20 saved outcomes from each random version, you just
     # want the best ones. By best, I mean highest and lowest correlation.
-    for res_obj in rand_results:
+    # for cross-corr, there is only one value -- you pass it through here
+    # actually just to make a new 'results' object from many results objects.
+    # It's convoluted, I know, but I'm not refactoring any more now.
+    for res_obj in several_results:
 
         # check if this is a NaN object; skip it if so
         if res_obj.corr[0] is np.nan:
@@ -473,7 +530,9 @@ def average_rand_result(rand_results):
     if new_corr == []:
         result = Result()
     else:
-        # make a new result object
+        # make a new result object (from all the best random results, equallly
+        # likely to have positive and negative correlation)
+        debug()
         result = Result(new_corr, new_pvals, new_params, res_obj.SEn)
 
     return result
