@@ -323,14 +323,15 @@ class Calculator(object):
                     combDict[en] = False
             varCombinations.append(combDict)
 
-        # for testing; only all three true
-        hei = []
-        for v in varCombinations:
-            if np.all(v.values()):
-                hei.append(v)
-        varCombinations = hei
+        ## for testing; only all three true
+        #hei = []
+        #for v in varCombinations:
+            #if np.all(v.values()):
+                #hei.append(v)
+        #varCombinations = hei
+        #debug()
 
-        varCombinations = [v for v in varCombinations]
+        #varCombinations = [v for v in varCombinations]
         # set the range for which you wish to calculate correlation
         itsMin = 2
         itsMax = 20
@@ -346,6 +347,7 @@ class Calculator(object):
 
         for combo in varCombinations:
             print('\n---- delineate Combo -------')
+            print(combo)
 
             comboKey = '_'.join([str(combo[v]) for v in freeEns])
 
@@ -354,7 +356,6 @@ class Calculator(object):
 
             onlySignCoeff=0.05
             # Print some output and return one value for c1, c2, and c3
-            print(combo)
             c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
                     onlySignCoeff, analysis, self.name, grid_size, aInfo=aInfo,
                     combo=combo)
@@ -389,7 +390,7 @@ class Calculator(object):
         itsRange = range(itsMin, itsMax+1)
         if self.testing:
             #itsRange = [itsMin, 5, 10, 15, itsMax]
-            itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
+            #itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
             itsRange = range(itsMin, itsMax+1)
 
         analysis = 'Normal'
@@ -404,6 +405,14 @@ class Calculator(object):
             result, grid_size, aInfo = optimizeParam(self.ITSs, itsRange, self.testing,
                     analysis=analysis, variableCombo=combo)
 
+            # For this type of analysis you do NOT want to do any screening;
+            # otherwise you won't be getting any plots. It's for the reporting
+            # / logging to file that you want to do the screening. These should
+            # have been separated. Now you're stuck with the situation where
+            # you'll have to re-run the simulations after making plots just to
+            # get the output correlation coefficients. As an alternative, can
+            # you separate these two? Avoid problems (try not to make new
+            # problems).
             onlySignCoeff=0.05
             # Print some output and return one value for c1, c2, and c3
             print(combo)
@@ -540,12 +549,14 @@ class Calculator(object):
         if self.testing:
             #itsRange = [5, 7, 10, 13, 15, 18, 20]
             itsRange = range(2, 21)
+            #itsRange = range(8, 19)
             #itsRange = [14]
 
         analysis2stats = {}
 
-        #for analysis in ['Normal', 'Random', 'Cross Correlation']:
-        for analysis in ['Cross Correlation']:
+        for analysis in ['Normal', 'Random', 'Cross Correlation']:
+        #for analysis in ['Cross Correlation']:
+        #for analysis in ['Normal']:
 
             result, grid_size, aInfo = optimizeParam(self.ITSs, itsRange,
                     testing=self.testing, analysis=analysis)
@@ -582,7 +593,7 @@ class Calculator(object):
                 # the median is a much better measure for pvals!!! (at least
                 # for cross corr)
 
-                onlySignCoeff = 0.95  # doesn't make sense really
+                onlySignCoeff = 0.05  # doesn't make sense really
                 c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
                                 onlySignCoeff, analysis, self.name, grid_size,
                                 aInfo=aInfo)
@@ -725,7 +736,7 @@ class Plotter(object):
                 if PYorKeq == 'AP':
                     ax.set_ylabel('AP')
                 elif PYorKeq == 'Keq':
-                    ax.set_ylabel('Keq $(kcal/mol)$')
+                    ax.set_ylabel('Keq')
 
             # set title
             if indices[0] == 0:
@@ -856,7 +867,7 @@ class Plotter(object):
 
         # labels
         if xlab:
-            ax.set_xlabel('SE$_{20}$ $(kcal/mol)$', size=self.labSize)
+            ax.set_xlabel('SE$_{20}$', size=self.labSize)
         ax.set_ylabel('Sum of abortive probabilities ($\%$)', size=self.labSize)
 
         # ticks
@@ -898,12 +909,12 @@ class Plotter(object):
 
         axL.scatter(keq100, sumAP100, c='b')
         axL.scatter(keq400, sumAP400, c='g')
-        axL.set_xlabel('SE$_{20}$ $(kcal/mol)$')
+        axL.set_xlabel('SE$_{20}$')
         axL.set_ylabel('Sum AP')
 
         axR.scatter(keq100, sumAP100norm, c='b')
         axR.scatter(keq400, sumAP400norm, c='b')
-        axL.set_xlabel('SE$_{20}$ $(kcal/mol)$')
+        axL.set_xlabel('SE$_{20}$')
         axL.set_ylabel('Sum AP')
 
     def delineatorComboPlot(self, delineateResults):
@@ -964,8 +975,10 @@ class Plotter(object):
                 f = interpolate(pv, co, k=1)
                 ax.axhline(y=f(0.05), ls='--', color='r', linewidth=3)
 
-            indxMax = indx[-1]
-            xticklabels = [str(integer) for integer in range(3, indxMax)]
+            indxMax = indx[-1] + 1
+            indMin = 2
+
+            xticklabels = [str(integer) for integer in range(indMin, indxMax)]
 
             #Make sure ymin has only one value behind the comma
             ymin = float(format(ymin, '.1f'))
@@ -975,10 +988,10 @@ class Plotter(object):
             ax.legend(loc='upper left', prop={'size': 5}, handlelength=3.3)
 
             # xticks
-            ax.set_xticks(range(3, indxMax))
+            ax.set_xticks(range(indMin, indxMax))
             #ax.set_xticklabels(xticklabels)
-            ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='odd'))
-            ax.set_xlim(3, indxMax)
+            ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='even'))
+            ax.set_xlim(indMin-1, indxMax)
             ax.set_xlabel("RNA length, $n$", size=self.labSize)
 
             #  setting the tick font sizes
@@ -1050,7 +1063,8 @@ class Plotter(object):
                 f = interpolate(pv, co, k=1)
                 ax.axhline(y=f(0.05), ls='--', color='r', linewidth=3)
 
-            indxMax = indx[-1]
+            indxMax = indx[-1] + 1
+            indMin = 2
 
             #Make sure ymin has only one value behind the comma
             ymin = float(format(ymin, '.1f'))
@@ -1060,10 +1074,10 @@ class Plotter(object):
             ax.legend(loc='upper left', prop={'size':6}, handlelength=3)
 
             # xticks
-            ax.set_xticks(range(3, indxMax))
+            ax.set_xticks(range(indMin, indxMax))
 
             xtickLabels = []
-            for i in range(3, indxMax):
+            for i in range(indMin, indxMax):
                 if i%2 == 0:
                     xtickLabels.append(str(i))
                 else:
@@ -1071,7 +1085,7 @@ class Plotter(object):
 
             ax.set_xticklabels(xtickLabels)
 
-            ax.set_xlim(3, indxMax)
+            ax.set_xlim(indMin-1, indxMax)
             ax.set_xlabel("RNA length, $n$", size=self.labSize)
 
             # setting the tick font sizes
@@ -1103,7 +1117,7 @@ class Plotter(object):
         ax.errorbar(SE15, PY, yerr=PYstd, fmt=None, zorder=1)
 
         ########### Set figure and axis properties ############
-        ax.set_xlabel('SE$_{15}$ $(kcal/mol)$', size=self.labSize)
+        ax.set_xlabel('SE$_{15}$', size=self.labSize)
         ax.set_ylabel('Productive yield ($\%$)', size=self.labSize)
 
         xmin, xmax = min(SE15), max(SE15)
@@ -1264,7 +1278,7 @@ class Plotter(object):
         # XXX get the errorbars to be gray too!!!!!!!!
 
         ax.set_ylabel("Productive yield ($\%$)", size=self.labSize)
-        ax.set_xlabel("SE$_{20}$ $(kcal/mol)$", size=self.labSize)
+        ax.set_xlabel("SE$_{20}$", size=self.labSize)
 
         ymin = -0.1
 
@@ -1507,7 +1521,8 @@ class Plotter(object):
                                      linewidth=self.lineSize, color=colr,
                                      marker='x', markersize=3)
 
-        its_max = incrX[-1]
+        indxMax = incrX[-1] + 1
+        indxMin = 2
 
         ymin = -0.5
         ymax = 1.1
@@ -1522,12 +1537,12 @@ class Plotter(object):
         ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize)
 
         # xticks
-        xticklabels = [str(integer) for integer in range(3, its_max)]
-        xticklabels_skip = odd_even_spacer(xticklabels, oddeven='odd')
+        xticklabels = [str(integer) for integer in range(indxMin, indxMax+1)]
+        xticklabels_skip = odd_even_spacer(xticklabels, oddeven='even')
 
-        ax.set_xticks(range(3, its_max))
+        ax.set_xticks(range(indxMin, indxMax))
         ax.set_xticklabels(xticklabels_skip)
-        ax.set_xlim(3, its_max)
+        ax.set_xlim(indxMin-1, indxMax)
         ax.set_xlabel("RNA length, $n$", size=self.labSize)
 
         ax.legend(loc='upper left', prop={'size':6})
@@ -1705,9 +1720,9 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     """
 
     # grid size
-    grid_size = 15
+    grid_size = 11
     if testing:
-        grid_size = 9
+        grid_size = 6
 
     # defalt: do nothing
     analysisInfo = {
@@ -1721,13 +1736,13 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     if analysis == 'Random':
         # nr of random sequences tested for each parameter combination
         analysisInfo['Random']['run'] = True
-        #analysisInfo['Random']['value'] = 100
-        analysisInfo['Random']['value'] = 15
+        analysisInfo['Random']['value'] = 100
+        #analysisInfo['Random']['value'] = 15
     elif analysis == 'Cross Correlation':
         # nr of samplings of 50% of ITSs for each parameter combination
         analysisInfo['CrossCorr']['run'] = True
-        #analysisInfo['CrossCorr']['value'] = 100
-        analysisInfo['CrossCorr']['value'] = 15
+        analysisInfo['CrossCorr']['value'] = 100
+        #analysisInfo['CrossCorr']['value'] = 15
     elif analysis != 'Normal':
         print('Give correct analysis parameter name')
         1/0
@@ -1763,6 +1778,9 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
 
     It's not straightforward how to calculate return parameter values c1 c2,
     c3. You have tried to average all, and average just significant values.
+
+    There is an unhelathy coupling between writing output and getting parameter
+    values for Kew-calculation. Should be separated.
 
     """
 
@@ -1821,45 +1839,67 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
             # perhaps the mean is best since it's random?
             parvals = [results[pos].params_median[param] for pos in its_range]
 
-        Parvals = []
         if analysis == 'Normal':
             pvals = minpvals  # min of 20 best
         else:
             pvals = medianpvals  # median of X cross-corr, random
 
+        # For calculation you want to keep
+        # Issue: you screen out non-significant values, but that means that
+        # you can't plot for combination with nonsignificant stuffs!
+        # compromise: when the median pvalue is too high, use a median of all
+        # values; when there is some significant stuff in there, do the
+        # filtering. This is the only way to show on plots the effect of zero
+        # correlation for some parameter combinations.
+        medianAllPvals = nanmedian(pvals)
+        ParvalsFiltered = []
         for ix, pval in enumerate(pvals):
-            # if set, only collect parameters corresponsing to significant
-            if onlySignCoeff and (pval < onlySignCoeff):
-                continue
+            # in this case, there are significant values, so we choose only
+            # parameter values associated with significant correlation
+            if (medianAllPvals < onlySignCoeff) and (pval < onlySignCoeff):
 
-            # don't consider rna-dna until after full hybrid length is reached
-            if param == 'c1' and ix < 8:
-                Parvals.append(0)
+                # don't consider rna-dna until after full hybrid length is reached
+                if param == 'c1' and ix < 8:
+                    ParvalsFiltered.append(0)
+                else:
+                    ParvalsFiltered.append(parvals[ix])
+            # in this case, there are no significant values anyway, but we need
+            # something to make a plot
             else:
-                Parvals.append(parvals[ix])
+                if param == 'c1' and ix < 8:
+                    ParvalsFiltered.append(0)
+                else:
+                    ParvalsFiltered.append(parvals[ix])
 
-        print param, Parvals
+        print param, ParvalsFiltered
 
         # ignore nan in mean and std calculations
-        mean = nanmean(Parvals)
-        median = nanmedian(Parvals)
-        normal_std = nanstd(Parvals)
-        std = mad_std(Parvals)  # std, but using the mad as an estimator
+        mean = nanmean(ParvalsFiltered)
+        median = nanmedian(ParvalsFiltered)
+        normal_std = nanstd(ParvalsFiltered)
+
+        if ParvalsFiltered == []:
+            madStd = np.nan
+        else:
+            madStd = mad_std(ParvalsFiltered)  # std, but using the mad as an estimator
 
         outpString = '{0}: {1:.2f} (mean) +/- {2:.2f} or {0}: {3:.2f}'\
                         ' (median) +/- {4:.2f}'.format(param, mean, normal_std,
-                                median, std)
+                                median, madStd)
         print(outpString)
         logFileHandle.write(analysis + '\n')
         logFileHandle.write(outpString + '\n')
 
-        outp[param] = mean
+        # This is what is going into the keq calculation and plotting! Better
+        # keep the median if that's what you're reporting in the figures.
+        #outp[param] = mean
+        outp[param] = median
 
     # print correlations
     if analysis == 'Normal':
         infoStr = "Normal analysis: max correlation and corresponding p-value"
         print(infoStr)
-        logFileHandle.write(infoStr)
+        logFileHandle.write(infoStr + '\n')
         print analysis
 
         for nt, c, p in zip(its_range, maxcorr, pvals):
@@ -1870,7 +1910,7 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
     else:
         infoStr = "Random or cross-correlation: mean (median) correlation and p-values"
         print(infoStr)
-        logFileHandle.write(infoStr)
+        logFileHandle.write(infoStr + '\n')
         print analysis
         for nt, c, p, cm, pm in zip(its_range, meancorr, meanpvals, mediancorr,
                 medianpvals):
@@ -2974,12 +3014,12 @@ def main():
     # moving average of AP vs PY/FL/TA
     #moving_average_ap(dg100, dg400)
 
-    # Do not recalculate when tweaking plots
-    #calculateAgain = False
-    calculateAgain = True
+    # Do not recalculate but use saved values (for tweaking plots)
+    calculateAgain = False  # TODO regenerate triplet fig
+    #calculateAgain = True
 
-    testing = True
-    #testing = False
+    #testing = True
+    testing = False
 
     figures = [
             #'megaFig',  # One big figure for the first 4 plots
@@ -2989,8 +3029,8 @@ def main():
             #'Figure4old',  # Keq vs AP
             #'FigureX',  # 2x2 Keq vs AP, effect of normalization
             #'FigureX2',  # 1x2 Keq vs AP
-            #'CrossRandomDelineateSuppl',  # CrossCorrRandomDelineate in one
-            'Suppl1',   # Random and cross-corrleation (supplementary)
+            'CrossRandomDelineateSuppl',  # CrossCorrRandomDelineate in one
+            #'Suppl1',   # Random and cross-corrleation (supplementary)
             #'Suppl2',   # Delineate -- all combinations
             #'Suppl3',   # PY vs sum(AP) before and after normalization
             #'Suppl4',   # Examples of Keq and AP for 4 variants
@@ -3012,7 +3052,7 @@ def main():
             'Suppl2':  ['delineateCombo'],
             'Suppl3':  ['sumAP'],
             'Suppl4':  ['AP_Keq_examples'],
-            'DeLineate':  ['delineate']
+            'DeLineate':  ['delineate', 'delineateCombo']
             }
 
     ### XXX Below this line are figures that appear in the paper XXX ###

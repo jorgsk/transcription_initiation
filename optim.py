@@ -116,7 +116,7 @@ def main_optim(its_range, ITSs, ranges, analysisInfo):
     # Get the first iteration of results based on a wide parameter range
     for its_len in its_range:
 
-        # assume no analysis of this type
+        # subsequently set to true depending on input
         normal_obj = False
         random_obj = False
         crosscorr_obj = False
@@ -532,7 +532,6 @@ def pick_top_results(several_results):
     else:
         # make a new result object (from all the best random results, equallly
         # likely to have positive and negative correlation)
-        debug()
         result = Result(new_corr, new_pvals, new_params, res_obj.SEn)
 
     return result
