@@ -1007,7 +1007,7 @@ class Plotter(object):
             ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                           alpha=0.5)
 
-    def delineatorPlot(self, delineateResults):
+    def delineatorPlot(self, delineateResults, inst_change=False):
         """
         delineateResults is a double dictionary
         Double dictionary [FalseFalseTrue][name] -> [indx, corr, pvals]
@@ -1016,6 +1016,9 @@ class Plotter(object):
 
         Where the falsetrues are in the order DNA RNA 3N
         So the above example would be the keq values from optimizing only on 3N
+
+        inst_change flag enables plotting of instantaneous increase in
+        correlation for each step
         """
 
         ymin = -0.3  # correlation is always high
@@ -1054,53 +1057,58 @@ class Plotter(object):
                 ax.plot(incrX, corr, label=label, linewidth=self.lineSize,
                         color=color)
 
-            # interpolate pvalues (x, must increase) with correlation (y) and
-            # obtain the correlation for p = 0.05 to plot as a black
-            p_line = False
-            if p_line and (label == '$\Delta{3N}$'):
-                # hack to get pvals and corr coeffs sorted
-                pv, co = zip(*sorted(zip(pvals, corr)))
-                f = interpolate(pv, co, k=1)
-                ax.axhline(y=f(0.05), ls='--', color='r', linewidth=3)
+        # also plot the instantaneous increase in correlation for each
+        # nucleotide addition
+        if inst_change:
+            debug()
 
-            indxMax = indx[-1] + 1
-            indMin = 2
+        # interpolate pvalues (x, must increase) with correlation (y) and
+        # obtain the correlation for p = 0.05 to plot as a black
+        p_line = False
+        if p_line and (label == '$\Delta{3N}$'):
+            # hack to get pvals and corr coeffs sorted
+            pv, co = zip(*sorted(zip(pvals, corr)))
+            f = interpolate(pv, co, k=1)
+            ax.axhline(y=f(0.05), ls='--', color='r', linewidth=3)
 
-            #Make sure ymin has only one value behind the comma
-            ymin = float(format(ymin, '.1f'))
-            yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -ymax, -0.1)]
+        indxMax = indx[-1] + 1
+        indMin = 2
 
-            # legend
-            ax.legend(loc='upper left', prop={'size':6}, handlelength=3)
+        #Make sure ymin has only one value behind the comma
+        ymin = float(format(ymin, '.1f'))
+        yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -ymax, -0.1)]
 
-            # xticks
-            ax.set_xticks(range(indMin, indxMax))
+        # legend
+        ax.legend(loc='upper left', prop={'size':6}, handlelength=3)
 
-            xtickLabels = []
-            for i in range(indMin, indxMax):
-                if i%2 == 0:
-                    xtickLabels.append(str(i))
-                else:
-                    xtickLabels.append('')
+        # xticks
+        ax.set_xticks(range(indMin, indxMax))
 
-            ax.set_xticklabels(xtickLabels)
+        xtickLabels = []
+        for i in range(indMin, indxMax):
+            if i%2 == 0:
+                xtickLabels.append(str(i))
+            else:
+                xtickLabels.append('')
 
-            ax.set_xlim(indMin-1, indxMax)
-            ax.set_xlabel("RNA length, $n$", size=self.labSize)
+        ax.set_xticklabels(xtickLabels)
 
-            # setting the tick font sizes
-            ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
-                    width=self.tickWidth)
+        ax.set_xlim(indMin-1, indxMax)
+        ax.set_xlabel("RNA length, $n$", size=self.labSize)
 
-            ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize)
+        # setting the tick font sizes
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
+                width=self.tickWidth)
 
-            ax.set_yticks(np.arange(ymin, ymax, 0.1))
-            ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
-            ax.set_ylim(ymin, ymax)
-            ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                          alpha=0.5)
-            ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                          alpha=0.5)
+        ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize)
+
+        ax.set_yticks(np.arange(ymin, ymax, 0.1))
+        ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
+        ax.set_ylim(ymin, ymax)
+        ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      alpha=0.5)
+        ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      alpha=0.5)
 
     def dg400validater(self, dg400, SE15, PY, PYstd, fit_function=False):
 
@@ -1297,6 +1305,59 @@ class Plotter(object):
 
         return ax
 
+    def instantaneousCorrelation(self, corr):
+        """
+        Plot the increase in correlation at each reaction step
+        """
+        # use the current axis
+        mainAx = self.axes[self._thisYaxNr, self._thisXaxNr]
+
+        xlim = mainAx.get_xlim()
+        instantAx = mainAx.twinx()  # make a twin axis
+
+        instCorr = [abs(corr[i]) - abs(corr[i-1]) for i in range(1, len(corr))]
+
+        instCorrZerod = []
+        for val in instCorr:
+            if val > 0:
+                instCorrZerod.append(val)
+            else:
+                instCorrZerod.append(0)
+
+        # float -> int
+        xlim = (int(xlim[0]), int(xlim[1]+1))
+        instantAx.bar(range(*xlim), instCorrZerod, width=0.8, color='g',
+                alpha=0.4, align='center')
+
+        instantAx.set_ylabel('Increase in correlation',
+                size=self.labSize-1, color='green')
+
+        # tick parameters
+        instantAx.tick_params(axis='y', labelsize=self.tickLabelSize,
+                length=self.tickLength, width=self.tickWidth, colors='green')
+
+        yrange = np.arange(0,1.1,0.1)
+        yticklabels_skip = odd_even_spacer(yrange)
+
+        instantAx.set_yticks(yrange)
+        instantAx.set_yticklabels(yticklabels_skip)
+
+        its_max = int(instantAx.get_xlim()[-1])
+        # override
+        its_max = 20
+        instantAx.set_xticks(range(2, its_max + 1))
+
+        xtickLabels = []
+        for i in range(2, its_max+1):
+            if i%5 == 0:
+                xtickLabels.append(str(i))
+            else:
+                xtickLabels.append('')
+
+        instantAx.set_xticklabels(xtickLabels)
+
+        instantAx.set_xlim(2-0.3, its_max + 0.3)
+
     def cumulativeAbortive(self, cumulRaw, cumulAp, corr):
         """
         Plot the cumulative abortive probability on top of the correlation
@@ -1307,26 +1368,32 @@ class Plotter(object):
         mainAx = self.axes[self._thisYaxNr, self._thisXaxNr]
 
         cumulRawNorm = np.array(cumulRaw)/cumulRaw[-1]
+        cumulRawNormMinusFirst = (np.array(cumulRaw)-cumulRaw[0])/cumulRaw[-1]
         cumulApNorm = np.array(cumulAp)/cumulAp[-1]
+        #debug()
 
         #choice = 'AP'
         choice = 'raw'
+
+        #debug()
 
         xlim = mainAx.get_xlim()
         cumlAx = mainAx.twinx()  # make a twin axis
 
         if choice == 'AP':
             # cumulApNorm starts with 2. make it start with 3 using [1:]
-            cumlAx.plot(np.arange(xlim[0]-1, xlim[1]+1), cumulApNorm, ls='--',
+            cumlAx.plot(np.arange(xlim[0]-1, xlim[1]+1), cumulApNorm, ls='-',
                     linewidth=2, color='g')
 
             cumlAx.set_ylabel('Cumulative abortive probability',
                     size=self.labSize, color='green')
 
-        else:
-            cumlAx.plot(np.arange(xlim[0]-1, xlim[1]+1), cumulRawNorm, ls='-',
-                    linewidth=1, color='g')
+        elif choice == 'raw':
+            #cumlAx.plot(np.arange(xlim[0]-1, xlim[1]+1), cumulRawNorm, ls='-',
+                    #linewidth=1, color='g')
                     #linewidth=1, color='g', marker='D', markersize=3)
+            cumlAx.plot(np.arange(xlim[0]-1, xlim[1]+1), cumulRawNormMinusFirst, ls='-',
+                    linewidth=1, color='g')
 
             cumlAx.set_ylabel('Abortive product (normalized, cumulative)',
                     size=self.labSize-1, color='green')
@@ -1363,7 +1430,8 @@ class Plotter(object):
                ' But this is not a good measure ... youll need to do bettrr ')
         print pearsonr(np.array(corr)*(-1), cumulRawNorm)
 
-    def PYvsSEladder(self, indx, corr, pvals, PYs, SEbest, b, inset=False):
+    def PYvsSEladder(self, indx, corr, pvals, PYs, SEbest, b, inset=False,
+            pval_pos='high'):
         """
         The classic ladder plot, including inset scatterplot
         """
@@ -1460,7 +1528,11 @@ class Plotter(object):
         ax.set_xlabel("RNA length, $n$", size=self.labSize)
 
         # bbox_to_anchor= x, y, width, height
-        ax.legend(bbox_to_anchor=(0.8, 0.1, 0.2, 0.1), loc='best',
+        if pval_pos == 'high':
+            yLoc = 0.85
+        elif pval_pos == 'low':
+            yLoc = 0.15
+        ax.legend(bbox_to_anchor=(0.8, yLoc, 0.2, 0.1), loc='best',
                     prop={'size':4.5})
 
         ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
@@ -2973,8 +3045,8 @@ def main():
     #remove_controls = True
     remove_controls = False
 
-    dg100 = data_handler.ReadData('dg100-new')  # read the DG100 data
-    dg400 = data_handler.ReadData('dg400')  # read the DG100 data
+    dg100 = data_handler.ReadData('dg100-new')
+    dg400 = data_handler.ReadData('dg400')
 
     if remove_controls:
         controls = ['DG133', 'DG115a', 'N25', 'N25anti', 'N25/A1anti']
@@ -3024,12 +3096,15 @@ def main():
     figures = [
             #'megaFig',  # One big figure for the first 4 plots
             #'Figure2',  # SE vs PY
+            #'Figure2_DG400',  # SE vs PY for DG400
             #'Figure3',  # Delineate + DG400
+            #'Figure3_instantaneous_change',  # Delineate w/increase in correlation + DG400
             #'Figure32',  # DG400
             #'Figure4old',  # Keq vs AP
             #'FigureX',  # 2x2 Keq vs AP, effect of normalization
             #'FigureX2',  # 1x2 Keq vs AP
-            'CrossRandomDelineateSuppl',  # CrossCorrRandomDelineate in one
+            'Figure4',  # delineate + cumul abortive, + keq-AP correlation
+            #'CrossRandomDelineateSuppl',  # CrossCorrRandomDelineate in one
             #'Suppl1',   # Random and cross-corrleation (supplementary)
             #'Suppl2',   # Delineate -- all combinations
             #'Suppl3',   # PY vs sum(AP) before and after normalization
@@ -3042,11 +3117,14 @@ def main():
     fig2calc = {
             'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
             'Figure2': ['PYvsSE', 'cumulativeAbortive'],
+            'Figure2_DG400': ['PYvsSE', 'cumulativeAbortive'],
             'Figure3': ['delineate', 'dg400_validation'],
+            'Figure3_instantaneous_change': ['delineate'],
             'Figure32': ['dg400_validation'],  # only do dg400 validation
             'Figure4old': ['AP_vs_Keq'],
             'FigureX': ['AP_vs_Keq', 'sumAP'],
             'FigureX2': ['AP_vs_Keq', 'sumAP'],
+            'Figure4': ['AP_vs_Keq', 'PYvsSE', 'cumulativeAbortive'],
             'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
             'Suppl1':  ['crossCorrRandom'],
             'Suppl2':  ['delineateCombo'],
@@ -3108,7 +3186,7 @@ def main():
             # standard PY vs SEn
             topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsSE']
             # cumulative amount of abortive probability
-            results2 = calcResults['cumulativeAbortive']
+            #results2 = calcResults['cumulativeAbortive']
 
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY',
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
@@ -3117,8 +3195,11 @@ def main():
             ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEmax)
             ax_lad = plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc,
                                         inset=False)
+
             # XXX plot settings for ax_lad are reset below
-            plotr.cumulativeAbortive(*results2, corr=corr)
+            #plotr.cumulativeAbortive(*results2, corr=corr)
+            # XXX try another approach than the cumulative: the absolute!
+            plotr.instantaneousCorrelation(corr)
 
             # Should be 8.7 cm
             plotr.setFigSize(8.7, 4.5)
@@ -3133,6 +3214,59 @@ def main():
             plotr.addLetters(shiftX=0)
 
             saveMe['PYvsSE'] = plotr.figure
+
+        ##################### FIGURE SE vs PY ########################
+        if fig == 'Figure2_DG400':
+
+            # standard PY vs SEn
+            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsSE']
+            # cumulative amount of abortive probability
+            #results2 = calcResults['cumulativeAbortive']
+
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY',
+                    p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
+                    tickLength=2, tickWidth=0.5)
+
+            ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEmax)
+            ax_lad = plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc,
+                                        inset=False)
+
+            # XXX plot settings for ax_lad are reset below
+            #plotr.cumulativeAbortive(*results2, corr=corr)
+            # XXX try another approach than the cumulative: the absolute!
+            plotr.instantaneousCorrelation(corr)
+
+            # Should be 8.7 cm
+            plotr.setFigSize(8.7, 4.5)
+            #plt.tight_layout()
+            plotr.figure.subplots_adjust(left=0.08, top=0.96, right=0.90,
+                    bottom=0.16, wspace=0.35)
+            #plotr.figure.subplots_adjust(wspace=0.45)
+            # make the correlation label come closer
+            ax_lad.yaxis.labelpad = 1
+            ax_scatr.yaxis.labelpad = 1
+
+            plotr.addLetters(shiftX=0)
+
+            saveMe['PYvsSE'] = plotr.figure
+
+        if fig == 'Figure3_instantaneous_change':
+
+            # delineation of effects of different energies
+            delinResults = calcResults['delineate']
+
+            plotr = Plotter(plotName=fig,
+                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1.5,
+                    tickLength=2, tickWidth=0.5)
+
+            plotr.delineatorPlot(delinResults, inst_change=True)  # plot the delineate plot
+
+            # Should be 8.7 cm
+            plotr.setFigSize(8.7, 4.7)
+            plotr.figure.subplots_adjust(left=0.13, top=0.98, right=0.99,
+                    bottom=0.18, wspace=0.4)
+
+            saveMe['Delineate_Instantaneous_change'] = plotr.figure
 
         ###################### FIGURE DELINEATE + DG400 ########################
         # A figure that combines the 'delineate' and scatter plot for DG400 figures
@@ -3197,6 +3331,80 @@ def main():
             plt.tight_layout()
 
             saveMe[name] = plotr.figure
+
+        if fig == 'Figure4':
+
+            """
+            Display the cumulative AP (minus +2) and delineate as well as the
+            nt-2-nt correlation (which doesn't match as well).
+            """
+            results2 = calcResults['cumulativeAbortive']
+            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsSE']
+
+            #plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
+                    #p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
+                    #tickLength=2, tickWidth=0.5)
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
+                    p_line=True, labSize=8, tickLabelSize=8, lineSize=2,
+                    tickLength=2, tickWidth=0.5)
+
+            # ladder plut with cumul abortive
+            ax_lad = plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc,
+                                        inset=False, pval_pos='low')
+            plotr.cumulativeAbortive(*results2, corr=corr)
+
+            # bar plot
+            resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
+            axM1 = plotr.moving_average_ap_keq(resAPvsKeq)
+
+            #plotr.setFigSize(8.7, 4.5)
+            plotr.setFigSize(17.7, 6.5)
+            #plt.tight_layout()
+            #plotr.figure.subplots_adjust(left=0.11, top=0.97, right=0.995,
+                    #bottom=0.18, wspace=0.33)
+            plotr.figure.subplots_adjust(left=0.06, top=0.97, right=0.995,
+                    bottom=0.15, wspace=0.33)
+
+            # make the correlation label come closer
+            axM1.yaxis.labelpad = 0.4
+            ax_lad.yaxis.labelpad = 1
+
+            letters = ('A', 'B')
+            positions = ['UL', 'UR']
+            plotr.addLetters(letters, positions)
+
+            saveMe[fig] = plotr.figure
+
+        if fig == 'FigureX2':
+
+            """
+            Display the sum(AP), SE_20 correlation as well as the nt-2-nt
+            correlation (which doesn't match as well).
+            """
+            plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
+                    p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
+                    tickLength=2, tickWidth=0.5)
+
+            # scatterplot
+            resAP = calcResults['sumAP']
+            plotr.sumAP_SE20(resAP, norm=False)
+
+            # bar plot
+            resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
+            axM1 = plotr.moving_average_ap_keq(resAPvsKeq)
+
+            plotr.setFigSize(8.7, 4.0)
+            #plt.tight_layout()
+            plotr.figure.subplots_adjust(left=0.11, top=0.97, right=0.995,
+                    bottom=0.18, wspace=0.33)
+
+            axM1.yaxis.labelpad = 0.4
+
+            letters = ('A', 'B')
+            positions = ['UL', 'UR']
+            plotr.addLetters(letters, positions)
+
+            saveMe[fig] = plotr.figure
 
         if fig == 'FigureX2':
 
