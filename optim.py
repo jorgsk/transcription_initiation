@@ -99,7 +99,7 @@ class Result(object):
         self.params_best = dict((k, v[0]) for k,v in params.items())
 
 
-def main_optim(its_range, ITSs, ranges, analysisInfo):
+def main_optim(its_range, ITSs, ranges, analysisInfo, measure):
     """
 
     Call the core optimialization wrapper but treat different analysis cases
@@ -123,7 +123,7 @@ def main_optim(its_range, ITSs, ranges, analysisInfo):
 
         # 'normal' results (full dataset)
         if analysisInfo['Normal']['run']:
-            normal_obj = core_optim_wrapper(its_len, ITSs, ranges)
+            normal_obj = core_optim_wrapper(its_len, ITSs, ranges, measure)
 
         # Randomize
         if analysisInfo['Random']['run']:
@@ -133,7 +133,7 @@ def main_optim(its_range, ITSs, ranges, analysisInfo):
         # Cross correlation
         if analysisInfo['CrossCorr']['run']:
             crosscorr = analysisInfo['CrossCorr']['value']
-            crosscorr_obj = crosscorr_wrapper(its_len, ITSs, ranges, crosscorr)
+            crosscorr_obj = crosscorr_wrapper(its_len, ITSs, ranges, measure, crosscorr)
 
         results['Normal'][its_len] = normal_obj
         results['Random'][its_len] = random_obj
@@ -208,7 +208,7 @@ def randomize_wrapper(its_len, ITSs, ranges, randomize=0):
     return avrgdResults
 
 
-def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
+def crosscorr_wrapper(its_len, ITSs, ranges, measure, crosscorr=0):
     """
     Wrapper around core_optim_wrapper that deals with cross-correlation.
     Optimialization is performed on one half of the ITSs and the correlation is
@@ -240,7 +240,7 @@ def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
         # Choose 50% of the ITS randomly; both energies and PYs
         ITS_fit, ITS_compare = ITS_RandomSplit(ITSs)
 
-        fit_result = core_optim_wrapper(its_len, ITS_fit, ranges)
+        fit_result = core_optim_wrapper(its_len, ITS_fit, ranges, measure)
 
         # Skip if you don't get a result (should not be a problem with large ranges)
         if not fit_result:
@@ -252,7 +252,8 @@ def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
                       for p in par_order]
 
         # run the rest of the ITS with the optimal parameters from fitting-set
-        control_result = core_optim_wrapper(its_len, ITS_compare, fit_ranges)
+        control_result = core_optim_wrapper(its_len, ITS_compare, fit_ranges,
+                measure)
 
         # Skip if you don't get a result (should B OK with large ranges)
         if not control_result:
@@ -265,7 +266,7 @@ def crosscorr_wrapper(its_len, ITSs, ranges, crosscorr=0):
     return pick_top_results(retro_results)
 
 
-def core_optim_wrapper(its_len, ITSs, ranges):
+def core_optim_wrapper(its_len, ITSs, ranges, measure):
     """
     Wrapper around the multi-core solver. Return a Result object with
     correlations and pvalues.
@@ -288,15 +289,14 @@ def core_optim_wrapper(its_len, ITSs, ranges):
     #rmax = 5  # uncomment for multiprocessing debugging.
     if rmax > 6:
         my_pool = multiprocessing.Pool()
-        results = [my_pool.apply_async(_multi_calc, (p, its_len, ITSs))
-                      for p in divide]
+        results = [my_pool.apply_async(_multi_calc, (p, its_len, ITSs, measure))
+                for p in divide]
         my_pool.close()
         my_pool.join()
         # flatten the output
         all_results = sum([r.get() for r in results], [])
     else:  # the non-parallell version for debugging and no multi-range calculations
-        all_results = sum([_multi_calc(*(p, its_len, ITSs))
-                            for p in divide], [])
+        all_results = sum([_multi_calc(*(p, its_len, ITSs, measure)) for p in divide], [])
 
     # All_results is a list of tuples on the following form: ((SEn, par, rp, pp))
     # Sort them on the pearson/spearman correlation pvalue, 'pp' and pick top
@@ -332,20 +332,30 @@ def core_optim_wrapper(its_len, ITSs, ranges):
     return result_obj
 
 
-def _multi_calc(paras, its_len, ITSs):
+def _multi_calc(params, its_len, ITSs, measure='SE'):
     """
     Evaluate the model for all parameter combinations. Return the final values,
     the parameters, and the correlation coefficients.
+
+    XXX WARNING: if measure == 'product', SEn is not the sum of equilibrium
+    constants but the product. However, to save refactoring work the variable
+    is still called SE.
     """
 
     all_hits = []
     y = [its.PY for its in ITSs]
 
-    for par in paras:
-        SEn = keq_calc(par, its_len, ITSs)
+    for par in params:
+        all_keqs = keq_calc(par, its_len, ITSs)
 
         # correlation
-        rp, pp = spearmanr(y, SEn)
+        if measure == 'SE':
+            SEn = [np.sum(keqs) for keqs in all_keqs]
+            rp, pp = spearmanr(y, SEn)
+
+        elif measure == 'product':
+            SEn = [np.prod(keqs) for keqs in all_keqs]
+            rp, pp = spearmanr(y, SEn)
 
         # ignore parameter correlation where the correlation is a nan
         if np.isnan(rp):
@@ -369,7 +379,7 @@ def keq_calc(start_values, its_len, ITSs):
     # get the tuning parameters and the rna-dna and k1, kminus1 values
     # RT is the gas constant * temperature
     RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
-    ITS_SEn = []
+    all_keqs = []
 
     for its in ITSs:
 
@@ -390,11 +400,9 @@ def keq_calc(start_values, its_len, ITSs):
         # equilibrium constants at each position
         keqs = keq_i(RT, its_len, dg3d, dna_dna, rna_dna, a, b, c)
 
-        SEn = sum(keqs)
+        all_keqs.append(keqs)
 
-        ITS_SEn.append(SEn)
-
-    return np.array(ITS_SEn)
+    return np.asarray(all_keqs)
 
 
 def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c):
@@ -406,10 +414,6 @@ def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c):
     Tip for the future; start at +1 also for nucleotides, so all arrays have the
     same length. Just have the first values as 0. Makes it much easier to
     understand the code later. The 0s are placeholders.
-
-    !!There is no RNA-DNA energy change before +10. FFS.
-
-    Q: what do you get in? the keq, dna_dna etc?
 
     k1[0] should be for d(x_3)/dt
 

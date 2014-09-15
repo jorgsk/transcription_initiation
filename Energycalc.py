@@ -180,13 +180,9 @@ for dinuc, val in kminus1.items():
     # You are fixing it by ad-hoc reducing some values. This helps to bring
     # positive correlation like you expected!
 
-# try to normalize some values for invEq
-# result: correlation reappears with 'sensible' values
-#invEq['TA'] = 5
-#invEq['TG'] = 6
 
 def seq2din(sequence):
-    indiv = list(sequence) # splitting sequence into individual letters
+    indiv = list(sequence)  # splitting sequence into individual letters
     return [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
 
 # XXX go from Keq to Delta G values. Do 1/Keq because Hein paper has got the
@@ -198,13 +194,14 @@ RT = 1.9858775*(37 + 273.15)
 #dna_keq = complement(Keq_EC8_EC9)
 dna_keq = Keq_EC8_EC9
 
+## Jorgen: this is not keq, this is delta G!!
 delta_keq_f = {}
 for din, en in dna_keq.items():
-    delta_keq_f[din] = RT*np.log(en)/1000  #divide by 1000 to get kcal
+    delta_keq_f[din] = RT*np.log(en)/1000  # divide by 1000 to get kcal
 
 delta_keq_b = {}
 for din, en in dna_keq.items():
-    delta_keq_b[din] = -RT*np.log(en)/1000  #divide by 1000 to get kcal
+    delta_keq_b[din] = -RT*np.log(en)/1000  # divide by 1000 to get kcal
 
 def Delta_trans_forward(sequence):
     """

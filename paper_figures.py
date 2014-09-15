@@ -1,5 +1,5 @@
 """
-New, class based attempt at getting some rigour into creating figures for your
+New class based attempt at getting some rigour into creating figures for your
 papers. You need more flexibility in terms of subfiguring and not re-running
 simulations just to change figure data.
 
@@ -74,6 +74,17 @@ class Fit(object):
         """
         return y - self.exponential_function(B, x)
 
+    # below functions made for use with new scipy function curve_fit
+    def normal_distribution(self, a, b, x):
+        """
+        """
+        return (1.0 / (a*np.sqrt(2*np.pi))) * np.exp(-((x-b)**2)/(2*a**2))
+
+    def lognormal_distribution(self, a, b, x):
+        """
+        """
+        return (1.0 / (x*a*np.sqrt(2*np.pi))) * np.exp(-((np.log(x)-b)**2)/(2*a**2))
+
 
 class SimulationResult(object):
     """
@@ -94,7 +105,7 @@ class Calculator(object):
     Performs the calculations needed for the plotter. This ensures that
     plotting and value-calculating can be run separately.
 
-    Each calculator class has a corresponding plotting class
+    Each calculator method has a corresponding plotting method
     """
 
     def __init__(self, dg100, dg400, calcName, testing, dset, coeffs, topNuc):
@@ -110,6 +121,7 @@ class Calculator(object):
             self.ITSs = dset
         else:
             self.ITSs = dg100
+
         self.dg100 = dg100
         self.dg400 = dg400
         self.testing = testing
@@ -132,6 +144,7 @@ class Calculator(object):
         # you're modifying it so make a copy
         dset = copy.deepcopy(self.dg100 + self.dg400)
         #dset = copy.deepcopy(self.dg100)
+        #dset = copy.deepcopy(self.dg400)
 
         c1, c2, c3 = self.coeffs
         for its in dset:
@@ -155,13 +168,19 @@ class Calculator(object):
 
             for mer_center_pos in xmers:
 
-                attr = 'abortiveProb'
-                movAP = get_movAv_array(dset, center=mer_center_pos,
-                        movSize=movSize, attr=attr, prePost='both')
+                ## testing the N25_anti
+                #movAP = get_movAv_array(dset, center=mer_center_pos,
+                        #movSize=movSize, attr='abortiveProb', prePost='post')
 
-                attr = 'keq'
+                #movKeq = get_movAv_array(dset, center=mer_center_pos,
+                        #movSize=0, attr='keq', prePost='both')
+
+                # This is how the figure currently is
+                movAP = get_movAv_array(dset, center=mer_center_pos,
+                        movSize=movSize, attr='abortiveProb', prePost='both')
+
                 movKeq = get_movAv_array(dset, center=mer_center_pos,
-                        movSize=movSize, attr=attr, prePost='both')
+                        movSize=movSize, attr='keq', prePost='both')
 
                 corr, pval = spearmanr(movAP, movKeq)
 
@@ -287,7 +306,8 @@ class Calculator(object):
                 its.calc_keq(c1, c2, c3)
                 outp[name]['keq'].append(sum(its.keq))
                 outp[name]['PY'].append(its.PY)
-                apS = sum([v for v in its.abortiveProb if v > 0])
+                # not to 20, but to 15?
+                apS = sum([v for v in its.abortiveProb[:15] if v > 0])
                 outp[name]['sumAP'].append(apS)
                 apSnorm = sum([v for v in its.abortiveProb/apS if v > 0])
                 outp[name]['sumAPnorm'].append(apSnorm)
@@ -397,6 +417,7 @@ class Calculator(object):
 
         delinResults = {}
 
+        debug()
         for combo in varCombinations:
             print('\n---- delineate -------')
 
@@ -434,10 +455,14 @@ class Calculator(object):
 
         return delinResults
 
-    def correlateSE_PY(self, itsRange):
+    def correlateSE_PY(self, itsRange, measure='SE'):
         """
         Return three lists: indices, corr-values, and p-values
         Correlation between SE_n and PY
+
+        ATC -> [AT], [TC] always n-1 translocation steps.
+
+        keq[0] is 2-nt, keq[1] is 3-nt
         """
 
         PY = [i.PY for i in self.ITSs]
@@ -447,9 +472,13 @@ class Calculator(object):
 
         # keq[0] corresponds to 2-nt
         # therefore, ind=2 -> sum(i.keq[:1]) = sum(i.keq[0])
+        # therefore, ind=20 -> corresponds to 20-nt
         for ind in itsRange:
 
-            SEn = [sum(i.keq[:ind-1]) for i in self.ITSs]
+            if measure == 'SE':
+                SEn = [sum(i.keq[:ind-1]) for i in self.ITSs]
+            elif measure == 'product':
+                SEn = [np.prod(i.keq[:ind-1]) for i in self.ITSs]
 
             co, pv = spearmanr(SEn, PY)
 
@@ -502,21 +531,30 @@ class Calculator(object):
         #if self.testing:
             #itsRange = [itsMin, 5, 10, 15, itsMax]
 
+        # XXX TESTING
+        #debug()
+        #self.coeffs = False
+        # XXX TESTING
         if self.coeffs:
             c1, c2, c3 = self.coeffs
         else:
             analysis = 'Normal'
             onlySignCoeff=0.05
+            # XXX testing new measure: product
+            #result, grid_size, aInfo = optimizeParam(self.ITSs, itsRange,
+                    #self.testing, analysis=analysis, measure='product')
             result, grid_size, aInfo = optimizeParam(self.ITSs, itsRange,
-                    self.testing, analysis=analysis)
+                    self.testing, analysis=analysis, measure='SE')
             c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
                     onlySignCoeff, analysis, self.name, grid_size, aInfo=aInfo)
+            print c1, c2, c3
 
         # add the constants to the ITS objects and calculate Keq
         for its in self.ITSs:
             its.calc_keq(c1, c2, c3)
 
-        corr, pvals = self.correlateSE_PY(itsRange)
+        #corr, pvals = self.correlateSE_PY(itsRange, measure='product')
+        corr, pvals = self.correlateSE_PY(itsRange, measure='SE')
         indx = itsRange
 
         # print the results for each nucleotide
@@ -531,11 +569,15 @@ class Calculator(object):
         ntMax = max(indx)
         SEmax = [sum(i.keq[:ntMax+1]) for i in self.ITSs]
         SEbest = [sum(i.keq[:self.topNuc]) for i in self.ITSs]
+        choice = 16
+        SEchoice = [sum(i.keq[:choice+1]) for i in self.ITSs]
 
         for (ind, cor) in zip(indx, corr):
             print ind, cor
 
-        return self.topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest
+        SEs = (SEmax, SEbest, SEchoice, choice)
+
+        return self.topNuc, indx, corr, pvals, PYs, PYstd, SEs
 
     def crossCorrRandom(self, testing=True):
         """
@@ -815,7 +857,7 @@ class Plotter(object):
         # labels
         if xlab:
             ax.set_xlabel('ITS position', size=self.labSize)
-        ax.set_ylabel('Correlation: Keq and AP', size=self.labSize)
+        ax.set_ylabel('Correlation: K$_{bt}$ and AP', size=self.labSize)
 
         # ticks
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -841,7 +883,7 @@ class Plotter(object):
 
         return ax
 
-    def sumAP_SE20(self, results, norm=True, xlab=True, xticks=True):
+    def sumAP_SEXX(self, results, norm=True, xlab=True, xticks=True):
 
         ax = self.getNextAxes()
 
@@ -867,7 +909,7 @@ class Plotter(object):
 
         # labels
         if xlab:
-            ax.set_xlabel('SE$_{20}$', size=self.labSize)
+            ax.set_xlabel('SE$_{15}$', size=self.labSize)
         ax.set_ylabel('Sum of abortive probabilities ($\%$)', size=self.labSize)
 
         # ticks
@@ -1265,15 +1307,15 @@ class Plotter(object):
 
         ax.plot(sort_x, sort_fit, linewidth=2)
 
-    def PYvsSEscatter(self, PYs, PYstd, SEmax):
+    def PYvsSEscatter(self, PYs, PYstd, SEchoice, choice):
         """
-        Plotting just the best correlation (at 14 usually)
+        Plotting a scatter between PY and SE at position choice
         """
 
         # the index for which corr has the highest value
-        print("Spearman for ntMax (usually 20) and PY")
-        print(spearmanr(SEmax, PYs))
-        print(pearsonr(SEmax, PYs))
+        print("Spearman, Pearson for SE{0} and PY".format(choice))
+        print(spearmanr(SEchoice, PYs))
+        print(pearsonr(SEchoice, PYs))
 
         ax = self.getNextAxes()
 
@@ -1281,12 +1323,12 @@ class Plotter(object):
         PYs = [p*100 for p in PYs]
         PYstd = [p*100 for p in PYstd]
 
-        ax.errorbar(SEmax, PYs, yerr=PYstd, fmt=None, ecolor='b', zorder=1)
-        ax.scatter(SEmax, PYs, c='b', s=12, linewidth=0.6, zorder=2)
+        ax.errorbar(SEchoice, PYs, yerr=PYstd, fmt=None, ecolor='b', zorder=1)
+        ax.scatter(SEchoice, PYs, c='b', s=12, linewidth=0.6, zorder=2)
         # XXX get the errorbars to be gray too!!!!!!!!
 
         ax.set_ylabel("Productive yield ($\%$)", size=self.labSize)
-        ax.set_xlabel("SE$_{20}$", size=self.labSize)
+        ax.set_xlabel("SE$_{{{0}}}$".format(choice), size=self.labSize)
 
         ymin = -0.1
 
@@ -1294,7 +1336,7 @@ class Plotter(object):
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
                 width=self.tickWidth)
 
-        xmin, xmax = min(SEmax), max(SEmax)
+        xmin, xmax = min(SEchoice), max(SEchoice)
         xscale = (xmax-xmin)*0.06
         ax.set_xlim(xmin-xscale, xmax+xscale)
 
@@ -1309,6 +1351,9 @@ class Plotter(object):
         """
         Plot the increase in correlation at each reaction step
         """
+        #from scipy.stats import lognorm, norm
+        #from numpy.polynomial import Polynomial
+
         # use the current axis
         mainAx = self.axes[self._thisYaxNr, self._thisXaxNr]
 
@@ -1326,11 +1371,34 @@ class Plotter(object):
 
         # float -> int
         xlim = (int(xlim[0]), int(xlim[1]+1))
-        instantAx.bar(range(*xlim), instCorrZerod, width=0.8, color='g',
+        rna_lenghts = range(*xlim)
+        instantAx.bar(rna_lenghts, instCorrZerod, width=0.8, color='g',
                 alpha=0.4, align='center')
 
-        instantAx.set_ylabel('Increase in correlation',
-                size=self.labSize-1, color='green')
+        # Fit data to normal and lognormal distributions
+        # Add that 2-mers have 0 correlation too; for the sake of the plot.
+        #F = Fit()
+        #rna_lenghts_Z = [2] + rna_lenghts
+        #instCorrZerod_Z = [0] + instCorrZerod
+        #params_normal = optimize.curve_fit(F.normal_distribution, rna_lenghts_Z,
+                #instCorrZerod_Z)
+        #normal_fitted_values = [F.normal_distribution(l, *params_normal[0]) for l
+                #in rna_lenghts_Z]
+        #params_lognormal = optimize.curve_fit(F.lognormal_distribution, rna_lenghts_Z,
+                #instCorrZerod_Z)
+        #lognormal_fitted_values = [F.lognormal_distribution(l, *params_lognormal[0]) for l
+                #in rna_lenghts_Z]
+
+        #pp = Polynomial.fit(rna_lenghts_Z, instCorrZerod_Z, 4)
+
+        # XXX don't show this fit; it's nice, but you'd need to devote more
+        # results/discussion to it.
+        #instantAx.plot(*pp.linspace(), color='k')
+
+        # XXX opt for polyfit instead of fitting to lognorm
+        #instantAx.plot(rna_lenghts_Z, lognormal_fitted_values, color='k')
+
+        instantAx.set_ylabel('Increase in correlation', size=self.labSize-1, color='green')
 
         # tick parameters
         instantAx.tick_params(axis='y', labelsize=self.tickLabelSize,
@@ -1341,6 +1409,7 @@ class Plotter(object):
 
         instantAx.set_yticks(yrange)
         instantAx.set_yticklabels(yticklabels_skip)
+        instantAx.set_ylim(0, instantAx.get_ylim()[1])
 
         its_max = int(instantAx.get_xlim()[-1])
         # override
@@ -1357,6 +1426,8 @@ class Plotter(object):
         instantAx.set_xticklabels(xtickLabels)
 
         instantAx.set_xlim(2-0.3, its_max + 0.3)
+
+        return
 
     def cumulativeAbortive(self, cumulRaw, cumulAp, corr):
         """
@@ -1775,7 +1846,7 @@ def write_py_SE15(dg400):
 
 
 def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
-        variableCombo={'DNA':True, 'RNA':True, '3N':True}):
+        variableCombo={'DNA':True, 'RNA':True, '3N':True}, measure='SE'):
     """
     Optimize c1, c2, c3 to obtain max correlation with PY/FL/TA/TR
 
@@ -1837,7 +1908,8 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
 
     par_ranges = (c1, c2, c3)
 
-    all_results = optim.main_optim(its_range, ITSs, par_ranges, analysisInfo)
+    all_results = optim.main_optim(its_range, ITSs, par_ranges, analysisInfo,
+                                    measure)
 
     # return results for requested analysis type ('normal' by default)
     return all_results[analysis], grid_size, analysisInfo
@@ -2746,7 +2818,45 @@ def basic_info(ITSs):
     fl = [i.fullLengthMean for i in ITSs]
     ta = [i.totAbortMean for i in ITSs]
 
+    #coeff = [0.14, 0.00, 0.93]  # median of 20 runs
+    coeff = [0, 0.00, 1]  # median of 20 runs
+
+    for i in ITSs:
+        i.calc_keq(*coeff)
+
+    #3,5,7,8,15 -- weights according to AP-Keq correlation
+    weight = [1,5, 1, 5, 1, 5, 5, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1,1]
+    SEs = [sum(i.keq) for i in ITSs]
+    keqProduct = [np.prod(i.keq[:20]) for i in ITSs]
+    nrPurines = [i.nr_purines for i in ITSs]
+    #totAbort = [i.totAbortMean for i in ITSs]
+    #totRNA = [i.totRNAMean for i in ITSs]
+    #debug()
+
+    apw_SEs = [sum(i.keq * weight) for i in ITSs]
+    apw_keqProduct = [np.prod(i.keq[:20]*weight) for i in ITSs]
+
+    print 'SEs and PY ', spearmanr(SEs, py)
+    print 'keqProduct and PY ', spearmanr(keqProduct, py)
+    print 'ap-weighted SEs and PY ', spearmanr(apw_SEs, py)
+    print 'ap-weigthed keqProduct and PY ', spearmanr(apw_keqProduct, py)
+
+    for position in range(3, 20):
+        nrPurines = [np.prod(i.keq[:position]) for i in ITSs]
+        corr = spearmanr(nrPurines, py)
+        print('Position {0}: correlation purines PY: {1}'.format(position,corr))
+
+    # what is the correlation between PY and AP at each position?
+    for position in range(2, 20):
+        AP_at_pos = [i.abortiveProb[position-2] for i in ITSs]
+        corr = spearmanr(AP_at_pos, py)
+        #corr = spearmanr(AP_at_pos, totAbort)
+        #corr = spearmanr(AP_at_pos, totRNA)
+        print('Position {0}: correlation AP PY: {1}'.format(position,corr))
+    debug()
+
     #print 'FL and TotAbort: ', spearmanr(fl, ta)
+    return
 
     #se = [i.SE for i in ITSs]
     #ap2mer = [i.abortiveProb[0] for i in ITSs]
@@ -3008,7 +3118,7 @@ def doFigureCalculations(fig2calc, pickDir, figures, calculateAgain, testing, dg
     for fig in figures:
         for subCalcName in fig2calc[fig]:
             coeff = [0.14, 0.00, 0.93]  # median of 20 runs
-            #coeff = [0, 0, 1]  # median of 20 runs
+            #coeff = [0, 0, 1]
             calcResults[subCalcName] = calcWrapper(subCalcName, topNuc=13,
                                                     coeff=coeff)
     return calcResults
@@ -3057,7 +3167,8 @@ def main():
     #normalize_AP(ITSs)
 
     # basic correlations
-    #basic_info(ITSs)
+    #basic_info(dg100)
+    #return
 
     ## plot data when sorting by SE
     #ITSs = sortITS(ITSs, 'SE')
@@ -3087,15 +3198,15 @@ def main():
     #moving_average_ap(dg100, dg400)
 
     # Do not recalculate but use saved values (for tweaking plots)
-    calculateAgain = False  # TODO regenerate triplet fig
-    #calculateAgain = True
+    #calculateAgain = False  # TODO regenerate triplet fig
+    calculateAgain = True
 
-    #testing = True
-    testing = False
+    testing = True
+    #testing = False
 
     figures = [
             #'megaFig',  # One big figure for the first 4 plots
-            #'Figure2',  # SE vs PY
+            'Figure2',  # SE vs PY
             #'Figure2_DG400',  # SE vs PY for DG400
             #'Figure3',  # Delineate + DG400
             #'Figure3_instantaneous_change',  # Delineate w/increase in correlation + DG400
@@ -3103,7 +3214,7 @@ def main():
             #'Figure4old',  # Keq vs AP
             #'FigureX',  # 2x2 Keq vs AP, effect of normalization
             #'FigureX2',  # 1x2 Keq vs AP
-            'Figure4',  # delineate + cumul abortive, + keq-AP correlation
+            #'Figure4',  # delineate + cumul abortive, + keq-AP correlation
             #'CrossRandomDelineateSuppl',  # CrossCorrRandomDelineate in one
             #'Suppl1',   # Random and cross-corrleation (supplementary)
             #'Suppl2',   # Delineate -- all combinations
@@ -3113,23 +3224,24 @@ def main():
             #'DeLineate',   # Just to do the delineate calculation
             ]
 
-    # Dictionary that maps figures to calculations
+    # Dictionary that maps dependency between figure and calculations
+    # Commented out figures are not in paper currently
     fig2calc = {
-            'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
-            'Figure2': ['PYvsSE', 'cumulativeAbortive'],
+            #'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
+            'Figure2': ['PYvsSE'],
             'Figure2_DG400': ['PYvsSE', 'cumulativeAbortive'],
             'Figure3': ['delineate', 'dg400_validation'],
-            'Figure3_instantaneous_change': ['delineate'],
+            #'Figure3_instantaneous_change': ['delineate'],
             'Figure32': ['dg400_validation'],  # only do dg400 validation
             'Figure4old': ['AP_vs_Keq'],
             'FigureX': ['AP_vs_Keq', 'sumAP'],
             'FigureX2': ['AP_vs_Keq', 'sumAP'],
             'Figure4': ['AP_vs_Keq', 'PYvsSE', 'cumulativeAbortive'],
             'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
-            'Suppl1':  ['crossCorrRandom'],
-            'Suppl2':  ['delineateCombo'],
-            'Suppl3':  ['sumAP'],
-            'Suppl4':  ['AP_Keq_examples'],
+            #'Suppl1':  ['crossCorrRandom'],
+            #'Suppl2':  ['delineateCombo'],
+            #'Suppl3':  ['sumAP'],
+            #'Suppl4':  ['AP_Keq_examples'],
             'DeLineate':  ['delineate', 'delineateCombo']
             }
 
@@ -3143,11 +3255,11 @@ def main():
 
     #plt.ion()
     plt.ioff()
+
     # Do calculations
     calcResults = doFigureCalculations(fig2calc, pickDir, figures,
                                        calculateAgain, testing, dg100, dg400)
 
-    #debug()
     # Do plotting
     for fig in figures:
 
@@ -3184,7 +3296,8 @@ def main():
         if fig == 'Figure2':
 
             # standard PY vs SEn
-            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsSE']
+            topNuc, indx, corr, pvals, PYs, PYstd, SEs = calcResults['PYvsSE']
+            SEmax, SEbest, SEchoice, choice = SEs
             # cumulative amount of abortive probability
             #results2 = calcResults['cumulativeAbortive']
 
@@ -3192,14 +3305,22 @@ def main():
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
                     tickLength=2, tickWidth=0.5)
 
-            ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEmax)
+            #ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEmax)
+            # now plotting to 16 (since this is often the last position of
+            # escape)
+            ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEchoice, choice)
             ax_lad = plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc,
                                         inset=False)
 
             # XXX plot settings for ax_lad are reset below
             #plotr.cumulativeAbortive(*results2, corr=corr)
             # XXX try another approach than the cumulative: the absolute!
+
+            # plot how correlations increase, and lognormal fit to this
+            # increase
             plotr.instantaneousCorrelation(corr)
+
+            # plot a fitted normal distribution
 
             # Should be 8.7 cm
             plotr.setFigSize(8.7, 4.5)
@@ -3378,8 +3499,8 @@ def main():
         if fig == 'FigureX2':
 
             """
-            Display the sum(AP), SE_20 correlation as well as the nt-2-nt
-            correlation (which doesn't match as well).
+            Display the sum(AP), SE_XX correlation as well as the nt-2-nt
+            correlation.
             """
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
@@ -3387,38 +3508,7 @@ def main():
 
             # scatterplot
             resAP = calcResults['sumAP']
-            plotr.sumAP_SE20(resAP, norm=False)
-
-            # bar plot
-            resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
-            axM1 = plotr.moving_average_ap_keq(resAPvsKeq)
-
-            plotr.setFigSize(8.7, 4.0)
-            #plt.tight_layout()
-            plotr.figure.subplots_adjust(left=0.11, top=0.97, right=0.995,
-                    bottom=0.18, wspace=0.33)
-
-            axM1.yaxis.labelpad = 0.4
-
-            letters = ('A', 'B')
-            positions = ['UL', 'UR']
-            plotr.addLetters(letters, positions)
-
-            saveMe[fig] = plotr.figure
-
-        if fig == 'FigureX2':
-
-            """
-            Display the sum(AP), SE_20 correlation as well as the nt-2-nt
-            correlation (which doesn't match as well).
-            """
-            plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
-                    p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
-                    tickLength=2, tickWidth=0.5)
-
-            # scatterplot
-            resAP = calcResults['sumAP']
-            plotr.sumAP_SE20(resAP, norm=False)
+            plotr.sumAP_SEXX(resAP, norm=False)
 
             # bar plot
             resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
@@ -3452,9 +3542,9 @@ def main():
 
             resNormalizedAP = calcResults['sumAP']
 
-            plotr.sumAP_SE20(resNormalizedAP, norm=False, xlab=False,
+            plotr.sumAP_SEXX(resNormalizedAP, norm=False, xlab=False,
                     xticks=False)
-            plotr.sumAP_SE20(resNormalizedAP, norm=True)
+            plotr.sumAP_SEXX(resNormalizedAP, norm=True)
 
             resAPvsKeqNorm = calcResults['AP_vs_Keq']['Normalized']
             resAPvsKeqNonNorm = calcResults['AP_vs_Keq']['Non-Normalized']
@@ -3593,4 +3683,4 @@ def main():
 
 if __name__ == '__main__':
     ITSs = main()
-    ga = ITSs[0]  # just for testing attributes in the interpreter...
+

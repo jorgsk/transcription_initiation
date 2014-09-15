@@ -21,6 +21,8 @@ class ITS(object):
         self.APR = apr
         self.msat = int(msat)
 
+        self.nr_purines = sum([1 for s in self.sequence[:20] if s in ['G','A']])
+
         # These are optional data which are used if the raw quantitations are
         # available
         self.quantitations = []
@@ -179,6 +181,7 @@ class ITS(object):
 
         """
 
+        # hard-coded constants hello Fates!
         RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
 
         its_len = 21
