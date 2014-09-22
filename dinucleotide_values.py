@@ -43,7 +43,7 @@ resistant_fraction_pm = {
 'TC': 0.01,
 'TG': 0.01,
 }
-k1 = {
+k_forward = {
 'AA':0.06,
 'AC':0.08,
 'AG':0.04,
@@ -61,7 +61,7 @@ k1 = {
 'TC':0.04,
 'TG':0.007,
 }
-k1_pm = {
+k_forward_pm = {
 'AA':0.01,
 'AC':0.01,
 'AG':0.01,
@@ -79,7 +79,7 @@ k1_pm = {
 'TC':0.01,
 'TG':0
 }
-kminus1 = {
+k_reverse = {
 'AA':0.10,
 'AC':0.11,
 'AG':0.13,
@@ -97,7 +97,7 @@ kminus1 = {
 'TC':0.10,
 'TG':0.14,
 }
-kmins1_pm = {
+k_reverse_pm = {
 'AA':0.03,
 'AC':0.02,
 'AG':0.03,
@@ -154,4 +154,3 @@ Keq_EC8_EC9_pm = {
 'TG':0,
 }
 
-# Create 

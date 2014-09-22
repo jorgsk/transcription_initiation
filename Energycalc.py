@@ -3,6 +3,7 @@ from Bio.Seq import Seq
 import copy
 import numpy as np
 
+
 def complement(in_dict):
     """
     Return the dinucleotide -> value dict with the complementary dinucleotide.
@@ -74,7 +75,6 @@ NNDD = {'AA':-1.00,
 EnLibDNA = copy.deepcopy(NNDD)
 del(EnLibDNA['Initiation'])
 
-#EnLibDNA = complement(EnLibRNA)
 
 def RNA_DNAexpected(length):
     """ Returns expected RNA/DNA energy for random sequence of length 'length'. """
@@ -87,10 +87,12 @@ def RNA_DNAexpected(length):
 
     return mean*(length-1)
 
+
 def DNA_DNAexpected(length):
     """ Returns expected DNA/DNA energy for random sequence of length 'length'. """
     mean = np.mean(EnLibDNA.values())
     return mean*(length-1)
+
 
 def RNA_DNAenergy(sequence):
     """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
@@ -98,11 +100,12 @@ def RNA_DNAenergy(sequence):
     if len(sequence) < 2:
         return 0
 
-    indiv = list(sequence) # splitting sequence into individual letters
+    indiv = list(sequence)  # splitting sequence into individual letters
     neigh = [indiv[cnt] + indiv[cnt+1] for cnt in range(len(indiv)-1)]
     energ = sum([NNRD[nei] for nei in neigh])
 #    energ = energ + NNRD['Initiation']
     return energ
+
 
 def DNA_DNAenergy(sequence):
     """ Calculate the DNA/DNA binding energy of 'sequence'. """
@@ -122,6 +125,7 @@ def DNA_DNAenergy(sequence):
         energ = energ + NNDD['Symmetry']
     energ = energ + NNDD['Initiation']
     return energ
+
 
 def PhysicalRNA(sequence, msat, msatyes,maxlen):
     """ Return RNA/DNA binding energies for ITS-sequence. If msatyes == 'yes':
@@ -148,8 +152,10 @@ def PhysicalRNA(sequence, msat, msatyes,maxlen):
             enlist[zeror][0] = expEnrgy
     return enlist
 
-promoter = 'ATAATAGATTC' # Last 11 nt's of promoter sequence (next is +1)
+promoter = 'ATAATAGATTC'  # Last 11 nt's of promoter sequence (next is +1)
 bubsize = 13
+
+
 def PhysicalDNA(sequence):
     """ Return DNA/DNA hybrid energy of ITS-sequence using the (-11, 20)-element.
     (pos1,pos2) = (0,13) really means that the sequence 0,1,...,12 is joined. """
@@ -162,15 +168,15 @@ def PhysicalDNA(sequence):
     return enlist
 
 # add the stuff from new paper
-from dinucleotide_values import resistant_fraction, k1, kminus1, Keq_EC8_EC9
+from dinucleotide_values import resistant_fraction, k_forward, k_reverse, Keq_EC8_EC9
 
 # recalculate the Keq and the reverse for more accuracy
 invEq = {}
 reKeq = {}
 
-for dinuc, val in kminus1.items():
-    invEq[dinuc] = val/k1[dinuc]
-    reKeq[dinuc] = k1[dinuc]/val
+for dinuc, val in k_reverse.items():
+    invEq[dinuc] = val/k_forward[dinuc]
+    reKeq[dinuc] = k_forward[dinuc]/val
 
     # The inverse has a large problem since some kf the k1 values are very small
     if dinuc == 'TA':
@@ -195,60 +201,67 @@ RT = 1.9858775*(37 + 273.15)
 dna_keq = Keq_EC8_EC9
 
 ## Jorgen: this is not keq, this is delta G!!
-delta_keq_f = {}
+deltaG_f = {}
 for din, en in dna_keq.items():
-    delta_keq_f[din] = RT*np.log(en)/1000  # divide by 1000 to get kcal
+    deltaG_f[din] = RT*np.log(en)/1000  # divide by 1000 to get kcal
 
-delta_keq_b = {}
+deltaG_b = {}
 for din, en in dna_keq.items():
-    delta_keq_b[din] = -RT*np.log(en)/1000  # divide by 1000 to get kcal
+    deltaG_b[din] = -RT*np.log(en)/1000  # divide by 1000 to get kcal
+
 
 def Delta_trans_forward(sequence):
     """
     Delta values for keq for the forward reaction
     """
 
-    return sum([delta_keq_f[din] for din in seq2din(sequence)])
+    return sum([deltaG_f[din] for din in seq2din(sequence)])
+
 
 def Delta_trans_backward(sequence):
     """
     Delta values for keq for the backward reaction
     """
 
-    return sum([delta_keq_b[din] for din in seq2din(sequence)])
+    return sum([deltaG_b[din] for din in seq2din(sequence)])
+
 
 def res_frac(sequence):
-    """ Calculate the DNA/RNA binding energy of 'sequence'. Now skipping
+    """ Return the DNA/RNA binding energy of 'sequence'. Now skipping
     initiation cost. """
     if len(sequence) < 2:
         return 0
 
     return sum([resistant_fraction[din] for din in seq2din(sequence)])
 
-def K1(sequence):
-    """ Calculate the K1 of 'sequence' """
+
+def k_forward(sequence):
+    """ Return the rate coefficient [/min] of forward translocation of 'sequence' """
     if len(sequence) < 2:
         return 0
 
-    return sum([k1[din] for din in seq2din(sequence)])
+    return sum([k_forward[din] for din in seq2din(sequence)])
 
-def Kminus1(sequence):
-    """ Calculate the K_-1 of 'sequence'. """
+
+def k_backward(sequence):
+    """ Return the rate coefficient [/min] of reverse translocation of 'sequence'. """
     if len(sequence) < 2:
         return 0
 
-    return sum([kminus1[din] for din in seq2din(sequence)])
+    return sum([k_reverse[din] for din in seq2din(sequence)])
+
 
 def Keq(sequence):
-    """ Calculate the Keq of 'sequence'. """
+    """ Return the Keq of 'sequence'. """
     if len(sequence) < 2:
         return 0
 
     return sum([Keq_EC8_EC9[din] for din in seq2din(sequence)])
 
+
 def Keq_mine(sequence):
-    """ Calculate the Keq of 'sequence'. """
+    """ Return the Keq of 'sequence'. """
     if len(sequence) < 2:
         return 0
 
-    return sum([k1[din]/kminus1[din] for din in seq2din(sequence)])
+    return sum([k_forward[din]/k_reverse[din] for din in seq2din(sequence)])

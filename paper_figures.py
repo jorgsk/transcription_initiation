@@ -153,7 +153,8 @@ class Calculator(object):
         movSize = 0  # effectively NOT a moving winding, but nt-2-nt comparison
 
         # Ignore 2, since it's just AT and very little variation occurs.
-        xmers = range(2, 21)
+        #xmers = range(2, 21)
+        xmers = range(2, 16)
         # the bar height will be the correlation with the above three values for
         # each moving average center position
 
@@ -299,7 +300,10 @@ class Calculator(object):
                 }
 
         # calculate keq values using latest parameter values
-        c1, c2, c3 = [0.13, 0, 0.93]
+        # this must be kept in copy-paste sync :(
+        coeffs = [0.12, 0.14, 0.66]  # median of 20 runs with its_range(2,16)
+
+        c1, c2, c3 = coeffs
 
         for dset, name in [(self.dg100, 'dg100'), (self.dg400, 'dg400')]:
             for its in dset:
@@ -354,7 +358,8 @@ class Calculator(object):
         #varCombinations = [v for v in varCombinations]
         # set the range for which you wish to calculate correlation
         itsMin = 2
-        itsMax = 20
+        #itsMax = 20
+        itsMax = 15
         itsRange = range(itsMin, itsMax+1)
         if self.testing:
             #itsRange = [itsMin, 5, 10, 15, itsMax]
@@ -406,7 +411,8 @@ class Calculator(object):
 
         # set the range for which you wish to calculate correlation
         itsMin = 2
-        itsMax = 20
+        itsMax = 15
+        #itsMax = 20
         itsRange = range(itsMin, itsMax+1)
         if self.testing:
             #itsRange = [itsMin, 5, 10, 15, itsMax]
@@ -417,7 +423,6 @@ class Calculator(object):
 
         delinResults = {}
 
-        debug()
         for combo in varCombinations:
             print('\n---- delineate -------')
 
@@ -525,8 +530,14 @@ class Calculator(object):
 
          #set the range of values for which you wish to calculate correlation
         itsMin = 2
-        itsMax = 20
+        #itsMax = 20
+        itsMax = 15
         itsRange = range(itsMin, itsMax+1)
+
+        scatter_plot_nt_pos = 15
+
+        if scatter_plot_nt_pos not in itsRange:
+            return 'XXX: scatter plot could not be made'
 
         #if self.testing:
             #itsRange = [itsMin, 5, 10, 15, itsMax]
@@ -535,6 +546,7 @@ class Calculator(object):
         #debug()
         #self.coeffs = False
         # XXX TESTING
+        #debug()
         if self.coeffs:
             c1, c2, c3 = self.coeffs
         else:
@@ -565,18 +577,15 @@ class Calculator(object):
         PYs = [i.PY for i in self.ITSs]
         PYstd = [i.PY_std for i in self.ITSs]
 
-        # the the highest nt you tested (probably 20)
         ntMax = max(indx)
-        SEmax = [sum(i.keq[:ntMax+1]) for i in self.ITSs]
+        # subtract 1 since keq[0] is 2-nt
+        SEmax = [sum(i.keq[:ntMax-1]) for i in self.ITSs]
         SEbest = [sum(i.keq[:self.topNuc]) for i in self.ITSs]
-        choice = 16
-        SEchoice = [sum(i.keq[:choice+1]) for i in self.ITSs]
+        SEchoice = [sum(i.keq[:scatter_plot_nt_pos-1]) for i in self.ITSs]
 
-        for (ind, cor) in zip(indx, corr):
-            print ind, cor
+        SEs = (SEmax, SEbest, SEchoice, scatter_plot_nt_pos)
 
-        SEs = (SEmax, SEbest, SEchoice, choice)
-
+        # topNuc and SEbest were used to make the inset plot
         return self.topNuc, indx, corr, pvals, PYs, PYstd, SEs
 
     def crossCorrRandom(self, testing=True):
@@ -586,13 +595,15 @@ class Calculator(object):
         """
 
         # set the range of values for which you wish to calculate correlation
-        itsRange = range(2, 21)
 
+        itsMin = 2
+        #itsMax = 20
+        itsMax = 15
+        itsRange = range(itsMin, itsMax+1)
         if self.testing:
-            #itsRange = [5, 7, 10, 13, 15, 18, 20]
-            itsRange = range(2, 21)
-            #itsRange = range(8, 19)
-            #itsRange = [14]
+            #itsRange = [itsMin, 5, 10, 15, itsMax]
+            #itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
+            itsRange = range(itsMin, itsMax+1)
 
         analysis2stats = {}
 
@@ -880,6 +891,8 @@ class Plotter(object):
         yIndx = [g for g in np.arange(-0.2, 0.8, 0.2)]
         ax.set_yticks(yIndx)
         ax.set_ylim(-0.12, 0.63)
+
+        debug()
 
         return ax
 
@@ -1413,7 +1426,7 @@ class Plotter(object):
 
         its_max = int(instantAx.get_xlim()[-1])
         # override
-        its_max = 20
+        #its_max = 20
         instantAx.set_xticks(range(2, its_max + 1))
 
         xtickLabels = []
@@ -1853,19 +1866,16 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
     # equation:
     k1 = exp(-(c1*rna_dna_i + c2*dna_dna_{i+1} + c3*Keq_{i-1}) * 1/RT)
 
-    As of right now, you only have PY for DG100 ... would be interesting to get
-    FL in there as well. Do you have this information? Maybe verify with Lilian.
-
     PY = Productive Yield
     FL = Full Length
     TA = Total Abortive
     TR = Total RNA
     """
 
-    # grid size
-    grid_size = 11
+    # grid size parameter values search space
+    grid_size = 20
     if testing:
-        grid_size = 6
+        grid_size = 5
 
     # defalt: do nothing
     analysisInfo = {
@@ -1880,12 +1890,14 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
         # nr of random sequences tested for each parameter combination
         analysisInfo['Random']['run'] = True
         analysisInfo['Random']['value'] = 100
-        #analysisInfo['Random']['value'] = 15
+        if testing:
+            analysisInfo['Random']['value'] = 15
     elif analysis == 'Cross Correlation':
         # nr of samplings of 50% of ITSs for each parameter combination
         analysisInfo['CrossCorr']['run'] = True
         analysisInfo['CrossCorr']['value'] = 100
-        #analysisInfo['CrossCorr']['value'] = 15
+        if testing:
+            analysisInfo['CrossCorr']['value'] = 15
     elif analysis != 'Normal':
         print('Give correct analysis parameter name')
         1/0
@@ -2027,6 +2039,9 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
         else:
             madStd = mad_std(ParvalsFiltered)  # std, but using the mad as an estimator
 
+        if ma.is_masked(madStd):
+            madStd = np.nan
+
         outpString = '{0}: {1:.2f} (mean) +/- {2:.2f} or {0}: {3:.2f}'\
                         ' (median) +/- {4:.2f}'.format(param, mean, normal_std,
                                 median, madStd)
@@ -2036,8 +2051,8 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
 
         # This is what is going into the keq calculation and plotting! Better
         # keep the median if that's what you're reporting in the figures.
-        #outp[param] = mean
-        outp[param] = median
+        outp[param] = mean
+        #outp[param] = median
 
     # print correlations
     if analysis == 'Normal':
@@ -2048,7 +2063,7 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
 
         for nt, c, p in zip(its_range, maxcorr, pvals):
             output = (nt, c, p)
-            print(output)
+            #print(output)
             logFileHandle.write(str(output) + '\n')
             print nt, c, p
     else:
@@ -3085,8 +3100,8 @@ def abortive_bar(dg100, dg400):
     fig.suptitle('Sum of abortive product at each nucleotide position')
 
 
-def doFigureCalculations(fig2calc, pickDir, figures, calculateAgain, testing, dg100,
-                            dg400):
+def doFigureCalculations(fig2calc, pickDir, figures, coeffs, calculateAgain,
+                        testing, dg100, dg400):
     """
     Perform all calculations necessary for plotting. Each figure can have
     several 'plot' functions.
@@ -3117,10 +3132,9 @@ def doFigureCalculations(fig2calc, pickDir, figures, calculateAgain, testing, dg
 
     for fig in figures:
         for subCalcName in fig2calc[fig]:
-            coeff = [0.14, 0.00, 0.93]  # median of 20 runs
-            #coeff = [0, 0, 1]
+            # XXX is the topNuc used for something important? lets hope not.
             calcResults[subCalcName] = calcWrapper(subCalcName, topNuc=13,
-                                                    coeff=coeff)
+                                                    coeff=coeffs)
     return calcResults
 
 
@@ -3198,24 +3212,29 @@ def main():
     #moving_average_ap(dg100, dg400)
 
     # Do not recalculate but use saved values (for tweaking plots)
-    #calculateAgain = False  # TODO regenerate triplet fig
+    #calculateAgain = False
     calculateAgain = True
+    # XXX warning if coeffs are set, these are used anyway! must set to false
+    coeffs = [0.12, 0.14, 0.66]  # median of 20 runs with its_range(2,21)
+    #coeffs = False  # this means coeffs will be calculated
 
     testing = True
     #testing = False
 
+    # its-range
+
     figures = [
+            #'Figure2',  # SE vs PY (in Paper)
+            #'Figure32',  # DG400 scatter plot (in Paper)
+            #'FigureX2',  # 1x2 Keq vs AP (in Paper)
+            'CrossRandomDelineateSuppl',  # (in Paper)
             #'megaFig',  # One big figure for the first 4 plots
-            'Figure2',  # SE vs PY
             #'Figure2_DG400',  # SE vs PY for DG400
             #'Figure3',  # Delineate + DG400
             #'Figure3_instantaneous_change',  # Delineate w/increase in correlation + DG400
-            #'Figure32',  # DG400
             #'Figure4old',  # Keq vs AP
             #'FigureX',  # 2x2 Keq vs AP, effect of normalization
-            #'FigureX2',  # 1x2 Keq vs AP
             #'Figure4',  # delineate + cumul abortive, + keq-AP correlation
-            #'CrossRandomDelineateSuppl',  # CrossCorrRandomDelineate in one
             #'Suppl1',   # Random and cross-corrleation (supplementary)
             #'Suppl2',   # Delineate -- all combinations
             #'Suppl3',   # PY vs sum(AP) before and after normalization
@@ -3227,22 +3246,22 @@ def main():
     # Dictionary that maps dependency between figure and calculations
     # Commented out figures are not in paper currently
     fig2calc = {
-            #'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
             'Figure2': ['PYvsSE'],
-            'Figure2_DG400': ['PYvsSE', 'cumulativeAbortive'],
-            'Figure3': ['delineate', 'dg400_validation'],
-            #'Figure3_instantaneous_change': ['delineate'],
-            'Figure32': ['dg400_validation'],  # only do dg400 validation
-            'Figure4old': ['AP_vs_Keq'],
-            'FigureX': ['AP_vs_Keq', 'sumAP'],
             'FigureX2': ['AP_vs_Keq', 'sumAP'],
-            'Figure4': ['AP_vs_Keq', 'PYvsSE', 'cumulativeAbortive'],
+            'Figure32': ['dg400_validation'],  # only do dg400 validation
             'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
+            #'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
+            #'Figure2_DG400': ['PYvsSE', 'cumulativeAbortive'],
+            #'Figure3': ['delineate', 'dg400_validation'],
+            #'Figure3_instantaneous_change': ['delineate'],
+            #'Figure4old': ['AP_vs_Keq'],
+            #'FigureX': ['AP_vs_Keq', 'sumAP'],
+            #'Figure4': ['AP_vs_Keq', 'PYvsSE', 'cumulativeAbortive'],
             #'Suppl1':  ['crossCorrRandom'],
             #'Suppl2':  ['delineateCombo'],
             #'Suppl3':  ['sumAP'],
             #'Suppl4':  ['AP_Keq_examples'],
-            'DeLineate':  ['delineate', 'delineateCombo']
+            #'DeLineate':  ['delineate', 'delineateCombo']
             }
 
     ### XXX Below this line are figures that appear in the paper XXX ###
@@ -3257,7 +3276,7 @@ def main():
     plt.ioff()
 
     # Do calculations
-    calcResults = doFigureCalculations(fig2calc, pickDir, figures,
+    calcResults = doFigureCalculations(fig2calc, pickDir, figures, coeffs,
                                        calculateAgain, testing, dg100, dg400)
 
     # Do plotting
@@ -3298,16 +3317,15 @@ def main():
             # standard PY vs SEn
             topNuc, indx, corr, pvals, PYs, PYstd, SEs = calcResults['PYvsSE']
             SEmax, SEbest, SEchoice, choice = SEs
+
             # cumulative amount of abortive probability
             #results2 = calcResults['cumulativeAbortive']
+            #debug()
 
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY',
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
                     tickLength=2, tickWidth=0.5)
 
-            #ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEmax)
-            # now plotting to 16 (since this is often the last position of
-            # escape)
             ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEchoice, choice)
             ax_lad = plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc,
                                         inset=False)
@@ -3575,10 +3593,10 @@ def main():
                     p_line=False, labSize=6, tickLabelSize=6, lineSize=2,
                     tickLength=2, tickWidth=0.5)
 
-            # cross corrrlation and random
-            crossCorrResults = calcResults['crossCorrRandom']
             # delineation of effects of different energies
             delinResults = calcResults['delineate']
+            # cross corrrlation and random
+            crossCorrResults = calcResults['crossCorrRandom']
             # all combinations of all DGs
             results = calcResults['delineateCombo']
 

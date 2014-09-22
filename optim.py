@@ -193,7 +193,8 @@ def randomize_wrapper(its_len, ITSs, ranges, randomize=0):
 
         ITS_random = randomize_ITS_sequence(ITSs)
 
-        rand_result = core_optim_wrapper(its_len, ITS_random, ranges)
+        rand_result = core_optim_wrapper(its_len, ITS_random, ranges,
+                measure='SE')
 
         # skip if you don't get anything from this randomizer
         if not rand_result:
@@ -407,7 +408,7 @@ def keq_calc(start_values, its_len, ITSs):
 
 def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c):
     """
-    NOTE!! now calculating for the backward translocation
+    NOTE!! calculating backward translocation
 
     Recall that the energies are in dinucleotide form. Thus ATG -> [0.4, 0.2]
 
