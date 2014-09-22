@@ -3,6 +3,12 @@ from Bio.Seq import Seq
 import copy
 import numpy as np
 
+# load nucleotide and dinucleotide values from various papers
+from dinucleotide_values import resistant_fraction,
+Keq_EC8_EC9, NNRD, malinen_et_al_nucleotide_addition_halflives_ms,
+malinen_et_al_forward_translocation_halflives_ms,
+pyrophosphorolysis_forward, pyrophosphorolysis_reverse
+
 
 def complement(in_dict):
     """
@@ -27,51 +33,10 @@ def complement(in_dict):
     return out_dict
 
 
-# RNA-DNA duplexes from Sugimoto 2002 paper
-# BASES ARE FROM THE TEMPLATE DNA STRAND OF A TRANSCRIPTION BUBBLE WITH AN
-# RNA-DNA HYBRID
-NNRD = {'AA':-0.4,
-        'AC':-1.6,
-        'AG':-1.4,
-        'AT':-1.0,
-        'CA':-1.0,
-        'CC':-1.5,
-        'CG':-1.2,
-        'CT':-0.9,
-        'GA':-1.4,
-        'GC':-2.4,
-        'GG':-2.2,
-        'GT':-1.5,
-        'TA':-0.3,
-        'TC':-0.8,
-        'TG':-1.0,
-        'TT':-0.2,
-        'Initiation':1.0}
 # EnLibRNA is for calculating expected random sequence values
-
 EnLibRNA = copy.deepcopy(NNRD)
 del(EnLibRNA['Initiation'])
 
-# DNA-DNA duplexes from Santalucia 2004 paper in the 5->3 direction
-NNDD = {'AA':-1.00,
-        'TT':-1.00,
-        'AT':-0.88,
-        'TA':-0.58,
-        'CA':-1.45,
-        'TG':-1.45,
-        'GT':-1.44,
-        'AC':-1.44,
-        'CT':-1.28,
-        'AG':-1.28,
-        'GA':-1.30,
-        'TC':-1.30,
-        'CG':-2.17,
-        'GC':-2.24,
-        'GG':-1.84,
-        'CC':-1.84,
-        'TerminalAT':0.05,
-        'Initiation':1.96,
-        'Symmetry':0.43}
 EnLibDNA = copy.deepcopy(NNDD)
 del(EnLibDNA['Initiation'])
 
@@ -167,9 +132,6 @@ def PhysicalDNA(sequence):
         enlist.append((DNA_DNAenergy(subseq),(pos1,pos2)))
     return enlist
 
-# add the stuff from new paper
-from dinucleotide_values import resistant_fraction, k_forward, k_reverse, Keq_EC8_EC9
-
 # recalculate the Keq and the reverse for more accuracy
 invEq = {}
 reKeq = {}
@@ -200,7 +162,6 @@ RT = 1.9858775*(37 + 273.15)
 #dna_keq = complement(Keq_EC8_EC9)
 dna_keq = Keq_EC8_EC9
 
-## Jorgen: this is not keq, this is delta G!!
 deltaG_f = {}
 for din, en in dna_keq.items():
     deltaG_f[din] = RT*np.log(en)/1000  # divide by 1000 to get kcal
@@ -208,6 +169,29 @@ for din, en in dna_keq.items():
 deltaG_b = {}
 for din, en in dna_keq.items():
     deltaG_b[din] = -RT*np.log(en)/1000  # divide by 1000 to get kcal
+
+
+def HalfLife2RateConstant(hl):
+    """
+    Assuming first order kinetics
+    """
+    return 0.693/hl
+
+
+def ScaleHeinRateConstants(hein_reverse_pyrophosphorolysis):
+    """
+    Take Hein's reverse pyrophosphorolysis rate constants and scale them so
+    that they are of similar order [/min -> /sec] to Malinen's measured values.
+
+    Hein's values are for example AG = 0.3, TG = 0.1 /min,
+    which is AG = 0.3/60 = 0.005/sec, TG = 0.1/60 = 0.00167/sec
+    While Malinen's values are for 'ending with G'
+    """
+    gatc = ['G', 'A', 'T', 'C']
+    half_lives = {[[malinen_et_al_forward_translocation_halflives_ms[nt]
+                                for nt in gatc])}
+    rate_constants = np.array([Ec.HalfLife2RateConstant(hl) for hl in half_lives])
+    # XXX TODO: finish this work
 
 
 def Delta_trans_forward(sequence):
@@ -235,7 +219,7 @@ def res_frac(sequence):
     return sum([resistant_fraction[din] for din in seq2din(sequence)])
 
 
-def k_forward(sequence):
+def K_forward(sequence):
     """ Return the rate coefficient [/min] of forward translocation of 'sequence' """
     if len(sequence) < 2:
         return 0
@@ -243,7 +227,7 @@ def k_forward(sequence):
     return sum([k_forward[din] for din in seq2din(sequence)])
 
 
-def k_backward(sequence):
+def K_backward(sequence):
     """ Return the rate coefficient [/min] of reverse translocation of 'sequence'. """
     if len(sequence) < 2:
         return 0

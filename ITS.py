@@ -7,16 +7,10 @@ import Energycalc as Ec
 
 class ITS(object):
 
-    nucleotide_addition_halflifes_ms = {
-            'A': 19.0,
-            'C': 8.5,
-            'G': 20.3,
-            'U': 23.5}
-
     def __init__(self, sequence, name='noname', PY=-1, PY_std=-1, apr=-1, msat=-1):
         # Set the initial important data.
         self.name = name
-        #self.sequence = sequence
+        # sequence is the non-template strand == the "same as RNA-strand"
         self.sequence = sequence + 'TAAATATGGC'
         self.PY = PY
         self.PY_std = PY_std
@@ -72,26 +66,110 @@ class ITS(object):
         self.DgRNA15 = sum(self.rna_dna_di[:15])
         self.Dg3D15 = sum(self.delta_g_b[:15])
 
-        # Make parameters for the nucleotide incorporation rates for each
-        # nucleotide during initiation
-
     def __repr__(self):
         return "{0}, PY: {1}".format(self.name, self.PY)
 
-    def initial_backtracking_rate_constant(self):
+    def ScaleHeinRateConstants()
+
+    def forward_transclocation(self, method='constant', constant=2):
         """
-        This is the ra
+        Forward translocation is in the brownian ratched model assumed to be
+        thermally driven, and not very different between nucleotides. The lack
+        of strong nucleotide-specificity for forward translocation was found
+        experimentally by Malinen et. al, and by Hein et. al indirectly through
+        pyrophosphorolysis.
         """
 
-    def ntp_incorporation_coefficients(self, method='constant', constant_constant=20):
+        if method == 'constant':
+            return np.array([constant for n in self.sequence])
+
+        if method == 'hein_et_al':
+            # /min
+            pyro_forward = np.array([Ec.pyrophosphorolysis_reverse[di] for di in __dinucs])
+
+            # scale to the malinen_et_al rate constants
+            hein_scaled_forward_rate_constants = ScaleHeinRateConstants(pyro_forward)
+
+            return hein_scaled_forward_rate_constants
+
+        if method == 'malinen_et_al':
+            # unit /s
+            half_lives = np.array([[Ec.malinen_et_al_forward_translocation_halflives_ms[nt]
+                                        for nt in self.sequence])
+            rate_constants = np.array([Ec.HalfLife2RateConstant(hl) for hl in half_lives])
+
+            return rate_constants
+
+
+    def abortive_rates(self, method='constant', constant=3):
+        """
+        Rate constants for abortive product release, once the hybrid has
+        become short enough.
+        """
+        if method == 'constant':
+            return np.array([constant for n in self.sequence])
+
+        if method == 'hybrid_energy_dependent':
+            """
+            After max hybrid length is reached, increase in abortive rate
+            constant increases with a factor proportional to RNA-DNA free
+            energy.
+            """
+            pass
+
+        if method == 'hybrid_length_dependent_linear':
+            """
+            Increase in abortive rate constant increases linearly with
+            decreasing RNA-DNA bonds.
+            """
+            pass
+
+        if method == 'hybrid_length_dependent_exponential':
+            """
+            Increase in abortive rate constant increases linearly with
+            decreasing RNA-DNA bonds. Less than linear down to length 5, then
+            larger than linear.
+            """
+            pass
+
+    def subsequent_backtracking_rate_constants(self, method='constant',
+            constant=5):
+        """
+        The rate constants for further backtracking until a state with abortive
+        initiation is reached.
+        """
+        if method == 'constant':
+            return np.array([constant for n in self.sequence])
+
+        if method == 'scrunch-dependent':
+            """
+            Let scale with scrunched DNA energy
+            """
+            pass
+
+    def initial_backtracking_rate_constants(self, method='constant', constant=10):
+        """
+        The rate constant for backtracking out of a presumeably
+        pre-translocated state.
+        """
+        if method == 'constant':
+            return np.array([constant for n in self.sequence])
+
+        if method == 'scrunch-dependent':
+            """
+            Let scale with scrunched DNA energy
+            """
+            pass
+
+    def ntp_incorporation_coefficients(self, method='constant', constant=20):
         """
         Rate constants given in /s
         """
 
         if method == 'constant':
-            return np.array([constant_constant for n in self.sequence])
+            return np.array([constant for n in self.sequence])
 
-        if method == 'sequence_dependent':
+        if method == 'malinen_sequence_dependent':
             """
             Follow Malinen et. al's values. Though he says that the nucleotide
             incorporation rates should be considered preliminary.
@@ -103,9 +181,9 @@ class ITS(object):
             Transcription initiation is assumed to start with a 2-NMP RNA so
             this array may be used starting from the third element: [2]
             """
-            half_lives = np.array([self.nucleotide_addition_halflifes_ms[n] for n in
-                self.sequence])
-            rate_constants = np.array([0.693/hl for hl in half_lives])
+            half_lives = np.array([Ec.malinen_et_al_nucleotide_addition_halflives_ms[n] for
+                                        n in self.sequence])
+            rate_constants = np.array([Ec.HalfLife2RateConstant(hl) for hl in half_lives])
 
             return rate_constants
 
