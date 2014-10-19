@@ -8,6 +8,9 @@ And malinen et al
 
 NOTE dinucleotides are in terms of the non-template DNA = 'same as RNA strand'
 
+If you had to do this again you should have stored the original data in some
+other form, like csv files.
+
 """
 
 # in terms of non-template DNA "same as RNA" strand
@@ -133,7 +136,8 @@ pyrophosphorolysis_reverse = {
 'GA':0.16, 'GC':0.36, 'GG':0.16, 'GT':0.17,  # interestingly, GN is highest for all N
 'TA':0.14, 'TC':0.10, 'TG':0.14, 'TT':0.06,
 }
-pyrophosphorolysis_reverse_pm {
+
+pyrophosphorolysis_reverse_pm = {
 'AA':0.03,
 'AC':0.02,
 'AG':0.03,
@@ -190,3 +194,45 @@ Keq_EC8_EC9_pm = {
 'TG':0,
 }
 
+# scaled stuff: Hein et. al's rate constant scaled to match those of Hein et.
+# see function "ScaleHeinRateConstants"
+
+# unit: /sec
+scaled_hein_translocation_forward_rate_constants = {
+'AA': 75.490196078431367,
+'AC': 46.116152450090745,
+'AG': 58.113207547169814,
+'AT': 85.953488372092991,
+'CA': 83.039215686274503,
+'CC': 79.65517241379311,
+'CG': 44.702467343976778,
+'CT': 71.627906976744171,
+'GA': 120.78431372549019,
+'GC': 150.92558983666061,
+'GG': 71.523947750362851,
+'GT': 121.7674418604651,
+'TA': 105.68627450980392,
+'TC': 41.923774954627952,
+'TG': 62.583454281567498,
+'TT': 42.976744186046496
+}
+
+# unit: /sec
+scaled_hein_translocation_reverse_rate_constants = {
+'AA': 45.294117647058819,
+'AC': 33.539019963702358,
+'AG': 17.880986937590713,
+'AT': 222.04651162790691,
+'CA': 30.196078431372548,
+'CC': 41.923774954627952,
+'CG': 13.410740203193033,
+'CT': 207.72093023255806,
+'GA': 60.392156862745097,
+'GC': 33.539019963702358,
+'GG': 22.351233671988389,
+'GT': 257.86046511627899,
+'TA': 7.5490196078431371,
+'TC': 16.769509981851179,
+'TG': 3.1291727140783747,
+'TT': 121.7674418604651
+}

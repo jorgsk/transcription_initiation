@@ -2,12 +2,14 @@
 from Bio.Seq import Seq
 import copy
 import numpy as np
+from ipdb import set_trace as debug
 
 # load nucleotide and dinucleotide values from various papers
-from dinucleotide_values import resistant_fraction,
-Keq_EC8_EC9, NNRD, malinen_et_al_nucleotide_addition_halflives_ms,
-malinen_et_al_forward_translocation_halflives_ms,
-pyrophosphorolysis_forward, pyrophosphorolysis_reverse
+from dinucleotide_values import resistant_fraction, Keq_EC8_EC9, NNRD, NNDD,
+malinen_et_al_nucleotide_addition_halflives_ms,
+malinen_et_al_forward_translocation_halflives_ms, pyrophosphorolysis_forward,
+pyrophosphorolysis_reverse, scaled_hein_translocation_forward_rate_constants,
+scaled_hein_translocation_reverse_rate_constants
 
 
 def complement(in_dict):
@@ -132,22 +134,6 @@ def PhysicalDNA(sequence):
         enlist.append((DNA_DNAenergy(subseq),(pos1,pos2)))
     return enlist
 
-# recalculate the Keq and the reverse for more accuracy
-invEq = {}
-reKeq = {}
-
-for dinuc, val in k_reverse.items():
-    invEq[dinuc] = val/k_forward[dinuc]
-    reKeq[dinuc] = k_forward[dinuc]/val
-
-    # The inverse has a large problem since some kf the k1 values are very small
-    if dinuc == 'TA':
-        invEq[dinuc] = 5
-    if dinuc == 'TG':
-        invEq[dinuc] = 6
-    # You are fixing it by ad-hoc reducing some values. This helps to bring
-    # positive correlation like you expected!
-
 
 def seq2din(sequence):
     indiv = list(sequence)  # splitting sequence into individual letters
@@ -178,20 +164,55 @@ def HalfLife2RateConstant(hl):
     return 0.693/hl
 
 
-def ScaleHeinRateConstants(hein_reverse_pyrophosphorolysis):
+def ScaleHeinRateConstants(hein_reverse_pyrophosphorolysis, direction='forward'):
     """
     Take Hein's reverse pyrophosphorolysis rate constants and scale them so
     that they are of similar order [/min -> /sec] to Malinen's measured values.
 
     Hein's values are for example AG = 0.3, TG = 0.1 /min,
     which is AG = 0.3/60 = 0.005/sec, TG = 0.1/60 = 0.00167/sec
-    While Malinen's values are for 'ending with G'
+
+    While Malinen's values are half lives for forward translocation reactions.
+    For example, for a 3' rna ending with 'G' hl = 11.7 ms. Assuming first
+    order reactions, this can be converted to a rate constant 0.059 / ms, which
+    is the same as 59.12/sec
+
+    The solution approach is to scale all of Hein's rate constants such that the
+    average for all dinucleotides ending in 'G' is 59.12.
+
+    Scale is derived for forward translocation, but apply the same to Hein's
+    forward pyrophosphorolysis.
+
+    After you scaled these, you put them in the dinucleotide value file
     """
+    scaled_hein_translocation_forward_rate_constants = {}
+    scaled_hein_translocation_reverse_rate_constants = {}
+
     gatc = ['G', 'A', 'T', 'C']
-    half_lives = {[[malinen_et_al_forward_translocation_halflives_ms[nt]
-                                for nt in gatc])}
-    rate_constants = np.array([Ec.HalfLife2RateConstant(hl) for hl in half_lives])
-    # XXX TODO: finish this work
+    for nt in gatc:
+        malinen_half_life = malinen_et_al_forward_translocation_halflives_ms[nt]
+        malinen_rate_constant_ms = HalfLife2RateConstant(malinen_half_life)
+        malinen_rate_constant_sec = malinen_rate_constant_ms * 1000
+
+        # gather all dinucleotides that end in nt
+        nt_ending_dinucs = [nuc + nt for nuc in gatc]
+
+        # get their average rate constant
+        mean_rate_constant = np.mean([pyrophosphorolysis_reverse[dnt] for dnt
+            in nt_ending_dinucs])
+
+        # get the scale
+        scale = mean_rate_constant / malinen_rate_constant_sec
+
+        # do the scaling
+        for dnt in nt_ending_dinucs:
+
+            scaled_hein_translocation_forward_rate_constants[dnt] =\
+                pyrophosphorolysis_reverse[dnt] / scale
+            scaled_hein_translocation_reverse_rate_constants[dnt] =\
+                pyrophosphorolysis_forward[dnt] / scale
+
+    #return scaled_hein_translocation_forward_rate_constants, scaled_hein_translocation_reverse_rate_constants
 
 
 def Delta_trans_forward(sequence):

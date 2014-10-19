@@ -3224,10 +3224,10 @@ def main():
     # its-range
 
     figures = [
-            #'Figure2',  # SE vs PY (in Paper)
+            'Figure2',  # SE vs PY (in Paper)
             #'Figure32',  # DG400 scatter plot (in Paper)
             #'FigureX2',  # 1x2 Keq vs AP (in Paper)
-            'CrossRandomDelineateSuppl',  # (in Paper)
+            #'CrossRandomDelineateSuppl',  # (in Paper)
             #'megaFig',  # One big figure for the first 4 plots
             #'Figure2_DG400',  # SE vs PY for DG400
             #'Figure3',  # Delineate + DG400

@@ -1,8 +1,12 @@
 """
 The ITS class holds sequence and experimental information about an ITS.
+
+Associated functions (methods) calculate sequence-derived values, such as
+translocation equilibria, or other such values.
 """
 import numpy as np
 import Energycalc as Ec
+from ipdb import set_trace as debug
 
 
 class ITS(object):
@@ -69,9 +73,24 @@ class ITS(object):
     def __repr__(self):
         return "{0}, PY: {1}".format(self.name, self.PY)
 
-    def ScaleHeinRateConstants()
+    def reverse_transclocation(self, method='constant', constant=30):
+        """
+        Reverse translocation is assumed to happen less frequently than forward
+        transloctation. Malinen et al have not measured reverse translocation
+        rates. Hein et al reported a rate constant for forward
+        pyrophosphorolysis which has been scaled and is being used as a reverse
+        rate constant for transloction.
+        """
 
-    def forward_transclocation(self, method='constant', constant=2):
+        if method == 'constant':
+            return np.array([constant for n in self.sequence])
+
+        if method == 'hein_et_al':
+            # /min
+            return = np.array([Ec.scaled_hein_translocation_reverse_rate_constants[di] for di
+                in self.dinucs])
+
+    def forward_transclocation(self, method='constant', constant=80):
         """
         Forward translocation is in the brownian ratched model assumed to be
         thermally driven, and not very different between nucleotides. The lack
@@ -85,26 +104,27 @@ class ITS(object):
 
         if method == 'hein_et_al':
             # /min
-            pyro_forward = np.array([Ec.pyrophosphorolysis_reverse[di] for di in __dinucs])
-
-            # scale to the malinen_et_al rate constants
-            hein_scaled_forward_rate_constants = ScaleHeinRateConstants(pyro_forward)
-
-            return hein_scaled_forward_rate_constants
+            return = np.array([Ec.scaled_hein_translocation_forward_rate_constants[di] for di
+                in self.dinucs])
 
         if method == 'malinen_et_al':
             # unit /s
-            half_lives = np.array([[Ec.malinen_et_al_forward_translocation_halflives_ms[nt]
+            half_lives = np.array([Ec.malinen_et_al_forward_translocation_halflives_ms[nt]
                                         for nt in self.sequence])
             rate_constants = np.array([Ec.HalfLife2RateConstant(hl) for hl in half_lives])
 
             return rate_constants
 
-
-    def abortive_rates(self, method='constant', constant=3):
+    def abortive_rates_from_backtracked(self, method='constant', constant=2):
         """
-        Rate constants for abortive product release, once the hybrid has
-        become short enough.
+        Rate constants for abortive product release from a backtracked complex
+        """
+        if method == 'constant':
+            return np.array([constant for n in self.sequence])
+
+    def direct_abortive_rates(self, method='constant', constant=3):
+        """
+        Rate constants for abortive product release without backtracking
         """
         if method == 'constant':
             return np.array([constant for n in self.sequence])
@@ -325,4 +345,11 @@ class ITS(object):
 
         self.AY = np.mean([py for py in self._PYraw.values()])
         self.AY_std = np.std([py for py in self._PYraw.values()])
+
+
+if __name__ == '__main__':
+
+    test_its = ITS('GATTACAGATTACAGATTACA', name='test_sequence')
+    test_its.forward_transclocation(method='hein_et_al')
+
 
