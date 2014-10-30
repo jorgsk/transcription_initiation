@@ -393,7 +393,7 @@ def keq_calc(start_values, its_len, ITSs):
 
         dna_dna = its.dna_dna_di[:its_len-1]
         rna_dna = its.rna_dna_di[:its_len-2]
-        dg3d = its.keq_delta_di_b[:its_len-2]
+        dg3d = its.dinucleotide_delta_g_b[:its_len-2]
 
         # the c1, c2, c3 values
         (a, b, c) = start_values

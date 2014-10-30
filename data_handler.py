@@ -3,7 +3,7 @@ import Workhouse
 import pandas
 import os
 
-from ITS import ITS
+from ITSframework import ITS
 
 from ipdb import set_trace as debug  # NOQA
 

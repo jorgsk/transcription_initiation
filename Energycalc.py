@@ -5,10 +5,10 @@ import numpy as np
 from ipdb import set_trace as debug
 
 # load nucleotide and dinucleotide values from various papers
-from dinucleotide_values import resistant_fraction, Keq_EC8_EC9, NNRD, NNDD,
-malinen_et_al_nucleotide_addition_halflives_ms,
-malinen_et_al_forward_translocation_halflives_ms, pyrophosphorolysis_forward,
-pyrophosphorolysis_reverse, scaled_hein_translocation_forward_rate_constants,
+from dinucleotide_values import resistant_fraction, Keq_EC8_EC9, NNRD, NNDD,\
+malinen_et_al_nucleotide_addition_halflives_ms,\
+malinen_et_al_forward_translocation_halflives_ms, pyrophosphorolysis_forward,\
+pyrophosphorolysis_reverse, scaled_hein_translocation_forward_rate_constants,\
 scaled_hein_translocation_reverse_rate_constants
 
 
@@ -148,13 +148,13 @@ RT = 1.9858775*(37 + 273.15)
 #dna_keq = complement(Keq_EC8_EC9)
 dna_keq = Keq_EC8_EC9
 
-deltaG_f = {}
+dinucleotide_deltaG_f = {}
 for din, en in dna_keq.items():
-    deltaG_f[din] = RT*np.log(en)/1000  # divide by 1000 to get kcal
+    dinucleotide_deltaG_f[din] = RT*np.log(en)/1000  # divide by 1000 to get kcal
 
-deltaG_b = {}
+dinucleotide_deltaG_b = {}
 for din, en in dna_keq.items():
-    deltaG_b[din] = -RT*np.log(en)/1000  # divide by 1000 to get kcal
+    dinucleotide_deltaG_b[din] = -RT*np.log(en)/1000  # divide by 1000 to get kcal
 
 
 def HalfLife2RateConstant(hl):
@@ -185,8 +185,8 @@ def ScaleHeinRateConstants(hein_reverse_pyrophosphorolysis, direction='forward')
 
     After you scaled these, you put them in the dinucleotide value file
     """
-    scaled_hein_translocation_forward_rate_constants = {}
-    scaled_hein_translocation_reverse_rate_constants = {}
+    scaled_hein_translocation_forward_rate_constants_dict = {}
+    scaled_hein_translocation_reverse_rate_constants_dict= {}
 
     gatc = ['G', 'A', 'T', 'C']
     for nt in gatc:
@@ -207,9 +207,9 @@ def ScaleHeinRateConstants(hein_reverse_pyrophosphorolysis, direction='forward')
         # do the scaling
         for dnt in nt_ending_dinucs:
 
-            scaled_hein_translocation_forward_rate_constants[dnt] =\
+            scaled_hein_translocation_forward_rate_constants_dict[dnt] =\
                 pyrophosphorolysis_reverse[dnt] / scale
-            scaled_hein_translocation_reverse_rate_constants[dnt] =\
+            scaled_hein_translocation_reverse_rate_constants_dict[dnt] =\
                 pyrophosphorolysis_forward[dnt] / scale
 
     #return scaled_hein_translocation_forward_rate_constants, scaled_hein_translocation_reverse_rate_constants
@@ -217,18 +217,18 @@ def ScaleHeinRateConstants(hein_reverse_pyrophosphorolysis, direction='forward')
 
 def Delta_trans_forward(sequence):
     """
-    Delta values for keq for the forward reaction
+    Delta values for dinucleotide keq for the forward reaction
     """
 
-    return sum([deltaG_f[din] for din in seq2din(sequence)])
+    return sum([dinucleotide_deltaG_f[din] for din in seq2din(sequence)])
 
 
 def Delta_trans_backward(sequence):
     """
-    Delta values for keq for the backward reaction
+    Delta values for dinucleotide keq for the backward reaction
     """
 
-    return sum([deltaG_b[din] for din in seq2din(sequence)])
+    return sum([dinucleotide_deltaG_b[din] for din in seq2din(sequence)])
 
 
 def res_frac(sequence):

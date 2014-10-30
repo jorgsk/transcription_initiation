@@ -6,7 +6,7 @@ translocation equilibria, or other such values.
 """
 import numpy as np
 import Energycalc as Ec
-from ipdb import set_trace as debug
+#from ipdb import set_trace as debug
 
 
 class ITS(object):
@@ -62,13 +62,13 @@ class ITS(object):
         # goes from 2-mer till length of sequence
         self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
         self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
-        self.delta_g_f = [Ec.deltaG_f[di] for di in __dinucs]
-        self.delta_g_b = [Ec.deltaG_b[di] for di in __dinucs]
+        self.dinucleotide_delta_g_f = [Ec.dinucleotide_deltaG_f[di] for di in __dinucs]
+        self.dinucleotide_delta_g_b = [Ec.dinucleotide_deltaG_b[di] for di in __dinucs]
 
         # define the 15 dna-dna and rna-rna and keq values
         self.DgDNA15 = sum(self.dna_dna_di[:15])
         self.DgRNA15 = sum(self.rna_dna_di[:15])
-        self.Dg3D15 = sum(self.delta_g_b[:15])
+        self.Dg3D15 = sum(self.dinucleotide_delta_g_b[:15])
 
     def __repr__(self):
         return "{0}, PY: {1}".format(self.name, self.PY)
@@ -87,8 +87,8 @@ class ITS(object):
 
         if method == 'hein_et_al':
             # /min
-            return = np.array([Ec.scaled_hein_translocation_reverse_rate_constants[di] for di
-                in self.dinucs])
+            return np.array([Ec.scaled_hein_translocation_reverse_rate_constants[di]
+                for di in self.dinucs])
 
     def forward_transclocation(self, method='constant', constant=80):
         """
@@ -104,7 +104,7 @@ class ITS(object):
 
         if method == 'hein_et_al':
             # /min
-            return = np.array([Ec.scaled_hein_translocation_forward_rate_constants[di] for di
+            return np.array([Ec.scaled_hein_translocation_forward_rate_constants[di] for di
                 in self.dinucs])
 
         if method == 'malinen_et_al':
@@ -320,7 +320,7 @@ class ITS(object):
         its_len = 21
         dna_dna = self.dna_dna_di[:its_len-1]
         rna_dna = self.rna_dna_di[:its_len-2]
-        dg3d = self.delta_g_b[:its_len-2]
+        dg3d = self.dinucleotide_delta_g_b[:its_len-2]
 
         # equilibrium constants at each position
         import optim
