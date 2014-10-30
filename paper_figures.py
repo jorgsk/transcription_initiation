@@ -34,6 +34,12 @@ fig_dir1 = os.path.join(here, 'figures')
 fig_dir2 = '/home/jorgsk/Dropbox/The-Tome/my_papers/rna-dna-paper/figures'
 fig_dirs = (fig_dir1, fig_dir2)
 
+# Figure sizes in centimeter. Height is somethign you might set maually but
+# width should always be the maximum
+nar_width = 8.7
+biochemistry_width = 8.5
+current_journal_width = biochemistry_width
+
 
 class Fit(object):
 
@@ -315,6 +321,36 @@ class Calculator(object):
                 outp[name]['sumAP'].append(apS)
                 apSnorm = sum([v for v in its.abortiveProb/apS if v > 0])
                 outp[name]['sumAPnorm'].append(apSnorm)
+
+        return outp
+
+    def averageAP(self):
+        """
+        Return dict {dg100/400: PY, average(Keq), average(AP), average(APnorm)}
+
+        """
+        outp = {
+                'dg100': {'PY':[], 'keq': [], 'averageAP': [], 'averageAPnorm': []},
+                'dg400': {'PY':[], 'keq': [], 'averageAP': [], 'averageAPnorm': []}
+                }
+
+        # calculate keq values using latest parameter values
+        # this must be kept in copy-paste sync :(
+        coeffs = [0.12, 0.14, 0.66]  # median of 20 runs with its_range(2,16)
+
+        c1, c2, c3 = coeffs
+
+        for dset, name in [(self.dg100, 'dg100'), (self.dg400, 'dg400')]:
+            for its in dset:
+                its.calc_keq(c1, c2, c3)
+                outp[name]['keq'].append(sum(its.keq)/len(its.keq))
+                outp[name]['PY'].append(its.PY)
+                # not to 20, but to 15?
+                ap15 = its.abortiveProb[:15]
+                apS = sum([v for v in ap15 if v > 0])
+                outp[name]['averageAP'].append(apS/len(ap15))
+                apSnorm = sum([v for v in its.abortiveProb/apS if v > 0])
+                outp[name]['averageAPnorm'].append(apSnorm)
 
         return outp
 
@@ -697,8 +733,8 @@ class Plotter(object):
 
     def setFigSize(self, xCm, yCm):
 
-        widthInch = mm2inch(xCm*10)
-        heightInch = mm2inch(yCm*10)
+        widthInch = cm2inch(xCm)
+        heightInch = cm2inch(yCm)
 
         self.figure.set_size_inches(widthInch, heightInch)
 
@@ -892,38 +928,36 @@ class Plotter(object):
         ax.set_yticks(yIndx)
         ax.set_ylim(-0.12, 0.63)
 
-        debug()
-
         return ax
 
-    def sumAP_SEXX(self, results, norm=True, xlab=True, xticks=True):
+    def averageAP_SEXX(self, results, norm=True, xlab=True, xticks=True):
 
         ax = self.getNextAxes()
 
         keq = results['dg100']['keq'] + results['dg400']['keq']
         #keq = results['dg400']['keq']
         if norm:
-            sumAP = results['dg100']['sumAPnorm'] + results['dg400']['sumAPnorm']
-            #sumAP = results['dg400']['sumAPnorm']
+            averageAP = results['dg100']['averageAPnorm'] + results['dg400']['averageAPnorm']
+            #averageAP = results['dg400']['averageAPnorm']
         else:
-            sumAP = results['dg100']['sumAP'] + results['dg400']['sumAP']
-            #sumAP = results['dg400']['sumAP']
+            averageAP = results['dg100']['averageAP'] + results['dg400']['averageAP']
+            #averageAP = results['dg400']['averageAP']
 
         # make into fake percentage
-        sumAP = [s*100 for s in sumAP]
-        ax.scatter(keq, sumAP, c='gray')
-        print('Spearmanr keq and sum AP')
+        averageAP = [s*100 for s in averageAP]
+        ax.scatter(keq, averageAP, c='gray')
+        print('Spearmanr keq and average AP')
         if norm:
             print('Normalized')
         else:
             print('Not normalized')
-        #print pearsonr(keq, sumAP)
-        print spearmanr(keq, sumAP)
+        #print pearsonr(keq, averageAP)
+        print spearmanr(keq, averageAP)
 
         # labels
         if xlab:
             ax.set_xlabel('SE$_{15}$', size=self.labSize)
-        ax.set_ylabel('Sum of abortive probabilities ($\%$)', size=self.labSize)
+        ax.set_ylabel('Average abortive probability ($\%$)', size=self.labSize)
 
         # ticks
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -935,9 +969,11 @@ class Plotter(object):
         if norm:
             yrang = np.arange(0.996, 1.004, 0.002)
         else:
-            yrang = np.arange(50, 500, 100)
+            yrang = np.arange(0, 36, 5)
             ax.set_yticks(yrang)
-            ax.set_ylim(70, 460)
+            ax.set_ylim(0, 36)
+
+        ax.set_xlim(0.45, 1.2)
 
         y_formatter = matplotlib.ticker.ScalarFormatter(useOffset=False)
         ax.yaxis.set_major_formatter(y_formatter)
@@ -1177,7 +1213,7 @@ class Plotter(object):
         PYstd = [p*100 for p in PYstd]
 
         ax.scatter(SE15, PY, s=12, color='b', zorder=2)
-        ax.errorbar(SE15, PY, yerr=PYstd, fmt=None, zorder=1)
+        ax.errorbar(SE15, PY, yerr=PYstd, fmt=None, zorder=1, elinewidth=0.3)
 
         ########### Set figure and axis properties ############
         ax.set_xlabel('SE$_{15}$', size=self.labSize)
@@ -1336,7 +1372,8 @@ class Plotter(object):
         PYs = [p*100 for p in PYs]
         PYstd = [p*100 for p in PYstd]
 
-        ax.errorbar(SEchoice, PYs, yerr=PYstd, fmt=None, ecolor='b', zorder=1)
+        ax.errorbar(SEchoice, PYs, yerr=PYstd, fmt=None, ecolor='b', zorder=1,
+                elinewidth=0.3)
         ax.scatter(SEchoice, PYs, c='b', s=12, linewidth=0.6, zorder=2)
         # XXX get the errorbars to be gray too!!!!!!!!
 
@@ -1773,8 +1810,8 @@ def remove_nan(corr, pvals):
     return newcorr, newpval
 
 
-def mm2inch(mm):
-    return float(mm)/25.4
+def cm2inch(cm):
+    return float(cm)/2.54
 
 
 def visual_inspection(ITSs, variable='AP'):
@@ -3212,20 +3249,20 @@ def main():
     #moving_average_ap(dg100, dg400)
 
     # Do not recalculate but use saved values (for tweaking plots)
-    #calculateAgain = False
-    calculateAgain = True
+    calculateAgain = False
+    #calculateAgain = True
     # XXX warning if coeffs are set, these are used anyway! must set to false
     coeffs = [0.12, 0.14, 0.66]  # median of 20 runs with its_range(2,21)
     #coeffs = False  # this means coeffs will be calculated
 
-    testing = True
-    #testing = False
+    #testing = True
+    testing = False
 
     # its-range
 
     figures = [
-            'Figure2',  # SE vs PY (in Paper)
-            #'Figure32',  # DG400 scatter plot (in Paper)
+            #'Figure2',  # SE vs PY (in Paper)
+            'Figure32',  # DG400 scatter plot (in Paper)
             #'FigureX2',  # 1x2 Keq vs AP (in Paper)
             #'CrossRandomDelineateSuppl',  # (in Paper)
             #'megaFig',  # One big figure for the first 4 plots
@@ -3247,7 +3284,7 @@ def main():
     # Commented out figures are not in paper currently
     fig2calc = {
             'Figure2': ['PYvsSE'],
-            'FigureX2': ['AP_vs_Keq', 'sumAP'],
+            'FigureX2': ['AP_vs_Keq', 'averageAP'],
             'Figure32': ['dg400_validation'],  # only do dg400 validation
             'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
             #'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
@@ -3341,7 +3378,7 @@ def main():
             # plot a fitted normal distribution
 
             # Should be 8.7 cm
-            plotr.setFigSize(8.7, 4.5)
+            plotr.setFigSize(current_journal_width, 4.5)
             #plt.tight_layout()
             plotr.figure.subplots_adjust(left=0.08, top=0.96, right=0.90,
                     bottom=0.16, wspace=0.35)
@@ -3376,7 +3413,7 @@ def main():
             plotr.instantaneousCorrelation(corr)
 
             # Should be 8.7 cm
-            plotr.setFigSize(8.7, 4.5)
+            plotr.setFigSize(current_journal_width, 4.5)
             #plt.tight_layout()
             plotr.figure.subplots_adjust(left=0.08, top=0.96, right=0.90,
                     bottom=0.16, wspace=0.35)
@@ -3401,7 +3438,7 @@ def main():
             plotr.delineatorPlot(delinResults, inst_change=True)  # plot the delineate plot
 
             # Should be 8.7 cm
-            plotr.setFigSize(8.7, 4.7)
+            plotr.setFigSize(current_journal_width, 4.7)
             plotr.figure.subplots_adjust(left=0.13, top=0.98, right=0.99,
                     bottom=0.18, wspace=0.4)
 
@@ -3424,7 +3461,7 @@ def main():
             plotr.dg400validater(calcdDG400, SE15, PY, PYstd)
 
             # Should be 8.7 cm
-            plotr.setFigSize(8.7, 4.7)
+            plotr.setFigSize(current_journal_width, 4.7)
             plotr.figure.subplots_adjust(left=0.13, top=0.98, right=0.99,
                     bottom=0.18, wspace=0.4)
 
@@ -3496,7 +3533,7 @@ def main():
             resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
             axM1 = plotr.moving_average_ap_keq(resAPvsKeq)
 
-            #plotr.setFigSize(8.7, 4.5)
+            #plotr.setFigSize(current_journal_width, 4.5)
             plotr.setFigSize(17.7, 6.5)
             #plt.tight_layout()
             #plotr.figure.subplots_adjust(left=0.11, top=0.97, right=0.995,
@@ -3525,14 +3562,14 @@ def main():
                     tickLength=2, tickWidth=0.5)
 
             # scatterplot
-            resAP = calcResults['sumAP']
-            plotr.sumAP_SEXX(resAP, norm=False)
+            resAP = calcResults['averageAP']
+            plotr.averageAP_SEXX(resAP, norm=False)
 
             # bar plot
             resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
             axM1 = plotr.moving_average_ap_keq(resAPvsKeq)
 
-            plotr.setFigSize(8.7, 4.0)
+            plotr.setFigSize(current_journal_width, 4.0)
             #plt.tight_layout()
             plotr.figure.subplots_adjust(left=0.11, top=0.97, right=0.995,
                     bottom=0.18, wspace=0.33)
@@ -3571,7 +3608,7 @@ def main():
                     xticks=False)
             axM2 = plotr.moving_average_ap_keq(resAPvsKeqNorm)
 
-            plotr.setFigSize(8.7, 6.5)
+            plotr.setFigSize(current_journal_width, 6.5)
             #plt.tight_layout()
             plotr.figure.subplots_adjust(left=0.13, top=0.97, right=0.98,
                     bottom=0.12, wspace=0.35, hspace=0.1)
