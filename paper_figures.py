@@ -114,7 +114,8 @@ class Calculator(object):
     Each calculator method has a corresponding plotting method
     """
 
-    def __init__(self, dg100, dg400, calcName, testing, dset, coeffs, topNuc):
+    def __init__(self, dg100, dg400, calcName, testing, dset, coeffs, topNuc,
+            msat_normalization):
 
         self.coeffs = coeffs
         self.topNuc = topNuc
@@ -133,6 +134,7 @@ class Calculator(object):
         self.testing = testing
         self.name = calcName
         self.results = None
+        self.msat_normalization = msat_normalization
 
     def calc(self):
         """
@@ -496,7 +498,7 @@ class Calculator(object):
 
         return delinResults
 
-    def correlateSE_PY(self, itsRange, measure='SE'):
+    def correlateMeasure_PY(self, itsRange, measure='AvgKbt'):
         """
         Return three lists: indices, corr-values, and p-values
         Correlation between SE_n and PY
@@ -517,14 +519,17 @@ class Calculator(object):
         for ind in itsRange:
 
             if measure == 'SE':
-                SEn = [sum(i.keq[:ind-1]) for i in self.ITSs]
+                measure_values = [sum(i.keq[:ind-1]) for i in self.ITSs]
             elif measure == 'product':
-                SEn = [np.prod(i.keq[:ind-1]) for i in self.ITSs]
+                measure_values = [np.prod(i.keq[:ind-1]) for i in self.ITSs]
+            elif measure == 'AvgKbt':
+                measure_values = [np.nanmean(i.keq[:ind-1]) for i in self.ITSs]
 
-            co, pv = spearmanr(SEn, PY)
+            co, pv = spearmanr(measure_values, PY)
 
             corr.append(co)
             pvals.append(pv)
+            debug()
 
         return corr, pvals
 
@@ -557,43 +562,38 @@ class Calculator(object):
 
         return self.dg400, SE15, PY, PYstd
 
-    def PYvsSE(self):
+    def PYvsAvgKbt(self):
         """
-        Correlate PY with SE and return corr, pval, and indx for plotting
+        Correlate PY with AvgKbt and return corr, pval, and indx for plotting
 
         topNuc is the 'best' correlating nucleotide position
         """
 
-         #set the range of values for which you wish to calculate correlation
-        itsMin = 2
-        #itsMax = 20
-        itsMax = 15
-        itsRange = range(itsMin, itsMax+1)
+        #set the range of values for which you wish to calculate correlation
+        # some ITSs have msat at 20, so go up to that
 
-        scatter_plot_nt_pos = 15
+        # start with 2-nt RNA, from which the first translocation step is taken
+        rnaMin = 2
+        #rnaMax = 20
+        rnaMax = 15
+        rnaRange = range(rnaMin, rnaMax+1)
 
-        if scatter_plot_nt_pos not in itsRange:
+        scatter_plot_nt_pos = 13
+
+        if scatter_plot_nt_pos not in rnaRange:
             return 'XXX: scatter plot could not be made'
 
-        #if self.testing:
-            #itsRange = [itsMin, 5, 10, 15, itsMax]
-
-        # XXX TESTING
-        #debug()
-        #self.coeffs = False
-        # XXX TESTING
-        #debug()
+        # if coefficients have been provided, do not calculate from scratch
         if self.coeffs:
             c1, c2, c3 = self.coeffs
         else:
             analysis = 'Normal'
             onlySignCoeff=0.05
-            # XXX testing new measure: product
-            #result, grid_size, aInfo = optimizeParam(self.ITSs, itsRange,
-                    #self.testing, analysis=analysis, measure='product')
-            result, grid_size, aInfo = optimizeParam(self.ITSs, itsRange,
-                    self.testing, analysis=analysis, measure='SE')
-            c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+            result, grid_size, aInfo = optimizeParam(self.ITSs, rnaRange,
+                    self.testing, analysis=analysis,
+                    msat_normalization=self.msat_normalization, measure='AvgKbt')
+
+            c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
                     onlySignCoeff, analysis, self.name, grid_size, aInfo=aInfo)
             print c1, c2, c3
 
@@ -602,8 +602,8 @@ class Calculator(object):
             its.calc_keq(c1, c2, c3)
 
         #corr, pvals = self.correlateSE_PY(itsRange, measure='product')
-        corr, pvals = self.correlateSE_PY(itsRange, measure='SE')
-        indx = itsRange
+        corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
+        indx = rnaRange
 
         # print the results for each nucleotide
         for combo in zip(indx, corr, pvals):
@@ -930,7 +930,8 @@ class Plotter(object):
 
         return ax
 
-    def averageAP_SEXX(self, results, norm=True, xlab=True, xticks=True):
+    def averageAP_SEXX(self, results, norm=True, xlab=True, xticks=True,
+            means=False):
 
         ax = self.getNextAxes()
 
@@ -956,7 +957,11 @@ class Plotter(object):
 
         # labels
         if xlab:
-            ax.set_xlabel('SE$_{15}$', size=self.labSize)
+            if means:
+                ax.set_xlabel('Avg 15', size=self.labSize)
+            else:
+                ax.set_xlabel('SE$_{15}$', size=self.labSize)
+
         ax.set_ylabel('Average abortive probability ($\%$)', size=self.labSize)
 
         # ticks
@@ -1201,7 +1206,8 @@ class Plotter(object):
         ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                       alpha=0.5)
 
-    def dg400validater(self, dg400, SE15, PY, PYstd, fit_function=False):
+    def dg400validater(self, dg400, SE15, PY, PYstd, fit_function=False,
+            means=False):
 
         ax = self.getNextAxes()
 
@@ -1212,11 +1218,18 @@ class Plotter(object):
         PY = [p*100 for p in PY]
         PYstd = [p*100 for p in PYstd]
 
+        # simple average for now, just for the effect
+        if means:
+            SE15 = np.asarray(SE15)/float(15)
+
         ax.scatter(SE15, PY, s=12, color='b', zorder=2)
         ax.errorbar(SE15, PY, yerr=PYstd, fmt=None, zorder=1, elinewidth=0.3)
 
         ########### Set figure and axis properties ############
-        ax.set_xlabel('SE$_{15}$', size=self.labSize)
+        if means:
+            ax.set_xlabel('Avg 15', size=self.labSize)
+        else:
+            ax.set_xlabel('SE$_{15}$', size=self.labSize)
         ax.set_ylabel('Productive yield ($\%$)', size=self.labSize)
 
         xmin, xmax = min(SE15), max(SE15)
@@ -1356,13 +1369,16 @@ class Plotter(object):
 
         ax.plot(sort_x, sort_fit, linewidth=2)
 
-    def PYvsSEscatter(self, PYs, PYstd, SEchoice, choice):
+    def PYvsAvgKbtscatter(self, PYs, PYstd, SEchoice, choice, means=False):
         """
         Plotting a scatter between PY and SE at position choice
+
+        Means=True means plotting the average reverse translocation equilibrium
+        value and not the sum.
         """
 
         # the index for which corr has the highest value
-        print("Spearman, Pearson for SE{0} and PY".format(choice))
+        print("PYvsAvgKbtscatter: Spearman, Pearson for SE{0} and PY".format(choice))
         print(spearmanr(SEchoice, PYs))
         print(pearsonr(SEchoice, PYs))
 
@@ -1372,13 +1388,19 @@ class Plotter(object):
         PYs = [p*100 for p in PYs]
         PYstd = [p*100 for p in PYstd]
 
+        if means:
+            SEchoice = np.asarray(SEchoice)/float(choice)
+
         ax.errorbar(SEchoice, PYs, yerr=PYstd, fmt=None, ecolor='b', zorder=1,
                 elinewidth=0.3)
         ax.scatter(SEchoice, PYs, c='b', s=12, linewidth=0.6, zorder=2)
         # XXX get the errorbars to be gray too!!!!!!!!
 
         ax.set_ylabel("Productive yield ($\%$)", size=self.labSize)
-        ax.set_xlabel("SE$_{{{0}}}$".format(choice), size=self.labSize)
+        if means:
+            ax.set_xlabel("Avg{0}".format(choice), size=self.labSize)
+        else:
+            ax.set_xlabel("SE$_{{{0}}}$".format(choice), size=self.labSize)
 
         ymin = -0.1
 
@@ -1551,8 +1573,8 @@ class Plotter(object):
                ' But this is not a good measure ... youll need to do bettrr ')
         print pearsonr(np.array(corr)*(-1), cumulRawNorm)
 
-    def PYvsSEladder(self, indx, corr, pvals, PYs, SEbest, b, inset=False,
-            pval_pos='high'):
+    def PYvsAvgKbtladder(self, indx, corr, pvals, PYs, SEbest, b, inset=False,
+            pval_pos='high', means=False):
         """
         The classic ladder plot, including inset scatterplot
         """
@@ -1614,9 +1636,12 @@ class Plotter(object):
             pv, co = zip(*sorted(zip(pvals, corr)))
             # interpolate pvalues (x, must increase) with correlation
             # (y) and obtain the threshold for p = 0.05
-            f = interpolate(pv[:-2], co[:-2], k=1)
-            ax.axhline(y=(-1)*f(0.05), ls=':', color='r',
-                                label='p = 0.05 threshold', linewidth=2)
+            #f = interpolate(pv[:-2], co[:-2], k=1)
+            # other approach: just count till you get past 0.05
+            pval_line_pos = np.argmax(np.asarray(pv[::-1]) < 0.05)
+            #ax.axhline(y=(-1)*f(0.05), ls=':', color='r',
+                                #label='p = 0.05 threshold', linewidth=2)
+            ax.axvspan(0, pval_line_pos, color='darksalmon')
 
         ymin = -0.1
         #ymin = 0
@@ -1627,7 +1652,11 @@ class Plotter(object):
         ax.set_yticklabels(yticklabels_skip)
         ylim0 = -0.05
         ax.set_ylim(ylim0, 1.001)
-        ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize, color='blue')
+
+        if means:
+            ax.set_ylabel("Correlation: PY and Avg$_n$", size=self.labSize, color='blue')
+        else:
+            ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize, color='blue')
 
         # set tick label size
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -1646,7 +1675,7 @@ class Plotter(object):
         ax.set_xticklabels(xtickLabels)
         #ax.set_xticklabels([])
         ax.set_xlim(3, its_max)
-        ax.set_xlabel("RNA length, $n$", size=self.labSize)
+        ax.set_xlabel("Translocation to length $n$ RNA", size=self.labSize)
 
         # bbox_to_anchor= x, y, width, height
         if pval_pos == 'high':
@@ -1895,18 +1924,22 @@ def write_py_SE15(dg400):
     outp.close()
 
 
-def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
-        variableCombo={'DNA':True, 'RNA':True, '3N':True}, measure='SE'):
+def optimizeParam(ITSs, rna_range, testing=True, analysis='Normal',
+        variableCombo={'DNA':True, 'RNA':True, '3N':True}, measure='SE',
+        msat_normalization=True):
     """
     Optimize c1, c2, c3 to obtain max correlation with PY/FL/TA/TR
 
     # equation:
-    k1 = exp(-(c1*rna_dna_i + c2*dna_dna_{i+1} + c3*Keq_{i-1}) * 1/RT)
+    k1 = exp(-(c1*rna_dna_i + c2*dna_dna_{i+1} + c3*Dinuc_{i-1}) * 1/RT)
 
     PY = Productive Yield
     FL = Full Length
     TA = Total Abortive
     TR = Total RNA
+
+    Default is to calculate the average Kbt up to msat, but the entire sequence
+    can be taken into account of msat_normalization == false
     """
 
     # grid size parameter values search space
@@ -1957,20 +1990,19 @@ def optimizeParam(ITSs, its_range, testing=True, analysis='Normal',
 
     par_ranges = (c1, c2, c3)
 
-    all_results = optim.main_optim(its_range, ITSs, par_ranges, analysisInfo,
-                                    measure)
+    all_results = optim.main_optim(rna_range, ITSs, par_ranges, analysisInfo,
+                                    measure, msat_normalization)
 
     # return results for requested analysis type ('normal' by default)
     return all_results[analysis], grid_size, analysisInfo
 
 
-def get_print_parameterValue_output(results, its_range, onlySignCoeff,
+def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
         analysis, callingFunctionName, grid_size, aInfo=False, combo=''):
     """
-    Analyze and print some of the output parameter values
-
-    It's not straightforward how to calculate return parameter values c1 c2,
-    c3. You have tried to average all, and average just significant values.
+    Analyze the weight coefficients to select three values from a set of
+    contestants. Current method is the mean of the statistically significant
+    values.
 
     There is an unhelathy coupling between writing output and getting parameter
     values for Kew-calculation. Should be separated.
@@ -1985,10 +2017,12 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
     logFilePath = os.path.join('outputLog',
                         '_'.join(['log', analysisNoGap, callingFunctionName,
                             str(grid_size), str(aInfo)]))
+
     # sometimes the same function calls, but with different combinations of the
     # free enregy variables
     if combo != '':
         logFilePath += '_' + str(combo)
+
     logFilePath += '.log'
 
     logFileHandle = open(logFilePath, 'wb')
@@ -2007,12 +2041,12 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
     # output
     outp = {}
 
-    minpvals = [results[pos].pvals_min for pos in its_range]
-    meanpvals = [results[pos].pvals_mean for pos in its_range]
-    medianpvals = [results[pos].pvals_median for pos in its_range]
-    maxcorr = [results[pos].corr_max for pos in its_range]
-    meancorr = [results[pos].corr_mean for pos in its_range]
-    mediancorr = [results[pos].corr_median for pos in its_range]
+    minpvals = [results[pos].pvals_min for pos in rna_range]
+    meanpvals = [results[pos].pvals_mean for pos in rna_range]
+    medianpvals = [results[pos].pvals_median for pos in rna_range]
+    maxcorr = [results[pos].corr_max for pos in rna_range]
+    meancorr = [results[pos].corr_mean for pos in rna_range]
+    mediancorr = [results[pos].corr_median for pos in rna_range]
 
     # print the mean and std of the estimated parameters
     for param in ['c1', 'c2', 'c3']:
@@ -2025,12 +2059,12 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
 
         # for random you again want the median value ... this is
         if analysis == 'Normal':
-            parvals = [results[pos].params_best[param] for pos in its_range]
+            parvals = [results[pos].params_best[param] for pos in rna_range]
         elif analysis == 'Cross Correlation':
-            parvals = [results[pos].params_median[param] for pos in its_range]
+            parvals = [results[pos].params_median[param] for pos in rna_range]
         elif analysis == 'Random':
             # perhaps the mean is best since it's random?
-            parvals = [results[pos].params_median[param] for pos in its_range]
+            parvals = [results[pos].params_median[param] for pos in rna_range]
 
         if analysis == 'Normal':
             pvals = minpvals  # min of 20 best
@@ -2075,9 +2109,10 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
             madStd = np.nan
         else:
             madStd = mad_std(ParvalsFiltered)  # std, but using the mad as an estimator
-
-        if ma.is_masked(madStd):
-            madStd = np.nan
+            if madStd.mask:
+                madStd = np.nan
+            else:
+                madStd = float(madStd)
 
         outpString = '{0}: {1:.2f} (mean) +/- {2:.2f} or {0}: {3:.2f}'\
                         ' (median) +/- {4:.2f}'.format(param, mean, normal_std,
@@ -2098,7 +2133,7 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
         logFileHandle.write(infoStr + '\n')
         print analysis
 
-        for nt, c, p in zip(its_range, maxcorr, pvals):
+        for nt, c, p in zip(rna_range, maxcorr, pvals):
             output = (nt, c, p)
             #print(output)
             logFileHandle.write(str(output) + '\n')
@@ -2108,7 +2143,7 @@ def get_print_parameterValue_output(results, its_range, onlySignCoeff,
         print(infoStr)
         logFileHandle.write(infoStr + '\n')
         print analysis
-        for nt, c, p, cm, pm in zip(its_range, meancorr, meanpvals, mediancorr,
+        for nt, c, p, cm, pm in zip(rna_range, meancorr, meanpvals, mediancorr,
                 medianpvals):
             output = (nt, c, p, cm, pm)
             logFileHandle.write(str(output) + '\n')
@@ -3138,13 +3173,13 @@ def abortive_bar(dg100, dg400):
 
 
 def doFigureCalculations(fig2calc, pickDir, figures, coeffs, calculateAgain,
-                        testing, dg100, dg400):
+                        testing, dg100, dg400, msat_normalization):
     """
     Perform all calculations necessary for plotting. Each figure can have
     several 'plot' functions.
     """
 
-    def calcWrapper(name, dset=False, coeff=False, topNuc=False):
+    def calcWrapper(name, msat_normalization, dset=False, coeff=False, topNuc=False):
         """
         Wrapper for calculating and returning plot data. Pickling if necessary.
         """
@@ -3152,8 +3187,11 @@ def doFigureCalculations(fig2calc, pickDir, figures, coeffs, calculateAgain,
         filePath = os.path.join(pickDir, name)
 
         if not os.path.isfile(filePath) or calculateAgain:
+            # when recalculating, do not reuse any coefficients
+            if calculateAgain:
+                coeff = False
             calcr = Calculator(dg100, dg400, name, testing, dset, coeff,
-                                topNuc)
+                                topNuc, msat_normalization)
             results = calcr.calc()
 
             # pickle the results for re-usage
@@ -3170,8 +3208,8 @@ def doFigureCalculations(fig2calc, pickDir, figures, coeffs, calculateAgain,
     for fig in figures:
         for subCalcName in fig2calc[fig]:
             # XXX is the topNuc used for something important? lets hope not.
-            calcResults[subCalcName] = calcWrapper(subCalcName, topNuc=13,
-                                                    coeff=coeffs)
+            calcResults[subCalcName] = calcWrapper(subCalcName,
+                    msat_normalization, topNuc=13, coeff=coeffs)
     return calcResults
 
 
@@ -3249,20 +3287,32 @@ def main():
     #moving_average_ap(dg100, dg400)
 
     # Do not recalculate but use saved values (for tweaking plots)
-    calculateAgain = False
-    #calculateAgain = True
+    #calculateAgain = False
+    calculateAgain = True
     # XXX warning if coeffs are set, these are used anyway! must set to false
     coeffs = [0.12, 0.14, 0.66]  # median of 20 runs with its_range(2,21)
     #coeffs = False  # this means coeffs will be calculated
 
-    #testing = True
-    testing = False
+    # when testing, run fewer iterations when estimating parameters
+    testing = True
+    #testing = False
 
-    # its-range
+    # present results as averages instead of sum
+    # XXX This should just be a quick show-and-tell
+    # To do things properly you'll have to actually perform the calculations on
+    # averages (mean or even median: opens up for a generic function of
+    # equilibrium constants
+    # Update end of November: when writing, it becomes clear that you have to
+    # use the max size and average for each ITS. You'll need to show both. Then
+    # you'll need. What is the best solution: a new figure, like Figure2_M?
+    # Well, you are not going back to the non-means, so just convert them
+    # to averages immediately, and add an option for normalization at msat.
+    #msat_normalization = True
+    msat_normalization = False
 
     figures = [
-            #'Figure2',  # SE vs PY (in Paper)
-            'Figure32',  # DG400 scatter plot (in Paper)
+            'Figure2',  # AvgKbt vs PY (in Paper)
+            #'Figure32',  # DG400 scatter plot (in Paper)
             #'FigureX2',  # 1x2 Keq vs AP (in Paper)
             #'CrossRandomDelineateSuppl',  # (in Paper)
             #'megaFig',  # One big figure for the first 4 plots
@@ -3283,25 +3333,23 @@ def main():
     # Dictionary that maps dependency between figure and calculations
     # Commented out figures are not in paper currently
     fig2calc = {
-            'Figure2': ['PYvsSE'],
+            'Figure2': ['PYvsAvgKbt'],
             'FigureX2': ['AP_vs_Keq', 'averageAP'],
             'Figure32': ['dg400_validation'],  # only do dg400 validation
             'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
-            #'megaFig': ['PYvsSE', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
-            #'Figure2_DG400': ['PYvsSE', 'cumulativeAbortive'],
+            #'megaFig': ['PYvsAvgKbt', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
+            #'Figure2_DG400': ['PYvsAvgKbt', 'cumulativeAbortive'],
             #'Figure3': ['delineate', 'dg400_validation'],
             #'Figure3_instantaneous_change': ['delineate'],
             #'Figure4old': ['AP_vs_Keq'],
             #'FigureX': ['AP_vs_Keq', 'sumAP'],
-            #'Figure4': ['AP_vs_Keq', 'PYvsSE', 'cumulativeAbortive'],
+            #'Figure4': ['AP_vs_Keq', 'PYvsAvgKbt', 'cumulativeAbortive'],
             #'Suppl1':  ['crossCorrRandom'],
             #'Suppl2':  ['delineateCombo'],
             #'Suppl3':  ['sumAP'],
             #'Suppl4':  ['AP_Keq_examples'],
             #'DeLineate':  ['delineate', 'delineateCombo']
             }
-
-    ### XXX Below this line are figures that appear in the paper XXX ###
 
     # collect the figures you want to save to file
     saveMe = {}
@@ -3314,7 +3362,8 @@ def main():
 
     # Do calculations
     calcResults = doFigureCalculations(fig2calc, pickDir, figures, coeffs,
-                                       calculateAgain, testing, dg100, dg400)
+                                       calculateAgain, testing, dg100, dg400,
+                                       msat_normalization)
 
     # Do plotting
     for fig in figures:
@@ -3327,10 +3376,10 @@ def main():
             plotr = Plotter(YaxNr=1, XaxNr=4, plotName='OneBigFig2', p_line=True)
 
             # The first two plots
-            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsSE']
+            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsAvgKbt']
             resCumulAb = calcResults['cumulativeAbortive']
-            plotr.PYvsSEscatter(PYs, PYstd, SEmax)
-            plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc, inset=True)
+            plotr.PYvsAvgKbtscatter(PYs, PYstd, SEmax)
+            plotr.PYvsAvgKbtladder(indx, corr, pvals, PYs, SEbest, topNuc, inset=True)
             plotr.cumulativeAbortive(*resCumulAb, corr=corr)
 
             # The next two plots
@@ -3352,7 +3401,7 @@ def main():
         if fig == 'Figure2':
 
             # standard PY vs SEn
-            topNuc, indx, corr, pvals, PYs, PYstd, SEs = calcResults['PYvsSE']
+            topNuc, indx, corr, pvals, PYs, PYstd, SEs = calcResults['PYvsAvgKbt']
             SEmax, SEbest, SEchoice, choice = SEs
 
             # cumulative amount of abortive probability
@@ -3363,22 +3412,20 @@ def main():
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
                     tickLength=2, tickWidth=0.5)
 
-            ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEchoice, choice)
-            ax_lad = plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc,
+            ax_scatr = plotr.PYvsAvgKbtscatter(PYs, PYstd, SEchoice, choice)
+            ax_lad = plotr.PYvsAvgKbtladder(indx, corr, pvals, PYs, SEbest, topNuc,
                                         inset=False)
 
             # XXX plot settings for ax_lad are reset below
             #plotr.cumulativeAbortive(*results2, corr=corr)
             # XXX try another approach than the cumulative: the absolute!
 
-            # plot how correlations increase, and lognormal fit to this
-            # increase
+            # plot how correlations increase
             plotr.instantaneousCorrelation(corr)
 
-            # plot a fitted normal distribution
-
-            # Should be 8.7 cm
+            # Set fig size
             plotr.setFigSize(current_journal_width, 4.5)
+
             #plt.tight_layout()
             plotr.figure.subplots_adjust(left=0.08, top=0.96, right=0.90,
                     bottom=0.16, wspace=0.35)
@@ -3389,13 +3436,13 @@ def main():
 
             plotr.addLetters(shiftX=0)
 
-            saveMe['PYvsSE'] = plotr.figure
+            saveMe['PYvsAvgKbt'] = plotr.figure
 
         ##################### FIGURE SE vs PY ########################
         if fig == 'Figure2_DG400':
 
             # standard PY vs SEn
-            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsSE']
+            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsAvgKbt']
             # cumulative amount of abortive probability
             #results2 = calcResults['cumulativeAbortive']
 
@@ -3403,8 +3450,8 @@ def main():
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
                     tickLength=2, tickWidth=0.5)
 
-            ax_scatr = plotr.PYvsSEscatter(PYs, PYstd, SEmax)
-            ax_lad = plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc,
+            ax_scatr = plotr.PYvsAvgKbtscatter(PYs, PYstd, SEmax)
+            ax_lad = plotr.PYvsAvgKbtladder(indx, corr, pvals, PYs, SEbest, topNuc,
                                         inset=False)
 
             # XXX plot settings for ax_lad are reset below
@@ -3424,7 +3471,7 @@ def main():
 
             plotr.addLetters(shiftX=0)
 
-            saveMe['PYvsSE'] = plotr.figure
+            saveMe['PYvsAvgKbt'] = plotr.figure
 
         if fig == 'Figure3_instantaneous_change':
 
@@ -3515,7 +3562,7 @@ def main():
             nt-2-nt correlation (which doesn't match as well).
             """
             results2 = calcResults['cumulativeAbortive']
-            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsSE']
+            topNuc, indx, corr, pvals, PYs, PYstd, SEmax, SEbest = calcResults['PYvsAvgKbt']
 
             #plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
                     #p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
@@ -3525,7 +3572,7 @@ def main():
                     tickLength=2, tickWidth=0.5)
 
             # ladder plut with cumul abortive
-            ax_lad = plotr.PYvsSEladder(indx, corr, pvals, PYs, SEbest, topNuc,
+            ax_lad = plotr.PYvsAvgKbtladder(indx, corr, pvals, PYs, SEbest, topNuc,
                                         inset=False, pval_pos='low')
             plotr.cumulativeAbortive(*results2, corr=corr)
 

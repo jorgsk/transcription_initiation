@@ -8,7 +8,7 @@ from ITSframework import ITS
 from ipdb import set_trace as debug  # NOQA
 
 
-def PYHsu(filepath):
+def PYHsu_oldcsv(filepath):
     import csv
     """ Read Hsu dg100 csv-file with PY etc data. """
     f = open(filepath, 'rb')
@@ -127,6 +127,13 @@ def add_AP(ITSs):
     return ITSs
 
 
+def ReadDG100Old(path):
+    ITSs = PYHsu_oldcsv(path)  # Unmodified Hsu data
+    ITSs = add_AP(ITSs)
+
+    return ITSs
+
+
 def ReadData(dataset):
     """ Read Hsu data.
 
@@ -145,8 +152,7 @@ def ReadData(dataset):
     # Selecting the dataset you want to use
     if dataset == 'dg100':
         path = cwd + 'sequence_data/Hsu/csvHsu'
-        ITSs = PYHsu(path)  # Unmodified Hsu data
-        ITSs = add_AP(ITSs)
+        ITSs = ReadDG100Old(path)
 
     elif dataset == 'dg100-new':
         path = cwd + 'Hsu_original_data/2006/2013_email'
@@ -155,6 +161,14 @@ def ReadData(dataset):
                  '1214_third':  'quant1214.csv'}
 
         ITSs = read_raw(path, files, dset='dg100')
+
+        # add msat from the old csv approach
+        oldcsvpath = cwd + 'sequence_data/Hsu/csvHsu'
+        ITSs_oldcsv = ReadDG100Old(oldcsvpath)
+        for its_name in ITSs:
+            for its_old in ITSs_oldcsv:
+                if its_name == its_old.name:
+                    ITSs[its_name].msat = its_old.msat
 
     elif dataset == 'dg400':
         path = cwd + 'prediction_experiment/raw_data'

@@ -60,8 +60,19 @@ class ITS(object):
 
         # Make di-nucleotide vectors for all the energy parameters
         # goes from 2-mer till length of sequence
+        # XXX MAN!! You are perpetually confused by the starting index of your
+        # arrays. How non-robust. If you want to keep returning to this you'll
+        # need something better.
+
+        # Index 0 never happens, index 1 is the bubble opening for the first
+        # translocation step
         self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
+
+        # Index 0, 1 etc is not relevant fo translocation because there is no
+        # change in length
         self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
+
+        # Index 0 is the first translocation step
         self.dinucleotide_delta_g_f = [Ec.dinucleotide_deltaG_f[di] for di in __dinucs]
         self.dinucleotide_delta_g_b = [Ec.dinucleotide_deltaG_b[di] for di in __dinucs]
 
@@ -318,9 +329,9 @@ class ITS(object):
         RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
 
         its_len = 21
-        dna_dna = self.dna_dna_di[:its_len-1]
-        rna_dna = self.rna_dna_di[:its_len-2]
-        dg3d = self.dinucleotide_delta_g_b[:its_len-2]
+        dna_dna = self.dna_dna_di[:its_len]
+        rna_dna = self.rna_dna_di[:its_len-1]
+        dg3d = self.dinucleotide_delta_g_b[:its_len-1]
 
         # equilibrium constants at each position
         import optim

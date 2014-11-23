@@ -43,13 +43,11 @@ class Result(object):
     their parameter values!'
 
     """
-    def __init__(self, corr=[np.nan], pvals=np.nan, params=np.nan,
-                 SEn=np.nan):
+    def __init__(self, corr=[np.nan], pvals=np.nan, params=np.nan):
 
         self.corr = corr
         self.pvals = pvals
         self.params = params
-        self.SEn = SEn
 
         # calculate the mean, std, max, and min values for correlation
         # coefficients, pvalues, and SEn
@@ -68,11 +66,6 @@ class Result(object):
         self.pvals_mean = np.mean(pvals)
         self.pvals_std = np.std(pvals)
         self.pvals_min = np.min(pvals)
-
-        self.SEn_mean = np.mean(SEn)
-        self.SEn_std = np.std(SEn)
-        self.SEn_max = np.max(SEn)
-        self.SEn_min = np.min(SEn)
 
         # The parameters are not so easy to do something with; the should be
         # supplied in a dictionray [c1,c2,c3] = arrays; so make mean, std,
@@ -99,22 +92,35 @@ class Result(object):
         self.params_best = dict((k, v[0]) for k,v in params.items())
 
 
-def main_optim(its_range, ITSs, ranges, analysisInfo, measure):
+def main_optim(rna_range, ITSs, ranges, analysisInfo, measure,
+        msat_normalization):
     """
 
     Call the core optimialization wrapper but treat different analysis cases
     differently.
 
+    With msat_normalization each its only consideres its sequence up to the
+    msat for that sequence. How does this affect the estimation of optimal
+    coefficients for the different free energy terms?
+
+    For example, what happens if you use only the maximum size of abortive
+    product for a single run at an optimization? You would end up with 43 of
+    each and simply average them.
+
+    To stick closer to today's approach you should do that same think you're
+    doing, but stop at each MSAT, just output NaN values for the ones that do
+    not add up, so that they do not cound toward the average/median whatev.
+    Then the step toward not considering msat but everything is not so long.
     """
 
     # make 'int' into a 'list' containing just that int
-    if type(its_range) is int:
-        its_range = range(its_range, its_range+1)
+    if type(rna_range) is int:
+        rna_range = range(rna_range, rna_range+1)
 
     results = {'Normal':{}, 'Random':{}, 'Cross Correlation':{}}
 
     # Get the first iteration of results based on a wide parameter range
-    for its_len in its_range:
+    for rna_length in rna_range:
 
         # subsequently set to true depending on input
         normal_obj = False
@@ -123,21 +129,24 @@ def main_optim(its_range, ITSs, ranges, analysisInfo, measure):
 
         # 'normal' results (full dataset)
         if analysisInfo['Normal']['run']:
-            normal_obj = core_optim_wrapper(its_len, ITSs, ranges, measure)
+            normal_obj = core_optim_wrapper(rna_length, ITSs, ranges, measure,
+                    msat_normalization)
 
         # Randomize
         if analysisInfo['Random']['run']:
             randize = analysisInfo['Random']['value']
-            random_obj = randomize_wrapper(its_len, ITSs, ranges, randize)
+            random_obj = randomize_wrapper(rna_length, ITSs, ranges,
+                    measure, msat_normalization, randomize=randize)
 
         # Cross correlation
         if analysisInfo['CrossCorr']['run']:
             crosscorr = analysisInfo['CrossCorr']['value']
-            crosscorr_obj = crosscorr_wrapper(its_len, ITSs, ranges, measure, crosscorr)
+            crosscorr_obj = crosscorr_wrapper(rna_length, ITSs, ranges,
+                    measure, msat_normalization, crosscorr=crosscorr)
 
-        results['Normal'][its_len] = normal_obj
-        results['Random'][its_len] = random_obj
-        results['Cross Correlation'][its_len] = crosscorr_obj
+        results['Normal'][rna_length] = normal_obj
+        results['Random'][rna_length] = random_obj
+        results['Cross Correlation'][rna_length] = crosscorr_obj
 
     return results
 
@@ -182,7 +191,7 @@ def ITSgenerator():
     return 'AT'+ ''.join([random.choice(gatc) for dummy1 in range(18)])
 
 
-def randomize_wrapper(its_len, ITSs, ranges, randomize=0):
+def randomize_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, randomize=0):
     """
     Generate random ITS sequences and do the simulation with them
     Return the average of the best scores you obtained
@@ -193,8 +202,8 @@ def randomize_wrapper(its_len, ITSs, ranges, randomize=0):
 
         ITS_random = randomize_ITS_sequence(ITSs)
 
-        rand_result = core_optim_wrapper(its_len, ITS_random, ranges,
-                measure='SE')
+        rand_result = core_optim_wrapper(rna_len, ITS_random, ranges,
+                measure, msat_normalization)
 
         # skip if you don't get anything from this randomizer
         if not rand_result:
@@ -209,7 +218,7 @@ def randomize_wrapper(its_len, ITSs, ranges, randomize=0):
     return avrgdResults
 
 
-def crosscorr_wrapper(its_len, ITSs, ranges, measure, crosscorr=0):
+def crosscorr_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, crosscorr=0):
     """
     Wrapper around core_optim_wrapper that deals with cross-correlation.
     Optimialization is performed on one half of the ITSs and the correlation is
@@ -241,7 +250,8 @@ def crosscorr_wrapper(its_len, ITSs, ranges, measure, crosscorr=0):
         # Choose 50% of the ITS randomly; both energies and PYs
         ITS_fit, ITS_compare = ITS_RandomSplit(ITSs)
 
-        fit_result = core_optim_wrapper(its_len, ITS_fit, ranges, measure)
+        fit_result = core_optim_wrapper(rna_len, ITS_fit, ranges, measure,
+                msat_normalization)
 
         # Skip if you don't get a result (should not be a problem with large ranges)
         if not fit_result:
@@ -253,8 +263,8 @@ def crosscorr_wrapper(its_len, ITSs, ranges, measure, crosscorr=0):
                       for p in par_order]
 
         # run the rest of the ITS with the optimal parameters from fitting-set
-        control_result = core_optim_wrapper(its_len, ITS_compare, fit_ranges,
-                measure)
+        control_result = core_optim_wrapper(rna_len, ITS_compare, fit_ranges,
+                measure, msat_normalization)
 
         # Skip if you don't get a result (should B OK with large ranges)
         if not control_result:
@@ -267,7 +277,7 @@ def crosscorr_wrapper(its_len, ITSs, ranges, measure, crosscorr=0):
     return pick_top_results(retro_results)
 
 
-def core_optim_wrapper(its_len, ITSs, ranges, measure):
+def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     """
     Wrapper around the multi-core solver. Return a Result object with
     correlations and pvalues.
@@ -287,19 +297,20 @@ def core_optim_wrapper(its_len, ITSs, ranges, measure):
     #make a pool of workers for multicore action
     # this is only efficient if you have a range longer than 10 or so
     rmax = sum([len(r) for r in ranges])
-    #rmax = 5  # uncomment for multiprocessing debugging.
+    rmax = 5  # uncomment for multiprocessing debugging.
     if rmax > 6:
         my_pool = multiprocessing.Pool()
-        results = [my_pool.apply_async(_multi_calc, (p, its_len, ITSs, measure))
-                for p in divide]
+        results = [my_pool.apply_async(_multi_calc, (p, rna_len, ITSs, measure,
+                                            msat_normalization)) for p in divide]
         my_pool.close()
         my_pool.join()
         # flatten the output
         all_results = sum([r.get() for r in results], [])
     else:  # the non-parallell version for debugging and no multi-range calculations
-        all_results = sum([_multi_calc(*(p, its_len, ITSs, measure)) for p in divide], [])
+        all_results = sum([_multi_calc(*(p, rna_len, ITSs, measure, msat_normalization))
+                            for p in divide], [])
 
-    # All_results is a list of tuples on the following form: ((SEn, par, rp, pp))
+    # All_results is a list of tuples on the following form: ((measure_values, par, rp, pp))
     # Sort them on the pearson/spearman correlation pvalue, 'pp' and pick top
     # 20 (since you can potentially have thousands of results if there are many
     # parameter combinations -- but we're only interested in the best results
@@ -314,7 +325,6 @@ def core_optim_wrapper(its_len, ITSs, ranges, measure):
     # now make separate corr, pvals, params, and SEn arrays from these
     # these corr values represent corr(sum(SEn[:its_len], PY)) for the
     # different c1, c2 ,c3 combinations
-    SEn = np.array(top_hits[0][0])  # only get SEn for the top top
     pars = [c[1] for c in top_hits]
     corr = np.array([c[2] for c in top_hits])
     pvals = np.array([c[3] for c in top_hits])
@@ -326,48 +336,50 @@ def core_optim_wrapper(its_len, ITSs, ranges, measure):
         params['c{0}'.format(par_nr)] = [p[par_nr-1] for p in pars]
 
     # make a Result object
-    result_obj = Result(corr, pvals, params, SEn)
+    result_obj = Result(corr, pvals, params)
 
     print 'time: ', time.time() - t1
 
     return result_obj
 
 
-def _multi_calc(params, its_len, ITSs, measure='SE'):
+def _multi_calc(params, rna_len, ITSs, measure='SE', msat_normalization=True):
     """
     Evaluate the model for all parameter combinations. Return the final values,
     the parameters, and the correlation coefficients.
 
-    XXX WARNING: if measure == 'product', SEn is not the sum of equilibrium
-    constants but the product. However, to save refactoring work the variable
-    is still called SE.
+    When using msat_normalization with avgkbt, don't go further than msat whe
     """
 
     all_hits = []
     y = [its.PY for its in ITSs]
 
     for par in params:
-        all_keqs = keq_calc(par, its_len, ITSs)
+        all_keqs = keq_calc(par, rna_len, ITSs, msat_normalization)
 
         # correlation
         if measure == 'SE':
-            SEn = [np.sum(keqs) for keqs in all_keqs]
-            rp, pp = spearmanr(y, SEn)
+            values = [np.nansum(keqs) for keqs in all_keqs]
+            rp, pp = spearmanr(y, values)
 
         elif measure == 'product':
-            SEn = [np.prod(keqs) for keqs in all_keqs]
-            rp, pp = spearmanr(y, SEn)
+            values = [np.prod(keqs) for keqs in all_keqs]
+            rp, pp = spearmanr(y, values)
+
+        elif measure == 'AvgKbt':
+            values = [np.nanmean(keqs) for keqs in all_keqs]
+            rp, pp = spearmanr(y, values)
 
         # ignore parameter correlation where the correlation is a nan
         if np.isnan(rp):
             continue
 
-        all_hits.append((SEn, par, rp, pp))
+        all_hits.append((values, par, rp, pp))
 
     return all_hits
 
 
-def keq_calc(start_values, its_len, ITSs):
+def keq_calc(start_values, rna_len, ITSs, msat_normalization):
 
     """
     k1 = exp(-(c1*rna_dna_i + c2*dna_dna_{i+1} + c3*Keq_{i-1}) * 1/RT)
@@ -376,6 +388,12 @@ def keq_calc(start_values, its_len, ITSs):
     When the rna-dna reaches length 9, the you must subtract the hybrid for
     each step forward. The hybrid oscillates between a 8bp and a
     9bp hybrid during translocation.
+
+    For msat normalization, report Keq = NaN when exceeding msat as a first
+    attempt.
+
+    Initial transcription starts with a 2-nt RNA-dna hybrid. Then it performs
+    the first translocation step.
     """
     # get the tuning parameters and the rna-dna and k1, kminus1 values
     # RT is the gas constant * temperature
@@ -391,24 +409,33 @@ def keq_calc(start_values, its_len, ITSs):
         # information is needed for 3. ATG -> [(1,2), (2,3)]. Only DNA-DNA needs
         # both.
 
-        dna_dna = its.dna_dna_di[:its_len-1]
-        rna_dna = its.rna_dna_di[:its_len-2]
-        dg3d = its.dinucleotide_delta_g_b[:its_len-2]
+        # energy arrays have as index=0 energies for the first two nucleotides
+        dna_dna = its.dna_dna_di[:rna_len]
+        rna_dna = its.rna_dna_di[:rna_len-1]
+        dg3d = its.dinucleotide_delta_g_b[:rna_len-1]
 
         # the c1, c2, c3 values
         (a, b, c) = start_values
 
         # equilibrium constants at each position
-        keqs = keq_i(RT, its_len, dg3d, dna_dna, rna_dna, a, b, c)
+        keqs = keq_i(RT, rna_len, dg3d, dna_dna, rna_dna, a, b, c)
+
+        if msat_normalization:
+            # keqs[0] is for a 2-mer RNA
+            # keqs[1] is for a 3-mer RNA
+            # ...
+            # keqs[n-2] is for an (n)-mer RNA
+            # so if msat = 11, there can be no equilibrium constant after index 9
+            keqs[its.msat-1:] = np.nan
 
         all_keqs.append(keqs)
 
     return np.asarray(all_keqs)
 
 
-def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c):
+def keq_i(RT, rna_len, dg3d, dna_dna, rna_dna, a, b, c):
     """
-    NOTE!! calculating backward translocation
+    Calculating backward translocation equilibrium constant.
 
     Recall that the energies are in dinucleotide form. Thus ATG -> [0.4, 0.2]
 
@@ -448,40 +475,41 @@ def keq_i(RT, its_len, keq, dna_dna, rna_dna, a, b, c):
     until k1[17] which is d(x_20)/dt -- or do you want to include x_21?
 
     """
+    # translocation step
 
-    # initialize empty rates. -2 because you start going from +2 to +3.
     # ATGCT -> [0.3, 0.5, 0.2, 0.8]
     # -> (1,2) = 0.3
     # -> (1,3) = 0.3 + 0.5
     # -> (2,3) = (0.5)
-    k1 = np.zeros(its_len-2)
+
+    # initialize empty rates. -1 because rna_len=2 should have one
+    k1 = np.zeros(rna_len-1)
 
     # for writing to file the Delta G values
-    keq_array = []
+    dgdinuc_array = []
     dnadna_array = []
     rnadna_array = []
 
-    for i in range(0, its_len-2):
+    # i=0 corresponds to rna_len=2
+    for i in range(0, rna_len-1):
 
-        KEQ = keq[i]  # already formulated for back-translation
-        keq_array.append(KEQ)
+        DGDINUC = dg3d[i]  # already formulated for back-translation
+        dgdinuc_array.append(DGDINUC)
 
         DNA_DNA = -dna_dna[i+1]  # negative for back-translocation
         dnadna_array.append(DNA_DNA)
 
-        # index 8 is the same as x_11. k[8] is for x_11
+        # index 8 is the same as rna lenth 10
         if i < 8:
             #RNA_DNA = sum(rna_dna[:i])
             RNA_DNA = 0
         else:
-            # the 7 and the 8 are because of starting at +3, dinucleotides, and
-            # python indexing starting at 0
             # take the negative for back-translocation
             RNA_DNA = -(sum(rna_dna[i-7:i+1]) - sum(rna_dna[i-8:i+1]))
 
         rnadna_array.append(RNA_DNA)
 
-        exponent = (a*RNA_DNA +b*DNA_DNA +c*KEQ)/RT
+        exponent = (a*RNA_DNA +b*DNA_DNA +c*DGDINUC)/RT
 
         rate = np.exp(-exponent)
 
@@ -537,6 +565,6 @@ def pick_top_results(several_results):
     else:
         # make a new result object (from all the best random results, equallly
         # likely to have positive and negative correlation)
-        result = Result(new_corr, new_pvals, new_params, res_obj.SEn)
+        result = Result(new_corr, new_pvals, new_params)
 
     return result
