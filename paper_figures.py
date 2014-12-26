@@ -10,9 +10,6 @@ from __future__ import division
 ########### Make a debug function ##########
 from ipdb import set_trace as debug  # NOQA
 
-# Another debugger?
-#from pudb import set_trace
-
 import data_handler
 import numpy as np
 import matplotlib
@@ -385,24 +382,16 @@ class Calculator(object):
                     combDict[en] = False
             varCombinations.append(combDict)
 
-        ## for testing; only all three true
-        #hei = []
-        #for v in varCombinations:
-            #if np.all(v.values()):
-                #hei.append(v)
-        #varCombinations = hei
-        #debug()
-
         #varCombinations = [v for v in varCombinations]
         # set the range for which you wish to calculate correlation
-        itsMin = 2
-        #itsMax = 20
-        itsMax = 15
-        itsRange = range(itsMin, itsMax+1)
+        rnaMin = 2
+        #rnaMax = 20
+        rnaMax = 15
+        rnaRange = range(rnaMin, rnaMax+1)
         if self.testing:
-            #itsRange = [itsMin, 5, 10, 15, itsMax]
-            #itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
-            itsRange = range(itsMin, itsMax+1)
+            #rnaRange = [rnaMin, 5, 10, 15, rnaMax]
+            #rnaRange = [rnaMin, 3, 4, 5, 7, 10, 12, 15, 17, rnaMax]
+            rnaRange = range(rnaMin, rnaMax+1)
 
         analysis = 'Normal'
 
@@ -414,23 +403,24 @@ class Calculator(object):
 
             comboKey = '_'.join([str(combo[v]) for v in freeEns])
 
-            result, grid_size, aInfo = optimizeParam(self.ITSs, itsRange,
-                    self.testing, analysis=analysis, variableCombo=combo)
+            result, grid_size, aInfo = optimizeParam(self.ITSs, rnaRange,
+                    self.testing, analysis, variableCombo=combo,
+                    measure='AvgKbt', msat_normalization=self.msat_normalization)
 
             onlySignCoeff=0.05
             # Print some output and return one value for c1, c2, and c3
-            c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
-                    onlySignCoeff, analysis, self.name, grid_size, aInfo=aInfo,
-                    combo=combo)
+            c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
+                    onlySignCoeff, analysis, self.name, grid_size,
+                    self.msat_normalization, aInfo=aInfo, combo=combo)
 
             # add the constants to the ITS objects and calculate Keq
-            for its in self.ITSs:
-                its.calc_keq(c1, c2, c3)
+            for rna in self.ITSs:
+                rna.calc_keq(c1, c2, c3)
 
             # calculate the correlation with PY
-            corr, pvals = self.correlateSE_PY(itsRange)
+            corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
 
-            delinResults[comboKey] = [itsRange, corr, pvals]
+            delinResults[comboKey] = [rnaRange, corr, pvals]
             print('\n-----------')
 
         return delinResults
@@ -448,14 +438,14 @@ class Calculator(object):
                            {'DNA':False, 'RNA':True,  '3N':False}]
 
         # set the range for which you wish to calculate correlation
-        itsMin = 2
-        itsMax = 15
-        #itsMax = 20
-        itsRange = range(itsMin, itsMax+1)
+        rnaMin = 2
+        rnaMax = 15
+        #rnaMax = 20
+        rnaRange = range(rnaMin, rnaMax+1)
         if self.testing:
-            #itsRange = [itsMin, 5, 10, 15, itsMax]
-            #itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
-            itsRange = range(itsMin, itsMax+1)
+            #rnaRange = [rnaMin, 5, 10, 15, rnaMax]
+            #rnaRange = [rnaMin, 3, 4, 5, 7, 10, 12, 15, 17, rnaMax]
+            rnaRange = range(rnaMin, rnaMax+1)
 
         analysis = 'Normal'
 
@@ -466,8 +456,9 @@ class Calculator(object):
 
             comboKey = '_'.join([str(combo[v]) for v in delineateResultsOrder])
 
-            result, grid_size, aInfo = optimizeParam(self.ITSs, itsRange, self.testing,
-                    analysis=analysis, variableCombo=combo)
+            result, grid_size, aInfo = optimizeParam(self.ITSs, rnaRange, self.testing,
+                    analysis=analysis, variableCombo=combo, measure='AvgKbt',
+                    msat_normalization=self.msat_normalization)
 
             # For this type of analysis you do NOT want to do any screening;
             # otherwise you won't be getting any plots. It's for the reporting
@@ -480,21 +471,21 @@ class Calculator(object):
             onlySignCoeff=0.05
             # Print some output and return one value for c1, c2, and c3
             print(combo)
-            c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
-                    onlySignCoeff, analysis, self.name, grid_size, aInfo=aInfo,
-                    combo=combo)
+            c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
+                    onlySignCoeff, analysis, self.name, grid_size, self.msat_normalization,
+                    aInfo=aInfo, combo=combo)
 
             # add the constants to the ITS objects and calculate Keq
-            for its in self.ITSs:
-                its.calc_keq(c1, c2, c3)
+            for rna in self.ITSs:
+                rna.calc_keq(c1, c2, c3)
 
             # calculate the correlation with PY
-            corr, pvals = self.correlateSE_PY(itsRange)
+            corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
             print('Correlation and p-values:')
             print(zip(corr, pvals))
             print('\n-----------')
 
-            delinResults[comboKey] = [itsRange, corr, pvals]
+            delinResults[comboKey] = [rnaRange, corr, pvals]
 
         return delinResults
 
@@ -529,7 +520,6 @@ class Calculator(object):
 
             corr.append(co)
             pvals.append(pv)
-            debug()
 
         return corr, pvals
 
@@ -541,9 +531,9 @@ class Calculator(object):
 
         if self.coeffs:
             c1, c2, c3 = self.coeffs
-
         else:
             print("omg no!")
+            1/0
 
         c1, c2, c3 = self.coeffs
         # add the constants to the ITS objects and calculate Keq
@@ -555,7 +545,7 @@ class Calculator(object):
         PYstd = [i.PY_std for i in self.dg400]
 
         # Get the SE15
-        SE15 = [sum(i.keq[:15]) for i in self.dg400]
+        SE15 = [sum(i.keq[:14])/14 for i in self.dg400]
 
         # write all of this to an output file
         write_py_SE15(self.dg400)
@@ -589,19 +579,21 @@ class Calculator(object):
         else:
             analysis = 'Normal'
             onlySignCoeff=0.05
+            variable_combo = {'DNA':True, 'RNA':True, '3N':True}
             result, grid_size, aInfo = optimizeParam(self.ITSs, rnaRange,
-                    self.testing, analysis=analysis,
-                    msat_normalization=self.msat_normalization, measure='AvgKbt')
+                    self.testing, analysis, variable_combo, 'AvgKbt',
+                    msat_normalization=self.msat_normalization)
 
             c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
-                    onlySignCoeff, analysis, self.name, grid_size, aInfo=aInfo)
-            print c1, c2, c3
+                    onlySignCoeff, analysis, self.name,
+                    grid_size, self.msat_normalization, aInfo=aInfo)
+
+            print ('c1: {0}, c2: {1}, c3: {2}'.format(c1, c2, c3))
 
         # add the constants to the ITS objects and calculate Keq
         for its in self.ITSs:
             its.calc_keq(c1, c2, c3)
 
-        #corr, pvals = self.correlateSE_PY(itsRange, measure='product')
         corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
         indx = rnaRange
 
@@ -613,11 +605,12 @@ class Calculator(object):
         PYs = [i.PY for i in self.ITSs]
         PYstd = [i.PY_std for i in self.ITSs]
 
-        ntMax = max(indx)
-        # subtract 1 since keq[0] is 2-nt
-        SEmax = [sum(i.keq[:ntMax-1]) for i in self.ITSs]
-        SEbest = [sum(i.keq[:self.topNuc]) for i in self.ITSs]
-        SEchoice = [sum(i.keq[:scatter_plot_nt_pos-1]) for i in self.ITSs]
+        tr_steps = float(max(indx)-1)
+
+        # now dividing by ntMax to calculate average Kbt
+        SEmax = [sum(i.keq[:tr_steps])/tr_steps for i in self.ITSs]
+        SEbest = [sum(i.keq[:self.topNuc])/tr_steps for i in self.ITSs]
+        SEchoice = [sum(i.keq[:scatter_plot_nt_pos-1])/tr_steps for i in self.ITSs]
 
         SEs = (SEmax, SEbest, SEchoice, scatter_plot_nt_pos)
 
@@ -632,43 +625,44 @@ class Calculator(object):
 
         # set the range of values for which you wish to calculate correlation
 
-        itsMin = 2
-        #itsMax = 20
-        itsMax = 15
-        itsRange = range(itsMin, itsMax+1)
+        rnaMin = 2
+        #rnaMax = 20
+        rnaMax = 15
+        rnaRange = range(rnaMin, rnaMax+1)
         if self.testing:
-            #itsRange = [itsMin, 5, 10, 15, itsMax]
-            #itsRange = [itsMin, 3, 4, 5, 7, 10, 12, 15, 17, itsMax]
-            itsRange = range(itsMin, itsMax+1)
+            #rnaRange = [rnaMin, 5, 10, 15, rnaMax]
+            #rnaRange = [rnaMin, 3, 4, 5, 7, 10, 12, 15, 17, rnaMax]
+            rnaRange = range(rnaMin, rnaMax+1)
 
         analysis2stats = {}
 
         for analysis in ['Normal', 'Random', 'Cross Correlation']:
         #for analysis in ['Cross Correlation']:
-        #for analysis in ['Normal']:
+        #for analysis in ['Random']:
 
-            result, grid_size, aInfo = optimizeParam(self.ITSs, itsRange,
-                    testing=self.testing, analysis=analysis)
+            result, grid_size, aInfo = optimizeParam(self.ITSs, rnaRange,
+                    testing=self.testing, analysis=analysis, measure='AvgKbt',
+                    msat_normalization=self.msat_normalization)
 
             # CrossCorr and Normal. How is this printed? How is this plotted?
             corr_stds = [r[1].corr_std for r in sorted(result.items())]
             # corr_stds corresponds to itsRange
-            indx = itsRange
+            indx = rnaRange
 
             # if normal, pick the median c1, c2, c3 values as for Figure 2
             if analysis == 'Normal':
                 # Print some output and return one value for c1, c2, and c3
                 onlySignCoeff = 0.05
-                c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+                c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
                                 onlySignCoeff, analysis, self.name, grid_size,
-                                aInfo=aInfo)
+                                self.msat_normalization, aInfo=aInfo)
 
                 # add the constants to the ITS objects and calculate Keq with
                 # the new c1, c2, and c3 mean values
                 for its in self.ITSs:
                     its.calc_keq(c1, c2, c3)
 
-                corr, pvals = self.correlateSE_PY(itsRange)
+                corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
 
             # if random or cross-correlation, pick the average of the best
             # results for each nucleotide
@@ -683,9 +677,9 @@ class Calculator(object):
                 # for cross corr)
 
                 onlySignCoeff = 0.05  # doesn't make sense really
-                c1, c2, c3 = get_print_parameterValue_output(result, itsRange,
+                c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
                                 onlySignCoeff, analysis, self.name, grid_size,
-                                aInfo=aInfo)
+                                self.msat_normalization, aInfo=aInfo)
 
             analysis2stats[analysis] = [indx, corr, corr_stds, pvals]
 
@@ -930,8 +924,7 @@ class Plotter(object):
 
         return ax
 
-    def averageAP_SEXX(self, results, norm=True, xlab=True, xticks=True,
-            means=False):
+    def averageAP_SEXX(self, results, norm=True, xlab=True, xticks=True):
 
         ax = self.getNextAxes()
 
@@ -957,10 +950,7 @@ class Plotter(object):
 
         # labels
         if xlab:
-            if means:
-                ax.set_xlabel('Avg 15', size=self.labSize)
-            else:
-                ax.set_xlabel('SE$_{15}$', size=self.labSize)
+            ax.set_xlabel('$\overline{K}_{bt,2,15}$', size=self.labSize)
 
         ax.set_ylabel('Average abortive probability ($\%$)', size=self.labSize)
 
@@ -1093,7 +1083,7 @@ class Plotter(object):
             #  setting the tick font sizes
             ax.tick_params(labelsize=self.tickLabelSize)
 
-            ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize)
+            ax.set_ylabel("Correlation: PY and average $K_{bt}$", size=self.labSize)
 
             ax.set_yticks(np.arange(ymin, ymax, 0.1))
             ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
@@ -1196,7 +1186,7 @@ class Plotter(object):
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
                 width=self.tickWidth)
 
-        ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize)
+        ax.set_ylabel("Correlation: PY and $K_{bt}$", size=self.labSize)
 
         ax.set_yticks(np.arange(ymin, ymax, 0.1))
         ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
@@ -1206,8 +1196,7 @@ class Plotter(object):
         ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
                       alpha=0.5)
 
-    def dg400validater(self, dg400, SE15, PY, PYstd, fit_function=False,
-            means=False):
+    def dg400validater(self, dg400, SE15, PY, PYstd, fit_function=False):
 
         ax = self.getNextAxes()
 
@@ -1219,22 +1208,18 @@ class Plotter(object):
         PYstd = [p*100 for p in PYstd]
 
         # simple average for now, just for the effect
-        if means:
-            SE15 = np.asarray(SE15)/float(15)
-
         ax.scatter(SE15, PY, s=12, color='b', zorder=2)
         ax.errorbar(SE15, PY, yerr=PYstd, fmt=None, zorder=1, elinewidth=0.3)
 
         ########### Set figure and axis properties ############
-        if means:
-            ax.set_xlabel('Avg 15', size=self.labSize)
-        else:
-            ax.set_xlabel('SE$_{15}$', size=self.labSize)
+        ax.set_xlabel('$\overline{K}_{bt,2,15}$', size=self.labSize)
+
         ax.set_ylabel('Productive yield ($\%$)', size=self.labSize)
 
         xmin, xmax = min(SE15), max(SE15)
         xscale = (xmax-xmin)*0.1
         ax.set_xlim(xmin-xscale, xmax+xscale)
+        #ax.set_xlim(0, 20)
 
         ymin, ymax = min(PY), max(PY)
         yscale_low = (ymax-ymin)*0.2
@@ -1253,21 +1238,25 @@ class Plotter(object):
         dg400dict = dict(((o.name, o) for o in dg400))
 
         specials = ['N25', 'N25/A1anti', 'DG115a', 'DG133']
+
+        t_steps = 14.
+
         for name in specials:
 
             # maybe you've already skipped these
             if name not in dg400dict:
                 continue
 
-            SE15 = sum(dg400dict[name].keq[:15])
+            SE15 = sum(dg400dict[name].keq[:t_steps])/t_steps
             PY = dg400dict[name].PY*100
 
-            box_x = 20
-            box_y = 10
+            if name == 'N25':
+                box_x = 20
+                box_y = 10
 
             if name == 'N25_A1anti' or name == 'N25/A1anti':
                 name = 'N25/A1anti'
-                box_x = -12
+                box_x = -1
                 box_y = -14
 
             if name == 'DG133':
@@ -1369,7 +1358,7 @@ class Plotter(object):
 
         ax.plot(sort_x, sort_fit, linewidth=2)
 
-    def PYvsAvgKbtscatter(self, PYs, PYstd, SEchoice, choice, means=False):
+    def PYvsAvgKbtscatter(self, PYs, PYstd, SEchoice, choice):
         """
         Plotting a scatter between PY and SE at position choice
 
@@ -1388,19 +1377,13 @@ class Plotter(object):
         PYs = [p*100 for p in PYs]
         PYstd = [p*100 for p in PYstd]
 
-        if means:
-            SEchoice = np.asarray(SEchoice)/float(choice)
-
         ax.errorbar(SEchoice, PYs, yerr=PYstd, fmt=None, ecolor='b', zorder=1,
                 elinewidth=0.3)
         ax.scatter(SEchoice, PYs, c='b', s=12, linewidth=0.6, zorder=2)
         # XXX get the errorbars to be gray too!!!!!!!!
 
         ax.set_ylabel("Productive yield ($\%$)", size=self.labSize)
-        if means:
-            ax.set_xlabel("Avg{0}".format(choice), size=self.labSize)
-        else:
-            ax.set_xlabel("SE$_{{{0}}}$".format(choice), size=self.labSize)
+        ax.set_xlabel("$\overline{K}_{bt,2,15}$", size=self.labSize)
 
         ymin = -0.1
 
@@ -1513,12 +1496,9 @@ class Plotter(object):
         cumulRawNorm = np.array(cumulRaw)/cumulRaw[-1]
         cumulRawNormMinusFirst = (np.array(cumulRaw)-cumulRaw[0])/cumulRaw[-1]
         cumulApNorm = np.array(cumulAp)/cumulAp[-1]
-        #debug()
 
         #choice = 'AP'
         choice = 'raw'
-
-        #debug()
 
         xlim = mainAx.get_xlim()
         cumlAx = mainAx.twinx()  # make a twin axis
@@ -1573,8 +1553,8 @@ class Plotter(object):
                ' But this is not a good measure ... youll need to do bettrr ')
         print pearsonr(np.array(corr)*(-1), cumulRawNorm)
 
-    def PYvsAvgKbtladder(self, indx, corr, pvals, PYs, SEbest, b, inset=False,
-            pval_pos='high', means=False):
+    def PYvsAvgKbtladder(self, indx, corr, pvals, PYs, SEbest, topnuc, inset=False,
+            pval_pos='high'):
         """
         The classic ladder plot, including inset scatterplot
         """
@@ -1585,6 +1565,7 @@ class Plotter(object):
         corr, pvals = remove_nan(corr, pvals)
 
         its_max = indx[-1]
+        #its_max = 15
 
         ## the ladder plot
         colr = 'b'
@@ -1593,9 +1574,9 @@ class Plotter(object):
                 markersize=3)
 
         ## the little inset scatter plot
-        if inset and b in indx:
+        if inset and topnuc in indx:
 
-            x = b
+            x = topnuc
             y = -corr[x-2]  # adjust for starting from 2
 
             # add axes within axes: add_axes[left, bottom, width, height]
@@ -1626,7 +1607,7 @@ class Plotter(object):
                                  #arrowprops=dict(arrowstyle='->',
                          #connectionstyle="arc, angleA=90, armA=45, rad=20"))
 
-            ax.scatter(b, y, s=20)
+            ax.scatter(topnuc, y, s=20)
 
             axsmall.set_yticklabels([])
             axsmall.set_xticklabels([])
@@ -1653,10 +1634,8 @@ class Plotter(object):
         ylim0 = -0.05
         ax.set_ylim(ylim0, 1.001)
 
-        if means:
-            ax.set_ylabel("Correlation: PY and Avg$_n$", size=self.labSize, color='blue')
-        else:
-            ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize, color='blue')
+        ax.set_ylabel("Correlation: PY and average $K_{bt}$", size=self.labSize,
+                     color='blue')
 
         # set tick label size
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -1675,7 +1654,7 @@ class Plotter(object):
         ax.set_xticklabels(xtickLabels)
         #ax.set_xticklabels([])
         ax.set_xlim(3, its_max)
-        ax.set_xlabel("Translocation to length $n$ RNA", size=self.labSize)
+        ax.set_xlabel("Translocation to length $i$ RNA", size=self.labSize)
 
         # bbox_to_anchor= x, y, width, height
         if pval_pos == 'high':
@@ -1756,7 +1735,7 @@ class Plotter(object):
         ax.set_yticks(yticks)
         ax.set_yticklabels(yticklabels_skip)
         ax.set_ylim(ymin, 1.1)
-        ax.set_ylabel("Correlation: PY and SE$_n$", size=self.labSize)
+        ax.set_ylabel("Correlation: PY and average $K_{bt}$", size=self.labSize)
 
         # xticks
         xticklabels = [str(integer) for integer in range(indxMin, indxMax+1)]
@@ -1924,9 +1903,8 @@ def write_py_SE15(dg400):
     outp.close()
 
 
-def optimizeParam(ITSs, rna_range, testing=True, analysis='Normal',
-        variableCombo={'DNA':True, 'RNA':True, '3N':True}, measure='SE',
-        msat_normalization=True):
+def optimizeParam(ITSs, rna_range, testing, analysis,
+        variableCombo, measure, msat_normalization):
     """
     Optimize c1, c2, c3 to obtain max correlation with PY/FL/TA/TR
 
@@ -1956,18 +1934,21 @@ def optimizeParam(ITSs, rna_range, testing=True, analysis='Normal',
 
     if analysis == 'Normal':
         analysisInfo['Normal']['run'] = True
+
     if analysis == 'Random':
         # nr of random sequences tested for each parameter combination
         analysisInfo['Random']['run'] = True
         analysisInfo['Random']['value'] = 100
         if testing:
             analysisInfo['Random']['value'] = 15
+
     elif analysis == 'Cross Correlation':
         # nr of samplings of 50% of ITSs for each parameter combination
         analysisInfo['CrossCorr']['run'] = True
         analysisInfo['CrossCorr']['value'] = 100
         if testing:
             analysisInfo['CrossCorr']['value'] = 15
+
     elif analysis != 'Normal':
         print('Give correct analysis parameter name')
         1/0
@@ -1998,15 +1979,15 @@ def optimizeParam(ITSs, rna_range, testing=True, analysis='Normal',
 
 
 def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
-        analysis, callingFunctionName, grid_size, aInfo=False, combo=''):
+        analysis, callingFunctionName, grid_size, msat_normalization,
+        aInfo=False, combo=''):
     """
     Analyze the weight coefficients to select three values from a set of
     contestants. Current method is the mean of the statistically significant
     values.
 
     There is an unhelathy coupling between writing output and getting parameter
-    values for Kew-calculation. Should be separated.
-
+    values for Keq-calculation. Should be separated.
     """
 
     logDir = 'outputLog'
@@ -2027,8 +2008,10 @@ def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
 
     logFileHandle = open(logFilePath, 'wb')
     logFileHandle.write('calling function: ' + callingFunctionName + '\n')
-    logFileHandle.write('combo: ' + str(combo) + '\n')
+    logFileHandle.write('combination of free energy variables: ' + str(combo) + '\n')
     logFileHandle.write('grid_size: ' + str(grid_size) + '\n')
+    logFileHandle.write('msat_normalization: ' + str(msat_normalization) + '\n')
+    logFileHandle.write('Range of RNA lengths: ' + str(rna_range) + '\n')
 
     if aInfo:
         for asis, settings in aInfo.items():
@@ -2683,7 +2666,6 @@ def position_wise_correlation_shifted(dg100, dg400):
                     #axu.set_ylabel('AP at pos {0}'.format(xmer))
 
                 #if xmer == 2 and pm == 0:
-                    #debug()
 
             # the positions along the x-axis (got nothing to do with labels)
             xpos = range(1, len(bar_heights)+1)
@@ -2918,7 +2900,6 @@ def basic_info(ITSs):
     nrPurines = [i.nr_purines for i in ITSs]
     #totAbort = [i.totAbortMean for i in ITSs]
     #totRNA = [i.totRNAMean for i in ITSs]
-    #debug()
 
     apw_SEs = [sum(i.keq * weight) for i in ITSs]
     apw_keqProduct = [np.prod(i.keq[:20]*weight) for i in ITSs]
@@ -3173,13 +3154,15 @@ def abortive_bar(dg100, dg400):
 
 
 def doFigureCalculations(fig2calc, pickDir, figures, coeffs, calculateAgain,
-                        testing, dg100, dg400, msat_normalization):
+                        testing, dg100, dg400, msat_normalization,
+                        average_for_plots):
     """
     Perform all calculations necessary for plotting. Each figure can have
     several 'plot' functions.
     """
 
-    def calcWrapper(name, msat_normalization, dset=False, coeff=False, topNuc=False):
+    def calcWrapper(name, msat_normalization, average_for_plots, dset=False,
+            coeff=False, topNuc=False):
         """
         Wrapper for calculating and returning plot data. Pickling if necessary.
         """
@@ -3190,6 +3173,7 @@ def doFigureCalculations(fig2calc, pickDir, figures, coeffs, calculateAgain,
             # when recalculating, do not reuse any coefficients
             if calculateAgain:
                 coeff = False
+
             calcr = Calculator(dg100, dg400, name, testing, dset, coeff,
                                 topNuc, msat_normalization)
             results = calcr.calc()
@@ -3209,7 +3193,7 @@ def doFigureCalculations(fig2calc, pickDir, figures, coeffs, calculateAgain,
         for subCalcName in fig2calc[fig]:
             # XXX is the topNuc used for something important? lets hope not.
             calcResults[subCalcName] = calcWrapper(subCalcName,
-                    msat_normalization, topNuc=13, coeff=coeffs)
+                    msat_normalization, average_for_plots, topNuc=13, coeff=coeffs)
     return calcResults
 
 
@@ -3289,13 +3273,18 @@ def main():
     # Do not recalculate but use saved values (for tweaking plots)
     #calculateAgain = False
     calculateAgain = True
+
     # XXX warning if coeffs are set, these are used anyway! must set to false
-    coeffs = [0.12, 0.14, 0.66]  # median of 20 runs with its_range(2,21)
-    #coeffs = False  # this means coeffs will be calculated
+    coeffs = [0.12, 0.14, 0.66]  # median of 100 runs
+    #coeffs = False  # False means coeffs will be calculated
 
     # when testing, run fewer iterations when estimating parameters
     testing = True
     #testing = False
+
+    # Specify if the parameter values should be medians or means
+    average_for_plots = 'mean'
+    average_for_plots = 'median'
 
     # present results as averages instead of sum
     # XXX This should just be a quick show-and-tell
@@ -3312,8 +3301,8 @@ def main():
 
     figures = [
             'Figure2',  # AvgKbt vs PY (in Paper)
-            #'Figure32',  # DG400 scatter plot (in Paper)
-            #'FigureX2',  # 1x2 Keq vs AP (in Paper)
+            'Figure32',  # DG400 scatter plot (in Paper)
+            'FigureX2',  # 1x2 Keq vs AP (in Paper)
             #'CrossRandomDelineateSuppl',  # (in Paper)
             #'megaFig',  # One big figure for the first 4 plots
             #'Figure2_DG400',  # SE vs PY for DG400
@@ -3322,7 +3311,7 @@ def main():
             #'Figure4old',  # Keq vs AP
             #'FigureX',  # 2x2 Keq vs AP, effect of normalization
             #'Figure4',  # delineate + cumul abortive, + keq-AP correlation
-            #'Suppl1',   # Random and cross-corrleation (supplementary)
+            #'Test',   # Random and cross-corrleation (supplementary)
             #'Suppl2',   # Delineate -- all combinations
             #'Suppl3',   # PY vs sum(AP) before and after normalization
             #'Suppl4',   # Examples of Keq and AP for 4 variants
@@ -3336,7 +3325,7 @@ def main():
             'Figure2': ['PYvsAvgKbt'],
             'FigureX2': ['AP_vs_Keq', 'averageAP'],
             'Figure32': ['dg400_validation'],  # only do dg400 validation
-            'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
+            #'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
             #'megaFig': ['PYvsAvgKbt', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
             #'Figure2_DG400': ['PYvsAvgKbt', 'cumulativeAbortive'],
             #'Figure3': ['delineate', 'dg400_validation'],
@@ -3344,14 +3333,14 @@ def main():
             #'Figure4old': ['AP_vs_Keq'],
             #'FigureX': ['AP_vs_Keq', 'sumAP'],
             #'Figure4': ['AP_vs_Keq', 'PYvsAvgKbt', 'cumulativeAbortive'],
-            #'Suppl1':  ['crossCorrRandom'],
+            #'Test':  ['crossCorrRandom'],
             #'Suppl2':  ['delineateCombo'],
             #'Suppl3':  ['sumAP'],
             #'Suppl4':  ['AP_Keq_examples'],
             #'DeLineate':  ['delineate', 'delineateCombo']
             }
 
-    # collect the figures you want to save to file
+    # for collecting figures you want to save to file
     saveMe = {}
 
     # save your calculations here for reuse
@@ -3363,7 +3352,7 @@ def main():
     # Do calculations
     calcResults = doFigureCalculations(fig2calc, pickDir, figures, coeffs,
                                        calculateAgain, testing, dg100, dg400,
-                                       msat_normalization)
+                                       msat_normalization, average_for_plots)
 
     # Do plotting
     for fig in figures:
@@ -3406,15 +3395,15 @@ def main():
 
             # cumulative amount of abortive probability
             #results2 = calcResults['cumulativeAbortive']
-            #debug()
 
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName='SE15 vs PY',
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
                     tickLength=2, tickWidth=0.5)
 
+            # Set position for scatter plot
             ax_scatr = plotr.PYvsAvgKbtscatter(PYs, PYstd, SEchoice, choice)
             ax_lad = plotr.PYvsAvgKbtladder(indx, corr, pvals, PYs, SEbest, topNuc,
-                                        inset=False)
+                                            inset=False)
 
             # XXX plot settings for ax_lad are reset below
             #plotr.cumulativeAbortive(*results2, corr=corr)

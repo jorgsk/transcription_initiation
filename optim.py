@@ -178,17 +178,18 @@ def randomize_ITS_sequence(ITSs):
 
     # keep only the PY and names of the ITS objects -> new sequence and energies
     for its in ITSs:
-        random_its = ITSgenerator()
-        copy_ITSs.append(ITS(random_its, name=its.name, PY=its.PY))
+        random_its = DNASequenceGenerator(length=18)
+        copy_ITSs.append(ITS(random_its, name=its.name, PY=its.PY,
+            msat=its.msat))
 
     return copy_ITSs
 
 
-def ITSgenerator():
-    """Generate a random ITS """
+def DNASequenceGenerator(length):
+    """Generate a random DNA sequence. length is a positive integer > 0 """
     import random
     gatc = list('GATC')
-    return 'AT'+ ''.join([random.choice(gatc) for dummy1 in range(18)])
+    return 'AT'+ ''.join([random.choice(gatc) for dummy1 in range(length)])
 
 
 def randomize_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, randomize=0):
@@ -297,7 +298,7 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     #make a pool of workers for multicore action
     # this is only efficient if you have a range longer than 10 or so
     rmax = sum([len(r) for r in ranges])
-    rmax = 5  # uncomment for multiprocessing debugging.
+    #rmax = 5  # uncomment for multiprocessing debugging.
     if rmax > 6:
         my_pool = multiprocessing.Pool()
         results = [my_pool.apply_async(_multi_calc, (p, rna_len, ITSs, measure,
@@ -338,12 +339,14 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     # make a Result object
     result_obj = Result(corr, pvals, params)
 
+    # XXX TODO:::stop here and find out why the first two rna lengths give
+    # strange random results
     print 'time: ', time.time() - t1
 
     return result_obj
 
 
-def _multi_calc(params, rna_len, ITSs, measure='SE', msat_normalization=True):
+def _multi_calc(params, rna_len, ITSs, measure, msat_normalization):
     """
     Evaluate the model for all parameter combinations. Return the final values,
     the parameters, and the correlation coefficients.
