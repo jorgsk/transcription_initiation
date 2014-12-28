@@ -95,7 +95,6 @@ class Result(object):
 def main_optim(rna_range, ITSs, ranges, analysisInfo, measure,
         msat_normalization):
     """
-
     Call the core optimialization wrapper but treat different analysis cases
     differently.
 
@@ -298,7 +297,7 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     #make a pool of workers for multicore action
     # this is only efficient if you have a range longer than 10 or so
     rmax = sum([len(r) for r in ranges])
-    rmax = 5  # uncomment for multiprocessing debugging.
+    #rmax = 5  # uncomment for multiprocessing debugging.
     if rmax > 6:
         my_pool = multiprocessing.Pool()
         results = [my_pool.apply_async(_multi_calc, (p, rna_len, ITSs, measure,
@@ -378,13 +377,6 @@ def _multi_calc(param_combo, rna_len, ITSs, measure, msat_normalization):
             continue
 
         all_hits.append((values, parc, rp, pp))
-
-        if pp < 1.5e-6:
-            logger_handle = open('multi_calc_PY_avgktb.txt', 'wb')
-            logger_handle.write('PY\tAvgKtb(nanmean)')
-            for py, avgktb in zip(y, values):
-                logger_handle.write('\t'.join([str(py), str(avgktb)]) + '\n')
-            logger_handle.close()
 
     return all_hits
 

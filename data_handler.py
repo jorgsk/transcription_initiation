@@ -177,6 +177,9 @@ def ReadData(dataset):
                  '23_first':  'quant23_raw.csv'}
 
         ITSs = read_raw(path, files, dset='dg400')
+        # set msat on dg400 library to 21 just to be sure (not measured)
+        for its in ITSs.values():
+            its.msat = 21
 
     else:
         print('Provide valid dataset input to ReadData!')

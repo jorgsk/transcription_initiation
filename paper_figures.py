@@ -112,7 +112,8 @@ class Calculator(object):
     """
 
     def __init__(self, dg100, dg400, calcName, testing, dset, coeffs, topNuc,
-            msat_normalization, average_for_plots_and_output):
+            msat_normalization, average_for_plots_and_output,
+            msat_param_estimate):
 
         self.coeffs = coeffs
         self.topNuc = topNuc
@@ -133,6 +134,7 @@ class Calculator(object):
         self.results = None
         self.msat_normalization = msat_normalization
         self.type_of_average = average_for_plots_and_output
+        self.msat_param_estimate = msat_param_estimate
 
     def calc(self):
         """
@@ -385,6 +387,7 @@ class Calculator(object):
         #rnaMax = 20
         rnaMax = 15
         rnaRange = range(rnaMin, rnaMax+1)
+        rnaRange = range(rnaMin, rnaMax+1)
         if self.testing:
             #rnaRange = [rnaMin, 5, 10, 15, rnaMax]
             #rnaRange = [rnaMin, 3, 4, 5, 7, 10, 12, 15, 17, rnaMax]
@@ -408,8 +411,8 @@ class Calculator(object):
             # Print some output and return one value for c1, c2, and c3
             c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
                     onlySignCoeff, analysis, self.name, grid_size,
-                    self.msat_normalization, aInfo=aInfo, combo=combo,
-                    type_of_average=self.type_of_average)
+                    self.msat_normalization, self.type_of_average,
+                    self.msat_param_estimate, aInfo=aInfo, combo=combo)
 
             # add the constants to the ITS objects and calculate Keq
             for rna in self.ITSs:
@@ -472,7 +475,7 @@ class Calculator(object):
             c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
                     onlySignCoeff, analysis, self.name, grid_size,
                     self.msat_normalization, self.type_of_average,
-                    aInfo=aInfo, combo=combo)
+                    self.msat_param_estimate, aInfo=aInfo, combo=combo)
 
             # add the constants to the ITS objects and calculate Keq
             for rna in self.ITSs:
@@ -520,12 +523,6 @@ class Calculator(object):
 
             corr.append(co)
             pvals.append(pv)
-            logger_handle = open('pap_fig_PY_avgktb.txt', 'wb')
-            logger_handle.write('PY\tAvgKtb(nanmean)')
-            for py, avgktb in zip(PY, measure_values):
-                logger_handle.write('\t'.join([str(py), str(avgktb)]) + '\n')
-            logger_handle.close()
-            debug()
 
         return corr, pvals
 
@@ -544,19 +541,19 @@ class Calculator(object):
         c1, c2, c3 = self.coeffs
         # add the constants to the ITS objects and calculate Keq
         for its in self.dg400:
-            its.calc_keq(c1, c2, c3)
+            its.calc_keq(c1, c2, c3, self.msat_normalization, 15)
 
         # get PY and PY standard deviation
         PY = [i.PY for i in self.dg400]
         PYstd = [i.PY_std for i in self.dg400]
 
         # Get the SE15
-        SE15 = [sum(i.keq[:14])/14 for i in self.dg400]
+        values = [sum(i.keq[:14])/14 for i in self.dg400]
 
         # write all of this to an output file
         write_py_SE15(self.dg400)
 
-        return self.dg400, SE15, PY, PYstd
+        return self.dg400, values, PY, PYstd
 
     def PYvsAvgKbt(self):
         """
@@ -569,14 +566,28 @@ class Calculator(object):
         # some ITSs have msat at 20, so go up to that
 
         # start with 2-nt RNA, from which the first translocation step is taken
-        rnaMin = 20
+        # XXX For MSAT-calculations, use rnaMin=rnaMax=20. This gives you the
+        # coeffs you're after. Then, use those coeffs with rnaMin=2,rnaMax=20
+        # to create the ladder plot.
+
+        rnaMin = 2
         rnaMax = 20
         #rnaMax = 15
         rnaRange = range(rnaMin, rnaMax+1)
 
-        # XXX TODO investigate that this is actually the index with highest
-        # correlation
-        scatter_plot_nt_pos = 20
+        # XXX Be very aware of the distinction between rnaRange and
+        # rnaRangeSmallest which is used for msat parameter estimation.
+        if self.msat_param_estimate:
+            rnaRangeSmallestPossible = range(20, 21)
+        else:
+            rnaRangeSmallestPossible = rnaRange
+
+        # With MSAT on, 20 is last scatter plot
+        if self.msat_normalization:
+            scatter_plot_nt_pos = 20  # msat
+        else:
+            scatter_plot_nt_pos = 13  # max without msat
+
 
         if scatter_plot_nt_pos not in rnaRange:
             return 'XXX: scatter plot could not be made'
@@ -588,14 +599,16 @@ class Calculator(object):
             analysis = 'Normal'
             onlySignCoeff=0.05
             variable_combo = {'DNA':True, 'RNA':True, '3N':True}
-            result, grid_size, aInfo = optimizeParam(self.ITSs, rnaRange,
+            result, grid_size, aInfo = optimizeParam(self.ITSs,
+                    rnaRangeSmallestPossible,
                     self.testing, analysis, variable_combo, 'AvgKbt',
-                    msat_normalization=self.msat_normalization)
+                    self.msat_normalization, self.msat_param_estimate)
 
-            c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
+            c1, c2, c3 = get_print_parameterValue_output(result,
+                    rnaRangeSmallestPossible,
                     onlySignCoeff, analysis, self.name,
                     grid_size, self.msat_normalization, self.type_of_average,
-                    aInfo=aInfo)
+                    self.msat_param_estimate, aInfo=aInfo)
             
             self.coeffs = c1, c2, c3
 
@@ -605,6 +618,8 @@ class Calculator(object):
         for its in self.ITSs:
             its.calc_keq(c1, c2, c3, self.msat_normalization, rnaMax)
 
+        # Ensure to use full rnaRange here, even if a smaller RNA range has
+        # been used to obtain the weight coefficients themselves 
         corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
         indx = rnaRange
 
@@ -665,10 +680,12 @@ class Calculator(object):
             if analysis == 'Normal':
                 # Print some output and return one value for c1, c2, and c3
                 onlySignCoeff = 0.05
+
                 c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
-                                onlySignCoeff, analysis, self.name, grid_size,
-                                self.msat_normalization, self.type_of_average,
-                                aInfo=aInfo)
+                        onlySignCoeff, analysis, self.name, grid_size,
+                        self.msat_normalization, self.type_of_average,
+                        self.type_of_average, self.msat_param_estimate,
+                        aInfo=aInfo)
 
                 # add the constants to the ITS objects and calculate Keq with
                 # the new c1, c2, and c3 mean values
@@ -687,13 +704,11 @@ class Calculator(object):
                 #pvals = [r[1].pvals_mean for r in sorted(result.items())]
                 pvals = [r[1].pvals_median for r in sorted(result.items())]
                 # the median is a much better measure for pvals!!! (at least
-                # for cross corr)
-
                 onlySignCoeff = 0.05  # doesn't make sense really
                 c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
                                 onlySignCoeff, analysis, self.name, grid_size,
                                 self.msat_normalization, self.type_of_average,
-                                aInfo=aInfo)
+                                self.msat_param_estimate, aInfo=aInfo)
 
             analysis2stats[analysis] = [indx, corr, corr_stds, pvals]
 
@@ -912,7 +927,7 @@ class Plotter(object):
         # labels
         if xlab:
             ax.set_xlabel('ITS position', size=self.labSize)
-        ax.set_ylabel('Correlation: K$_{bt}$ and AP', size=self.labSize)
+        ax.set_ylabel('Correlation: $\overline{K}_{bt,\mathrm{MSAT}}$ and AP', size=self.labSize)
 
         # ticks
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -964,7 +979,7 @@ class Plotter(object):
 
         # labels
         if xlab:
-            ax.set_xlabel('$\overline{K}_{bt,\text{MSAT}}$', size=self.labSize)
+            ax.set_xlabel('$\overline{K}_{bt,\mathrm{MSAT}}$', size=self.labSize)
 
         ax.set_ylabel('Average abortive probability ($\%$)', size=self.labSize)
 
@@ -1092,12 +1107,12 @@ class Plotter(object):
             #ax.set_xticklabels(xticklabels)
             ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='even'))
             ax.set_xlim(indMin-1, indxMax)
-            ax.set_xlabel("RNA length, $n$", size=self.labSize)
+            ax.set_xlabel("$i$", size=self.labSize)
 
             #  setting the tick font sizes
             ax.tick_params(labelsize=self.tickLabelSize)
 
-            ax.set_ylabel("Correlation: PY and average $K_{bt}$", size=self.labSize)
+            ax.set_ylabel("Correlation: PY and average $\overline{K}_{bt,i}$", size=self.labSize)
 
             ax.set_yticks(np.arange(ymin, ymax, 0.1))
             ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
@@ -1200,7 +1215,7 @@ class Plotter(object):
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
                 width=self.tickWidth)
 
-        ax.set_ylabel("Correlation: PY and $K_{bt}$", size=self.labSize)
+        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,i}$", size=self.labSize)
 
         ax.set_yticks(np.arange(ymin, ymax, 0.1))
         ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
@@ -1226,7 +1241,7 @@ class Plotter(object):
         ax.errorbar(SE15, PY, yerr=PYstd, fmt=None, zorder=1, elinewidth=0.3)
 
         ########### Set figure and axis properties ############
-        ax.set_xlabel('$\overline{K}_{bt,\text{MSAT}}$', size=self.labSize)
+        ax.set_xlabel('$\overline{K}_{bt,\mathrm{MSAT}}$', size=self.labSize)
 
         ax.set_ylabel('Productive yield ($\%$)', size=self.labSize)
 
@@ -1398,7 +1413,7 @@ class Plotter(object):
         # XXX get the errorbars to be gray too!!!!!!!!
 
         ax.set_ylabel("Productive yield ($\%$)", size=self.labSize)
-        ax.set_xlabel("$\overline{K}_{bt,\text{MSAT}$", size=self.labSize)
+        ax.set_xlabel("$\overline{K}_{bt,\mathrm{MSAT}}$", size=self.labSize)
 
         ymin = -0.1
 
@@ -1442,6 +1457,7 @@ class Plotter(object):
         # float -> int
         xlim = (int(xlim[0]), int(xlim[1]+1))
         rna_lenghts = range(*xlim)
+
         instantAx.bar(rna_lenghts, instCorrZerod, width=0.8, color='g',
                 alpha=0.4, align='center')
 
@@ -1481,13 +1497,13 @@ class Plotter(object):
         instantAx.set_yticklabels(yticklabels_skip)
         instantAx.set_ylim(0, instantAx.get_ylim()[1])
 
-        its_max = int(instantAx.get_xlim()[-1])
+        rna_max = xlim[-1]
         # override
         #its_max = 20
-        instantAx.set_xticks(range(2, its_max + 1))
+        instantAx.set_xticks(range(2, rna_max + 1))
 
         xtickLabels = []
-        for i in range(2, its_max+1):
+        for i in range(2, rna_max+1):
             if i%5 == 0:
                 xtickLabels.append(str(i))
             else:
@@ -1495,7 +1511,7 @@ class Plotter(object):
 
         instantAx.set_xticklabels(xtickLabels)
 
-        instantAx.set_xlim(2-0.3, its_max + 0.3)
+        instantAx.set_xlim(2-0.3, rna_max + 0.3)
 
         return
 
@@ -1571,7 +1587,7 @@ class Plotter(object):
     def PYvsAvgKbtladder(self, indx, corr, pvals, PYs, SEbest, topnuc, inset=False,
             pval_pos='high'):
         """
-        The classic ladder plot, including inset scatterplot
+        The classic ladder plot, optinally including inset scatterplot
         """
 
         ax = self.getNextAxes()
@@ -1649,7 +1665,7 @@ class Plotter(object):
         ylim0 = -0.05
         ax.set_ylim(ylim0, 1.001)
 
-        ax.set_ylabel("Correlation: PY and average $K_{bt}$", size=self.labSize,
+        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,i}$", size=self.labSize,
                      color='blue')
 
         # set tick label size
@@ -1669,7 +1685,7 @@ class Plotter(object):
         ax.set_xticklabels(xtickLabels)
         #ax.set_xticklabels([])
         ax.set_xlim(3, its_max)
-        ax.set_xlabel("Translocation to length $i$ RNA", size=self.labSize)
+        ax.set_xlabel("$i$", size=self.labSize)
 
         # bbox_to_anchor= x, y, width, height
         if pval_pos == 'high':
@@ -1750,7 +1766,7 @@ class Plotter(object):
         ax.set_yticks(yticks)
         ax.set_yticklabels(yticklabels_skip)
         ax.set_ylim(ymin, 1.1)
-        ax.set_ylabel("Correlation: PY and average $K_{bt}$", size=self.labSize)
+        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,i}$", size=self.labSize)
 
         # xticks
         xticklabels = [str(integer) for integer in range(indxMin, indxMax+1)]
@@ -1759,7 +1775,7 @@ class Plotter(object):
         ax.set_xticks(range(indxMin, indxMax))
         ax.set_xticklabels(xticklabels_skip)
         ax.set_xlim(indxMin-1, indxMax)
-        ax.set_xlabel("RNA length, $n$", size=self.labSize)
+        ax.set_xlabel("$i$", size=self.labSize)
 
         ax.legend(loc='upper left', prop={'size':6})
 
@@ -1919,7 +1935,7 @@ def write_py_SE15(dg400):
 
 
 def optimizeParam(ITSs, rna_range, testing, analysis,
-        variableCombo, measure, msat_normalization):
+        variableCombo, measure, msat_normalization, msat_param_estimate):
     """
     Optimize c1, c2, c3 to obtain max correlation with PY/FL/TA/TR
 
@@ -1934,6 +1950,11 @@ def optimizeParam(ITSs, rna_range, testing, analysis,
     Default is to calculate the average Kbt up to msat, but the entire sequence
     can be taken into account of msat_normalization == false
     """
+
+    # When using msat_param_estimate, only do parameter estimation for one
+    # nucleotide.
+    if msat_param_estimate:
+        rna_range = range(20, 21)
 
     # grid size parameter values search space
     grid_size = 20
@@ -1995,7 +2016,7 @@ def optimizeParam(ITSs, rna_range, testing, analysis,
 
 def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
         analysis, callingFunctionName, grid_size, msat_normalization,
-        type_of_average, aInfo=False, combo=''):
+        type_of_average, msat_param_estimate, aInfo=False, combo=''):
     """
     Analyze the weight coefficients to select three values from a set of
     contestants. Current method is the mean of the statistically significant
@@ -2057,14 +2078,28 @@ def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
         # for cross-corr, params_best is not the best of the params! Neither is
         # it what you want to output !!!
 
+        msat_estimate = 0
+
+        # When using msat parameter estimation, use only the parameters from
+        # full rna length, which is the maximum MSAT.
+        # this means that there is no need for parameter estimation for
+        # 3,4,...20-nt values. Just estimate for 20 and then use that value to
+        # calculate all the other results. Will that require a lot of
+        # refactoring?
+
+        if msat_param_estimate:
+            if analysis == 'Normal':
+                msat_estimate = results[20].params_best[param]
+
+            elif analysis in ['Cross Correlation', 'Random'] :
+                msat_estimate = results[20].params_average[param]
+
         # for random you again want the median value ... this is
         if analysis == 'Normal':
             parvals = [results[pos].params_best[param] for pos in rna_range]
-        elif analysis == 'Cross Correlation':
-            parvals = [results[pos].params_median[param] for pos in rna_range]
-        elif analysis == 'Random':
-            # perhaps the mean is best since it's random?
-            parvals = [results[pos].params_median[param] for pos in rna_range]
+
+        elif analysis in ['Cross Correlation', 'Random']:
+            parvals = [results[pos].params_average[param] for pos in rna_range]
 
         if analysis == 'Normal':
             pvalues = minpvalues  # min of 20 best
@@ -2080,8 +2115,7 @@ def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
         # correlation for some parameter combinations.
         medianAllPvalues = nanmedian(pvalues)
         ParameterValuesFiltered = []
-        # XXX BUG BUG BUG this assumes ix starts on +2; you have to let this go
-        # through the RNA range: your index should be rna_length.
+
         indx = 0
         for rna_length, pvalue in zip(rna_range, pvalues):
             # in this case, there are significant values, so we choose only
@@ -2119,8 +2153,9 @@ def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
                 madStd = float(madStd)
 
         outpString = '{0}: {1:.2f} (mean) +/- {2:.2f} or {0}: {3:.2f}'\
-                        ' (median) +/- {4:.2f}'.format(param, mean, normal_std,
-                                median, madStd)
+                ' (median) +/- {4:.2f}; msat(20): {5:.2f} '\
+                        .format(param, mean, normal_std, median, madStd,
+                                msat_estimate)
         print(outpString)
         logFileHandle.write(analysis + '\n')
         logFileHandle.write(outpString + '\n')
@@ -3184,7 +3219,7 @@ def abortive_bar(dg100, dg400):
 
 def doFigureCalculations(fig2calc, pickDir, figures, coeffs, calculateAgain,
                         testing, dg100, dg400, msat_normalization,
-                        average_for_plots_and_output):
+                        average_for_plots_and_output, msat_param_estimate):
     """
     Perform all calculations necessary for plotting. Each figure can have
     several 'plot' functions.
@@ -3206,7 +3241,8 @@ def doFigureCalculations(fig2calc, pickDir, figures, coeffs, calculateAgain,
 
             calcr = Calculator(dg100, dg400, name, testing, dset, coeff,
                                 topNuc, msat_normalization,
-                                average_for_plots_and_output)
+                                average_for_plots_and_output,
+                                msat_param_estimate)
             results = calcr.calc()
 
             # pickle the results for re-usage
@@ -3307,42 +3343,35 @@ def main():
     calculateAgain = True
 
     # XXX warning if coeffs are set they are used instead of recalculating!
+    # XXX afaik, these are only used for Figure2 (and 400-library). It would
+    # not make sense to use them on the cross-corr and delineate plots :S
     #coeffs = [0.12, 0.14, 0.66]  # median of 100 runs
     #coeffs = [0.14, 0.14, 0.69]  # median of 100 runs
     #coeffs = [0.0, 0.0, 0.95]  # median of 100 runs
-    #coeffs = [0.0, 0.0, 0.58]  # median of 100 runs
+    #coeffs = [0.26, 0.0, 0.58]  # median of 100 runs
     coeffs = False  # False means coeffs will be calculated
 
     # when testing, run fewer iterations when estimating parameters
     testing = True
     #testing = False
 
-    # TODO: find why maximum correlation reported (0.67) is not the same as
-    # reported later (0.617)
-    # When only using one 
-
     # Specify if the parameter values should be medians or means
     average_for_plots_and_output = 'mean'
     #average_for_plots_and_output = 'median'
 
-    # present results as averages instead of sum
-    # XXX This should just be a quick show-and-tell
-    # To do things properly you'll have to actually perform the calculations on
-    # averages (mean or even median: opens up for a generic function of
-    # equilibrium constants
-    # Update end of November: when writing, it becomes clear that you have to
-    # use the max size and average for each ITS. You'll need to show both. Then
-    # you'll need. What is the best solution: a new figure, like Figure2_M?
-    # Well, you are not going back to the non-means, so just convert them
-    # to averages immediately, and add an option for normalization at msat.
     msat_normalization = True
     #msat_normalization = False
 
+    # With this option set, only use optimal coeffs for rna_len=20; this
+    # assumes MSAT has been enabled.
+    msat_param_estimate = True
+    #msat_param_estimate = False
+
     figures = [
-            'Figure2',  # AvgKbt vs PY (in Paper)
+            #'Figure2',  # AvgKbt vs PY (in Paper)
             #'Figure32',  # DG400 scatter plot (in Paper)
             #'FigureX2',  # 1x2 Keq vs AP (in Paper)
-            #'CrossRandomDelineateSuppl',  # (in Paper)
+            'CrossRandomDelineateSuppl',  # (in Paper)
             #'megaFig',  # One big figure for the first 4 plots
             #'Figure2_DG400',  # SE vs PY for DG400
             #'Figure3',  # Delineate + DG400
@@ -3393,7 +3422,8 @@ def main():
     calcResults = doFigureCalculations(fig2calc, pickDir, figures, coeffs,
                                        calculateAgain, testing, dg100, dg400,
                                        msat_normalization,
-                                       average_for_plots_and_output)
+                                       average_for_plots_and_output,
+                                       msat_param_estimate)
 
     # Do plotting
     for fig in figures:
@@ -3440,6 +3470,9 @@ def main():
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName='values_15 vs PY',
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
                     tickLength=2, tickWidth=0.5)
+
+            # Challenge: ladder plot requires full RNA range.
+            # Solution: use full RNA range, but do not re-calculate coeffs. 
 
             # Set position for scatter plot
             ax_scatr = plotr.PYvsAvgKbtscatter(PYs, PYstd, values_choice, choice)
