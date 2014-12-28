@@ -298,7 +298,7 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     #make a pool of workers for multicore action
     # this is only efficient if you have a range longer than 10 or so
     rmax = sum([len(r) for r in ranges])
-    #rmax = 5  # uncomment for multiprocessing debugging.
+    rmax = 5  # uncomment for multiprocessing debugging.
     if rmax > 6:
         my_pool = multiprocessing.Pool()
         results = [my_pool.apply_async(_multi_calc, (p, rna_len, ITSs, measure,
@@ -346,7 +346,7 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     return result_obj
 
 
-def _multi_calc(params, rna_len, ITSs, measure, msat_normalization):
+def _multi_calc(param_combo, rna_len, ITSs, measure, msat_normalization):
     """
     Evaluate the model for all parameter combinations. Return the final values,
     the parameters, and the correlation coefficients.
@@ -357,8 +357,8 @@ def _multi_calc(params, rna_len, ITSs, measure, msat_normalization):
     all_hits = []
     y = [its.PY for its in ITSs]
 
-    for par in params:
-        all_keqs = keq_calc(par, rna_len, ITSs, msat_normalization)
+    for parc in param_combo:
+        all_keqs = keq_calc(parc, rna_len, ITSs, msat_normalization)
 
         # correlation
         if measure == 'SE':
@@ -377,7 +377,14 @@ def _multi_calc(params, rna_len, ITSs, measure, msat_normalization):
         if np.isnan(rp):
             continue
 
-        all_hits.append((values, par, rp, pp))
+        all_hits.append((values, parc, rp, pp))
+
+        if pp < 1.5e-6:
+            logger_handle = open('multi_calc_PY_avgktb.txt', 'wb')
+            logger_handle.write('PY\tAvgKtb(nanmean)')
+            for py, avgktb in zip(y, values):
+                logger_handle.write('\t'.join([str(py), str(avgktb)]) + '\n')
+            logger_handle.close()
 
     return all_hits
 
@@ -398,9 +405,7 @@ def keq_calc(start_values, rna_len, ITSs, msat_normalization):
     Initial transcription starts with a 2-nt RNA-dna hybrid. Then it performs
     the first translocation step.
     """
-    # get the tuning parameters and the rna-dna and k1, kminus1 values
-    # RT is the gas constant * temperature
-    RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
+
     all_keqs = []
 
     for its in ITSs:
@@ -411,27 +416,10 @@ def keq_calc(start_values, rna_len, ITSs, msat_normalization):
         # first -1 because of python indexing. additional -1 because only (1,2)
         # information is needed for 3. ATG -> [(1,2), (2,3)]. Only DNA-DNA needs
         # both.
+        (c1, c2, c3) = start_values
+        its.calc_keq(c1, c2, c3, msat_normalization, rna_len)
 
-        # energy arrays have as index=0 energies for the first two nucleotides
-        dna_dna = its.dna_dna_di[:rna_len]
-        rna_dna = its.rna_dna_di[:rna_len-1]
-        dg3d = its.dinucleotide_delta_g_b[:rna_len-1]
-
-        # the c1, c2, c3 values
-        (a, b, c) = start_values
-
-        # equilibrium constants at each position
-        keqs = keq_i(RT, rna_len, dg3d, dna_dna, rna_dna, a, b, c)
-
-        if msat_normalization:
-            # keqs[0] is for a 2-mer RNA
-            # keqs[1] is for a 3-mer RNA
-            # ...
-            # keqs[n-2] is for an (n)-mer RNA
-            # so if msat = 11, there can be no equilibrium constant after index 9
-            keqs[its.msat-1:] = np.nan
-
-        all_keqs.append(keqs)
+        all_keqs.append(its.keq)
 
     return np.asarray(all_keqs)
 

@@ -319,24 +319,30 @@ class ITS(object):
         self.totAbortMean = np.mean(self.totAbort.values(), axis=0)
         self.totRNAMean = np.mean(self.totRNA.values(), axis=0)
 
-    def calc_keq(self, c1, c2, c3):
+    def calc_keq(self, c1, c2, c3, msat_normalization, rna_len):
         """
         Calculate Keq_i for each i in [2,20]
-
         """
 
         # hard-coded constants hello Fates!
         RT = 1.9858775*(37 + 273.15)/1000  # divide by 1000 to get kcalories
 
-        its_len = 21
-        dna_dna = self.dna_dna_di[:its_len]
-        rna_dna = self.rna_dna_di[:its_len-1]
-        dg3d = self.dinucleotide_delta_g_b[:its_len-1]
+        dna_dna = self.dna_dna_di[:rna_len]
+        rna_dna = self.rna_dna_di[:rna_len-1]
+        dg3d = self.dinucleotide_delta_g_b[:rna_len-1]
 
         # equilibrium constants at each position
         import optim
 
-        self.keq = optim.keq_i(RT, its_len, dg3d, dna_dna, rna_dna, c1, c2, c3)
+        self.keq = optim.keq_i(RT, rna_len, dg3d, dna_dna, rna_dna, c1, c2, c3)
+
+        if msat_normalization:
+            # keqs[0] is for a 2-mer RNA
+            # keqs[1] is for a 3-mer RNA
+            # ...
+            # keqs[n-2] is for an (n)-mer RNA
+            # so if msat = 11, there can be no equilibrium constant after index 9
+            self.keq[self.msat-1:] = np.nan
 
     def calc_AbortiveYield(self):
         """
