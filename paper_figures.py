@@ -148,21 +148,33 @@ class Calculator(object):
         return self.results
 
     def AP_vs_Keq(self):
+        """
+        For the new msat method there is something weird happening after +15
+        for the dg100 library. Correlation is strongly negative for 16-19, and
+        seemingly very large for 20. This does not happen for dg400.
+
+        Could this be one reason why random sequences are also biased after +15
+        or so?
+        """
 
         # you're modifying it so make a copy
         dset = copy.deepcopy(self.dg100 + self.dg400)
         #dset = copy.deepcopy(self.dg100)
         #dset = copy.deepcopy(self.dg400)
 
+        if not self.coeffs:
+            print('Coeffs must be set for this figure!')
+            1/0
+
         c1, c2, c3 = self.coeffs
         for its in dset:
-            its.calc_keq(c1, c2, c3)
+            its.calc_keq(c1, c2, c3, self.msat_normalization, rna_len=20)
 
         movSize = 0  # effectively NOT a moving winding, but nt-2-nt comparison
 
         # Ignore 2, since it's just AT and very little variation occurs.
         #xmers = range(2, 21)
-        xmers = range(2, 16)
+        xmers = range(3, 16)
         # the bar height will be the correlation with the above three values for
         # each moving average center position
 
@@ -326,29 +338,34 @@ class Calculator(object):
 
         return outp
 
-    def averageAP(self):
+    def averageAPandKbt(self):
         """
-        Return dict {dg100/400: PY, average(Keq), average(AP), average(APnorm)}
-        Average keq up to 15
+        Return dict {dg100/400: PY, average(Keq), average(AP)}
+
+        Return averages up to 15 only, ignoring msat above that, in order to
+        compare DG100 with DG400.
         """
         outp = {
-                'dg100': {'PY':[], 'keq': [], 'averageAP': [], 'averageAPnorm': []},
-                'dg400': {'PY':[], 'keq': [], 'averageAP': [], 'averageAPnorm': []}
+                'dg100': {'avgkbt': [], 'averageAP': []},
+                'dg400': {'avgkbt': [], 'averageAP': []}
                 }
 
         c1, c2, c3 = self.coeffs
 
         for dset, name in [(self.dg100, 'dg100'), (self.dg400, 'dg400')]:
             for its in dset:
-                its.calc_keq(c1, c2, c3)
-                outp[name]['keq'].append(sum(its.keq[:15-1])/len(its.keq[:15-1]))
-                outp[name]['PY'].append(its.PY)
-                # not to 20, but to 15?
-                ap15 = its.abortiveProb[:15]
-                apS = sum([v for v in ap15 if v > 0])
-                outp[name]['averageAP'].append(apS/len(ap15))
-                apSnorm = sum([v for v in its.abortiveProb/apS if v > 0])
-                outp[name]['averageAPnorm'].append(apSnorm)
+
+                #its.calc_keq(c1, c2, c3, self.msat_normalization, rna_len=20)
+                #outp[name]['avgkbt'].append(np.nanmean(its.keq))
+
+                #apAboveZero = [a for a in its.abortiveProb[:its.msat] if a > 0]
+                #outp[name]['averageAP'].append(np.nanmean(apAboveZero))
+
+                its.calc_keq(c1, c2, c3, self.msat_normalization, rna_len=15)
+                outp[name]['avgkbt'].append(np.nanmean(its.keq[:15]))
+
+                apAboveZero = [a for a in its.abortiveProb[:15] if a > 0]
+                outp[name]['averageAP'].append(np.nanmean(apAboveZero))
 
         return outp
 
@@ -359,7 +376,6 @@ class Calculator(object):
         import itertools
 
         freeEns = ['DNA', 'RNA', '3N']
-        debug()
 
         # get all unique combinations of the free energies
         # skip the single-combinations (just 'RNA' f.ex)
@@ -385,17 +401,17 @@ class Calculator(object):
         #varCombinations = [v for v in varCombinations]
         # set the range for which you wish to calculate correlation
         rnaMin = 2
-        #rnaMax = 20
-        rnaMax = 15
+        rnaMax = 20
         rnaRange = range(rnaMin, rnaMax+1)
-        rnaRange = range(rnaMin, rnaMax+1)
-        if self.testing:
-            #rnaRange = [rnaMin, 5, 10, 15, rnaMax]
-            #rnaRange = [rnaMin, 3, 4, 5, 7, 10, 12, 15, 17, rnaMax]
-            rnaRange = range(rnaMin, rnaMax+1)
+
+        # Be awareof the msat_param estimate approach vs old
+        # optimize-for-each-sublength-approach
+        if self.msat_param_estimate:
+            rnaRangeSmallestPossible = range(20, 21)
+        else:
+            rnaRangeSmallestPossible = rnaRange
 
         analysis = 'Normal'
-
         delinResults = {}
 
         for combo in varCombinations:
@@ -404,26 +420,27 @@ class Calculator(object):
 
             comboKey = '_'.join([str(combo[v]) for v in freeEns])
 
-            result, grid_size, aInfo = optimizeParam(self.ITSs, rnaRange,
-                    self.testing, analysis, variableCombo=combo,
-                    measure='AvgKbt', msat_normalization=self.msat_normalization)
+            result, grid_size, aInfo = optimizeParam(self.ITSs,
+                    rnaRangeSmallestPossible, self.testing, analysis,
+                    combo,'AvgKbt', self.msat_normalization,
+                    self.msat_param_estimate)
 
             onlySignCoeff=0.05
             # Print some output and return one value for c1, c2, and c3
-            c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
-                    onlySignCoeff, analysis, self.name, grid_size,
-                    self.msat_normalization, self.type_of_average,
-                    self.msat_param_estimate, aInfo=aInfo, combo=combo)
+            c1, c2, c3 = get_print_parameterValue_output(result,
+                    rnaRangeSmallestPossible, onlySignCoeff, analysis,
+                    self.name, grid_size, self.msat_normalization,
+                    self.type_of_average, self.msat_param_estimate,
+                    aInfo=aInfo, combo=combo)
 
             # add the constants to the ITS objects and calculate Keq
             for rna in self.ITSs:
-                rna.calc_keq(c1, c2, c3)
+                rna.calc_keq(c1, c2, c3, self.msat_param_estimate, rnaMax)
 
             # calculate the correlation with PY
             corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
 
             delinResults[comboKey] = [rnaRange, corr, pvals]
-            print('\n-----------')
 
         return delinResults
 
@@ -431,7 +448,6 @@ class Calculator(object):
         """
         See the individual effect of DG3N, DGRNADNA, DGDNADNA
         """
-        debug()
 
         delineateResultsOrder = ['DNA', 'RNA', '3N']
 
@@ -442,16 +458,17 @@ class Calculator(object):
 
         # set the range for which you wish to calculate correlation
         rnaMin = 2
-        rnaMax = 15
-        #rnaMax = 20
+        rnaMax = 20
         rnaRange = range(rnaMin, rnaMax+1)
-        if self.testing:
-            #rnaRange = [rnaMin, 5, 10, 15, rnaMax]
-            #rnaRange = [rnaMin, 3, 4, 5, 7, 10, 12, 15, 17, rnaMax]
-            rnaRange = range(rnaMin, rnaMax+1)
+
+        # Be awareof the msat_param estimate approach vs old
+        # optimize-for-each-sublength-approach
+        if self.msat_param_estimate:
+            rnaRangeSmallestPossible = range(20, 21)
+        else:
+            rnaRangeSmallestPossible = rnaRange
 
         analysis = 'Normal'
-
         delinResults = {}
 
         for combo in varCombinations:
@@ -459,9 +476,10 @@ class Calculator(object):
 
             comboKey = '_'.join([str(combo[v]) for v in delineateResultsOrder])
 
-            result, grid_size, aInfo = optimizeParam(self.ITSs, rnaRange, self.testing,
-                    analysis=analysis, variableCombo=combo, measure='AvgKbt',
-                    msat_normalization=self.msat_normalization)
+            result, grid_size, aInfo = optimizeParam(self.ITSs,
+                    rnaRangeSmallestPossible, self.testing,
+                    analysis, combo, 'AvgKbt', self.msat_normalization,
+                    self.msat_param_estimate)
 
             # For this type of analysis you do NOT want to do any screening;
             # otherwise you won't be getting any plots. It's for the reporting
@@ -472,22 +490,19 @@ class Calculator(object):
             # you separate these two? Avoid problems (try not to make new
             # problems).
             onlySignCoeff=0.05
-            # Print some output and return one value for c1, c2, and c3
-            print(combo)
-            c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
+
+            c1, c2, c3 = get_print_parameterValue_output(result,
+                    rnaRangeSmallestPossible,
                     onlySignCoeff, analysis, self.name, grid_size,
                     self.msat_normalization, self.type_of_average,
                     self.msat_param_estimate, aInfo=aInfo, combo=combo)
 
             # add the constants to the ITS objects and calculate Keq
             for rna in self.ITSs:
-                rna.calc_keq(c1, c2, c3)
+                rna.calc_keq(c1, c2, c3, self.msat_normalization, rnaMax)
 
             # calculate the correlation with PY
             corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
-            print('Correlation and p-values:')
-            print(zip(corr, pvals))
-            print('\n-----------')
 
             delinResults[comboKey] = [rnaRange, corr, pvals]
 
@@ -674,7 +689,6 @@ class Calculator(object):
                     variable_combo, 'AvgKbt', self.msat_normalization,
                     self.msat_param_estimate)
 
-            # CrossCorr and Normal.
             corr_std = [r[1].corr_std for r in sorted(result.items())]
 
             # if normal, pick mean (no-msat_param_estimate) or optimal for
@@ -686,11 +700,10 @@ class Calculator(object):
                         rnaRangeSmallestPossible,
                         onlySignCoeff, analysis, self.name, grid_size,
                         self.msat_normalization, self.type_of_average,
-                        self.type_of_average, self.msat_param_estimate,
-                        aInfo=aInfo)
+                        self.msat_param_estimate, aInfo=aInfo)
 
                 for its in self.ITSs:
-                    its.calc_keq(c1, c2, c3)
+                    its.calc_keq(c1, c2, c3, self.msat_normalization, rnaMax)
 
                 corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
 
@@ -715,10 +728,7 @@ class Calculator(object):
                                 self.msat_normalization, self.type_of_average,
                                 self.msat_param_estimate, aInfo=aInfo)
 
-            # corr_stds corresponds to itsRange
-            indx = rnaRange
-
-            analysis2stats[analysis] = [indx, corr, corr_std, pvals]
+            analysis2stats[analysis] = [rnaRange, corr, corr_std, pvals]
 
         return analysis2stats
 
@@ -942,9 +952,12 @@ class Plotter(object):
                 width=self.tickWidth)
 
         # X: show only positions with significant positions or 5, 10, 15, 20
+        # XXX The start here must be in sync with the range for which
+        # calculations have been done!
         xIndx = []
-        for inx, colr in enumerate(colors, start=2):
-            if (inx%2 == 0):
+        for inx, colr in enumerate(colors, start=3):
+            #if (inx%2 == 0):
+            if (inx%2 != 0):
                 xIndx.append(str(inx))
             else:
                 xIndx.append('')
@@ -954,30 +967,37 @@ class Plotter(object):
         else:
             ax.set_xticklabels([])
 
+        # XXX uncommented while testing
         # Y: show every other tick with a label
-        yIndx = [g for g in np.arange(-0.2, 0.8, 0.2)]
-        ax.set_yticks(yIndx)
-        ax.set_ylim(-0.12, 0.63)
+        #yIndx = [g for g in np.arange(-0.2, 0.8, 0.2)]
+        #ax.set_yticks(yIndx)
+        #ax.set_ylim(-0.12, 0.63)
+        #ax.set_ylim(-0.12, 0.63)
 
         return ax
 
-    def averageAP_SEXX(self, results, norm=True, xlab=True, xticks=True):
+    def averageAP_SEXX(self, results, norm=False, xlab=True, xticks=True):
+        """
+        Each library has a high correlation coefficient alone -- but not when
+        combined??? Something must be wrong in the ordering, or some systemic
+        bias in avgkbt?
+        """
 
         ax = self.getNextAxes()
 
-        keq = results['dg100']['keq'] + results['dg400']['keq']
-        #keq = results['dg400']['keq']
-        if norm:
-            averageAP = results['dg100']['averageAPnorm'] + results['dg400']['averageAPnorm']
-            #averageAP = results['dg400']['averageAPnorm']
-        else:
-            averageAP = results['dg100']['averageAP'] + results['dg400']['averageAP']
-            #averageAP = results['dg400']['averageAP']
+        keq = results['dg100']['avgkbt'] + results['dg400']['avgkbt']
+        #keq = results['dg400']['avgkbt']
+        #keq = results['dg100']['avgkbt']
+
+        averageAP = results['dg100']['averageAP'] + results['dg400']['averageAP']
+        #averageAP = results['dg400']['averageAP']
+        #averageAP = results['dg100']['averageAP']
 
         # make into fake percentage
         averageAP = [s*100 for s in averageAP]
+
         ax.scatter(keq, averageAP, c='gray')
-        print('Spearmanr keq and average AP')
+        print('Spearmanr avgkbt and average AP')
         if norm:
             print('Normalized')
         else:
@@ -1005,7 +1025,8 @@ class Plotter(object):
             ax.set_yticks(yrang)
             ax.set_ylim(0, 36)
 
-        ax.set_xlim(0.45, 1.2)
+        #ax.set_xlim(0.45, 1.2)
+        #debug()
 
         y_formatter = matplotlib.ticker.ScalarFormatter(useOffset=False)
         ax.yaxis.set_major_formatter(y_formatter)
@@ -1217,7 +1238,7 @@ class Plotter(object):
         ax.set_xticklabels(xtickLabels)
 
         ax.set_xlim(indMin-1, indxMax)
-        ax.set_xlabel("RNA length, $n$", size=self.labSize)
+        ax.set_xlabel("$i$", size=self.labSize)
 
         # setting the tick font sizes
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -1967,7 +1988,7 @@ def optimizeParam(ITSs, rna_range, testing, analysis, variableCombo, measure,
     # grid size parameter value search space
     grid_size = 20
     if testing:
-        grid_size = 5
+        grid_size = 15
 
     # Information about which analysis to run, and for CrossCorr and Random how
     # many iterations
@@ -1985,32 +2006,37 @@ def optimizeParam(ITSs, rna_range, testing, analysis, variableCombo, measure,
         analysisInfo['Random']['run'] = True
         analysisInfo['Random']['nr_iterations'] = 100
         if testing:
-            analysisInfo['Random']['nr_iterations'] = 20
+            analysisInfo['Random']['nr_iterations'] = 30
 
     elif analysis == 'Cross Correlation':
         # nr of samplings of 50% of ITSs for each parameter combination
         analysisInfo['CrossCorr']['run'] = True
         analysisInfo['CrossCorr']['nr_iterations'] = 100
         if testing:
-            analysisInfo['CrossCorr']['nr_iterations'] = 5
+            analysisInfo['CrossCorr']['nr_iterations'] = 15
 
     elif analysis != 'Normal':
         print('Give correct analysis parameter name')
         1/0
 
     # Parameter ranges you want to test out
+    # NOTE: Using negative values works to nullify the bias toward positive
+    # correlation in random DNA.
     if variableCombo['RNA']:
         c1 = np.linspace(0, 1.0, grid_size)
+        #c1 = np.linspace(-1.0, 1.0, grid_size)
     else:
         c1 = np.array([0])
 
     if variableCombo['DNA']:
         c2 = np.linspace(0, 1.0, grid_size)
+        #c2 = np.linspace(-1.0, 1.0, grid_size)
     else:
         c2 = np.array([0])
 
     if variableCombo['3N']:
         c3 = np.linspace(0, 1.0, grid_size)
+        #c3 = np.linspace(-1.0, 1.0, grid_size)
     else:
         c3 = np.array([0])
 
@@ -2101,14 +2127,14 @@ def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
                 msat_estimate = results[20].params_best[param]
 
             elif analysis in ['Cross Correlation', 'Random']:
-                msat_estimate = results[20].params_average[param]
+                msat_estimate = results[20].params_mean[param]
 
         # for random you again want the median value ... this is
         if analysis == 'Normal':
             parvals = [results[pos].params_best[param] for pos in rna_range]
 
         elif analysis in ['Cross Correlation', 'Random']:
-            parvals = [results[pos].params_average[param] for pos in rna_range]
+            parvals = [results[pos].params_mean[param] for pos in rna_range]
 
         if analysis == 'Normal':
             pvalues = minpvalues  # min of 20 best
@@ -3357,8 +3383,8 @@ def main():
     #coeffs = [0.12, 0.14, 0.66]  # median of 100 runs
     #coeffs = [0.14, 0.14, 0.69]  # median of 100 runs
     #coeffs = [0.0, 0.0, 0.95]  # median of 100 runs
-    #coeffs = [0.26, 0.0, 0.58]  # median of 100 runs
-    coeffs = False  # False means coeffs will be calculated
+    coeffs = [0.26, 0.0, 0.58]  # median of 100 runs
+    #coeffs = False  # False means coeffs will be calculated
 
     # when testing, run fewer iterations when estimating parameters
     testing = True
@@ -3379,8 +3405,8 @@ def main():
     figures = [
             #'Figure2',  # AvgKbt vs PY (in Paper)
             #'Figure32',  # DG400 scatter plot (in Paper)
-            #'FigureX2',  # 1x2 Keq vs AP (in Paper)
-            'CrossRandomDelineateSuppl',  # (in Paper)
+            'FigureX2',  # 1x2 Keq vs AP (in Paper)
+            #'CrossRandomDelineateSuppl',  # (in Paper)
             #'megaFig',  # One big figure for the first 4 plots
             #'Figure2_DG400',  # SE vs PY for DG400
             #'Figure3',  # Delineate + DG400
@@ -3400,7 +3426,7 @@ def main():
     # Commented out figures are not in paper currently
     fig2calc = {
             'Figure2': ['PYvsAvgKbt'],
-            'FigureX2': ['AP_vs_Keq', 'averageAP'],
+            'FigureX2': ['AP_vs_Keq', 'averageAPandKbt'],
             'Figure32': ['dg400_validation'],  # only do dg400 validation
             'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
             #'megaFig': ['PYvsAvgKbt', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
@@ -3673,25 +3699,25 @@ def main():
         if fig == 'FigureX2':
 
             """
-            Display the sum(AP), SE_XX correlation as well as the nt-2-nt
-            correlation.
+            Display the sum(AP)-avgKbt correlation as well as the nt-2-nt
+            correlation between AP and Keq.
             """
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
                     tickLength=2, tickWidth=0.5)
 
             # scatterplot
-            resAP = calcResults['averageAP']
+            resAP = calcResults['averageAPandKbt']
             plotr.averageAP_SEXX(resAP, norm=False)
 
             # bar plot
             resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
             axM1 = plotr.moving_average_ap_keq(resAPvsKeq)
 
-            plotr.setFigSize(current_journal_width, 4.0)
+            plotr.setFigSize(current_journal_width, 4.1)
             #plt.tight_layout()
             plotr.figure.subplots_adjust(left=0.11, top=0.97, right=0.995,
-                    bottom=0.18, wspace=0.33)
+                    bottom=0.19, wspace=0.33)
 
             axM1.yaxis.labelpad = 0.4
 

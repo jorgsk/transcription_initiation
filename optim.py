@@ -95,6 +95,7 @@ class Result(object):
         # You rely on that v is sorted in the same order as corr ... relying on
         # sorting, whachagot next for me.
         # This value is not relevant for cross corr or random.
+        # XXX is this where the random bias is seeping in?
         self.params_best = dict((k, v[0]) for k,v in params.items())
 
 
@@ -186,6 +187,23 @@ def DNASequenceGenerator(length):
     return 'AT'+ ''.join([random.choice(gatc) for dummy1 in range(length)])
 
 
+def MsatParamEstimateCorrleation(ITSs, params, msat_normalization, measure):
+
+    correlation = []
+
+    PYs = [its.PY for its in ITSs]
+    # Get the optimal parameter values for the fitted ITSs
+    parameters = [np.array([params[p]]) for p in ('c1', 'c2', 'c3')]
+
+    for max_rna_len in range(2,21):
+        r, p, values = CorrelatePYandMeasure(parameters, max_rna_len, ITSs,
+                msat_normalization, measure, PYs)
+
+        correlation.append(r)
+
+    return correlation
+
+
 def randomize_wrapper(rna_len, ITSs, ranges, measure, msat_normalization,
                         msat_param_estimate, randomize=0):
     """
@@ -202,15 +220,10 @@ def randomize_wrapper(rna_len, ITSs, ranges, measure, msat_normalization,
                                             measure, msat_normalization)
 
         if rand_result and msat_param_estimate:
-            PYs = [its.PY for its in ITSs]
-            # Get the optimal parameter values for the fitted ITSs
-            par_order = ('c1', 'c2', 'c3')
-            fitted_params = [np.array([rand_result.params_best[p]]) for p in par_order]
 
-            for max_rna_len in range(2,21):
-                r, p, values = CorrelatePYandMeasure(fitted_params, max_rna_len, ITSs,
-                                                    msat_normalization, measure, PYs)
-                rand_result.all_corr_for_msat.append(r)
+            corr = MsatParamEstimateCorrleation(ITS_random, rand_result.params_best,
+                                                    msat_normalization, measure)
+            rand_result.all_corr_for_msat = corr
 
         # skip if you don't get anything from this randomizer
         if not rand_result:
@@ -275,12 +288,10 @@ def crosscorr_wrapper(rna_len, ITSs, ranges, measure, msat_normalization,
         # if using msat parameter estimation, save correlation for the full
         # rna_length range
         if control_result and msat_param_estimate:
-            PYs = [its.PY for its in ITSs]
 
-            for max_rna_len in range(2,21):
-                r, p, values = CorrelatePYandMeasure(fitted_params, max_rna_len, ITSs,
-                                                    msat_normalization, measure, PYs)
-                control_result.all_corr_for_msat.append(r)
+            corr = MsatParamEstimateCorrleation(ITS_compare, control_result.params_best,
+                                                    msat_normalization, measure)
+            control_result.all_corr_for_msat = corr
 
         # Skip if you don't get a result (should B OK with large ranges)
         if not control_result:
@@ -327,14 +338,8 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
                             for p in divide], [])
 
     # All_results is a list of tuples on the following form: ((measure_values, par, rp, pp))
-    # Sort them on the pearson/spearman correlation pvalue, 'pp' and pick top
-    # 20 (since you can potentially have thousands of results if there are many
-    # parameter combinations -- but we're only interested in the best results
+    # Sort them on the pearson/spearman correlation pvalue, 'pp' and pick top 20
     top_hits = sorted(all_results, key=itemgetter(3))[:20]
-    debug()
-
-    # XXX does this bias toward positive/negative correlation coefficients?
-    # yes -- naturally! Sort instead by top absolute value.
 
     # if top_hits is empty, return NaNs results (created by default)
     if top_hits == []:
@@ -343,18 +348,36 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     # now make separate corr, pvals, params, and SEn arrays from these
     # these corr values represent corr(sum(SEn[:its_len], PY)) for the
     # different c1, c2 ,c3 combinations
-    pars = [c[1] for c in top_hits]
+    par = [c[1] for c in top_hits]
     corr = np.array([c[2] for c in top_hits])
     pvals = np.array([c[3] for c in top_hits])
 
+    print 'mean top 20 corr', np.nanmean(corr)
+    #print 'top 3 corr and pval'
+    #itr=1
+    #for cr, pvl in zip(corr, pvals):
+        #print '{0}: corr: {1}, pval: {2}'.format(itr, cr, pvl)
+        #if itr == 3:
+            #break
+    #print 'top 20 corr', corr[0]
+    #debug()
+    # XXX in here there is a weak bias toward positive correlation coefficients.
+    # (= rna_length=msat=20). The bias is not because of multiple competing
+    # pvalues. It seems that if correlation is positive, then all parameter
+    # combinations give positive correlation, and vica versa. So it is the
+    # sequence set that determines if correlation should be positive or
+    # negative, not parameter estimation. This drags! Is there an explanation?
+    # Should you construct the random sequences with the same nucleotide
+    # frequency as found in the DG100 libraries?
+
     # Return parameters in a dictionary form
     # pars[c1, c2, c3] = [array]
-    params = {}
+    parameters = {}
     for par_nr in range(1, len(ranges)+1):
-        params['c{0}'.format(par_nr)] = [p[par_nr-1] for p in pars]
+        parameters['c{0}'.format(par_nr)] = [p[par_nr-1] for p in par]
 
     # make a Result object
-    result_obj = Result(corr, pvals, params)
+    result_obj = Result(corr, pvals, parameters)
 
     print 'time: ', time.time() - t1
 
@@ -394,7 +417,7 @@ def _multi_calc(param_combo, rna_len, ITSs, measure, msat_normalization):
 
     for parc in param_combo:
         r, p, values = CorrelatePYandMeasure(parc, rna_len, ITSs,
-                                                msat_normalization, measure, PYs)
+                                             msat_normalization, measure, PYs)
 
         # ignore parameter correlation where the correlation is a nan
         if np.isnan(r):
@@ -578,5 +601,4 @@ def pick_top_results(several_results, msat_param_estimate):
         else:
             result = Result(new_corr, new_pvals, new_params)
 
-    debug()
     return result
