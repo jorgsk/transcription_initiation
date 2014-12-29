@@ -43,7 +43,13 @@ class Result(object):
     their parameter values!'
 
     """
-    def __init__(self, corr=[np.nan], pvals=np.nan, params=np.nan):
+    def __init__(self, corr=[np.nan], pvals=np.nan, params=np.nan,
+            msat_corr_mean=[np.nan], msat_corr_std=[np.nan]):
+
+        # Create a placeholder list for msat parameter estimation
+        self.all_corr_for_msat = []
+        self.all_corr_for_msat_mean = msat_corr_mean
+        self.all_corr_for_msat_std = msat_corr_std
 
         self.corr = corr
         self.pvals = pvals
@@ -93,23 +99,10 @@ class Result(object):
 
 
 def main_optim(rna_range, ITSs, ranges, analysisInfo, measure,
-        msat_normalization):
+        msat_normalization, msat_param_estimate):
     """
     Call the core optimialization wrapper but treat different analysis cases
     differently.
-
-    With msat_normalization each its only consideres its sequence up to the
-    msat for that sequence. How does this affect the estimation of optimal
-    coefficients for the different free energy terms?
-
-    For example, what happens if you use only the maximum size of abortive
-    product for a single run at an optimization? You would end up with 43 of
-    each and simply average them.
-
-    To stick closer to today's approach you should do that same think you're
-    doing, but stop at each MSAT, just output NaN values for the ones that do
-    not add up, so that they do not cound toward the average/median whatev.
-    Then the step toward not considering msat but everything is not so long.
     """
 
     # make 'int' into a 'list' containing just that int
@@ -133,15 +126,17 @@ def main_optim(rna_range, ITSs, ranges, analysisInfo, measure,
 
         # Randomize
         if analysisInfo['Random']['run']:
-            randize = analysisInfo['Random']['value']
-            random_obj = randomize_wrapper(rna_length, ITSs, ranges,
-                    measure, msat_normalization, randomize=randize)
+            iterations = analysisInfo['Random']['nr_iterations']
+            random_obj = randomize_wrapper(rna_length, ITSs, ranges, measure,
+                    msat_normalization, msat_param_estimate,
+                    randomize=iterations)
 
         # Cross correlation
         if analysisInfo['CrossCorr']['run']:
-            crosscorr = analysisInfo['CrossCorr']['value']
+            iterations = analysisInfo['CrossCorr']['nr_iterations']
             crosscorr_obj = crosscorr_wrapper(rna_length, ITSs, ranges,
-                    measure, msat_normalization, crosscorr=crosscorr)
+                    measure, msat_normalization, msat_param_estimate,
+                    crosscorr=iterations)
 
         results['Normal'][rna_length] = normal_obj
         results['Random'][rna_length] = random_obj
@@ -177,9 +172,9 @@ def randomize_ITS_sequence(ITSs):
 
     # keep only the PY and names of the ITS objects -> new sequence and energies
     for its in ITSs:
-        random_its = DNASequenceGenerator(length=18)
+        random_its = DNASequenceGenerator(length=19)
         copy_ITSs.append(ITS(random_its, name=its.name, PY=its.PY,
-            msat=its.msat))
+                            msat=its.msat))
 
     return copy_ITSs
 
@@ -191,7 +186,8 @@ def DNASequenceGenerator(length):
     return 'AT'+ ''.join([random.choice(gatc) for dummy1 in range(length)])
 
 
-def randomize_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, randomize=0):
+def randomize_wrapper(rna_len, ITSs, ranges, measure, msat_normalization,
+                        msat_param_estimate, randomize=0):
     """
     Generate random ITS sequences and do the simulation with them
     Return the average of the best scores you obtained
@@ -203,22 +199,33 @@ def randomize_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, random
         ITS_random = randomize_ITS_sequence(ITSs)
 
         rand_result = core_optim_wrapper(rna_len, ITS_random, ranges,
-                measure, msat_normalization)
+                                            measure, msat_normalization)
+
+        if rand_result and msat_param_estimate:
+            PYs = [its.PY for its in ITSs]
+            # Get the optimal parameter values for the fitted ITSs
+            par_order = ('c1', 'c2', 'c3')
+            fitted_params = [np.array([rand_result.params_best[p]]) for p in par_order]
+
+            for max_rna_len in range(2,21):
+                r, p, values = CorrelatePYandMeasure(fitted_params, max_rna_len, ITSs,
+                                                    msat_normalization, measure, PYs)
+                rand_result.all_corr_for_msat.append(r)
 
         # skip if you don't get anything from this randomizer
         if not rand_result:
             continue
-
         else:
             randResults.append(rand_result)
 
     # select the average of the top correlations to report
-    avrgdResults = pick_top_results(randResults)
+    avrgdResults = pick_top_results(randResults, msat_param_estimate)
 
     return avrgdResults
 
 
-def crosscorr_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, crosscorr=0):
+def crosscorr_wrapper(rna_len, ITSs, ranges, measure, msat_normalization,
+                      msat_param_estimate, crosscorr=0):
     """
     Wrapper around core_optim_wrapper that deals with cross-correlation.
     Optimialization is performed on one half of the ITSs and the correlation is
@@ -237,7 +244,7 @@ def crosscorr_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, crossc
     'crosscorr' times this is done: split your ITSs in half. for one half, find
     the parameter values that give optimal correlation. Then, use those
     parameter values to get a (one only) correlation and p-value for the
-    correlation between the SE_i (sum of Keq values) and the PY.
+    correlation between the measure you're using and the PY.
 
     You thus end up with 'crosscorr' optimal values: how to select the best of
     these? Select the median, or the mean?
@@ -251,7 +258,7 @@ def crosscorr_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, crossc
         ITS_fit, ITS_compare = ITS_RandomSplit(ITSs)
 
         fit_result = core_optim_wrapper(rna_len, ITS_fit, ranges, measure,
-                msat_normalization)
+                                        msat_normalization)
 
         # Skip if you don't get a result (should not be a problem with large ranges)
         if not fit_result:
@@ -259,12 +266,21 @@ def crosscorr_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, crossc
 
         # Get the optimal parameter values for the fitted ITSs
         par_order = ('c1', 'c2', 'c3')
-        fit_ranges = [np.array([fit_result.params_best[p]])
-                      for p in par_order]
+        fitted_params = [np.array([fit_result.params_best[p]]) for p in par_order]
 
         # run the rest of the ITS with the optimal parameters from fitting-set
-        control_result = core_optim_wrapper(rna_len, ITS_compare, fit_ranges,
-                measure, msat_normalization)
+        control_result = core_optim_wrapper(rna_len, ITS_compare, fitted_params,
+                                            measure, msat_normalization)
+
+        # if using msat parameter estimation, save correlation for the full
+        # rna_length range
+        if control_result and msat_param_estimate:
+            PYs = [its.PY for its in ITSs]
+
+            for max_rna_len in range(2,21):
+                r, p, values = CorrelatePYandMeasure(fitted_params, max_rna_len, ITSs,
+                                                    msat_normalization, measure, PYs)
+                control_result.all_corr_for_msat.append(r)
 
         # Skip if you don't get a result (should B OK with large ranges)
         if not control_result:
@@ -274,7 +290,7 @@ def crosscorr_wrapper(rna_len, ITSs, ranges, measure, msat_normalization, crossc
 
     # average the results (keeping mean and std) and return
     # cross corr results
-    return pick_top_results(retro_results)
+    return pick_top_results(retro_results, msat_param_estimate)
 
 
 def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
@@ -314,9 +330,11 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     # Sort them on the pearson/spearman correlation pvalue, 'pp' and pick top
     # 20 (since you can potentially have thousands of results if there are many
     # parameter combinations -- but we're only interested in the best results
-    # in any case... right? is that true for cross-correlation and
-    # randomization too?
     top_hits = sorted(all_results, key=itemgetter(3))[:20]
+    debug()
+
+    # XXX does this bias toward positive/negative correlation coefficients?
+    # yes -- naturally! Sort instead by top absolute value.
 
     # if top_hits is empty, return NaNs results (created by default)
     if top_hits == []:
@@ -338,11 +356,29 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     # make a Result object
     result_obj = Result(corr, pvals, params)
 
-    # XXX TODO:::stop here and find out why the first two rna lengths give
-    # strange random results
     print 'time: ', time.time() - t1
 
     return result_obj
+
+
+def CorrelatePYandMeasure(parameters, max_rna_length, ITSs, msat_normalization,
+                            measure, y):
+
+    all_keqs = keq_calc(parameters, max_rna_length, ITSs, msat_normalization)
+
+    # correlation
+    if measure == 'SE':
+        values = [np.nansum(keqs) for keqs in all_keqs]
+
+    elif measure == 'product':
+        values = [np.prod(keqs) for keqs in all_keqs]
+
+    elif measure == 'AvgKbt':
+        values = [np.nanmean(keqs) for keqs in all_keqs]
+
+    r, p = spearmanr(y, values)
+
+    return (r, p, values)
 
 
 def _multi_calc(param_combo, rna_len, ITSs, measure, msat_normalization):
@@ -354,29 +390,17 @@ def _multi_calc(param_combo, rna_len, ITSs, measure, msat_normalization):
     """
 
     all_hits = []
-    y = [its.PY for its in ITSs]
+    PYs = [its.PY for its in ITSs]
 
     for parc in param_combo:
-        all_keqs = keq_calc(parc, rna_len, ITSs, msat_normalization)
-
-        # correlation
-        if measure == 'SE':
-            values = [np.nansum(keqs) for keqs in all_keqs]
-            rp, pp = spearmanr(y, values)
-
-        elif measure == 'product':
-            values = [np.prod(keqs) for keqs in all_keqs]
-            rp, pp = spearmanr(y, values)
-
-        elif measure == 'AvgKbt':
-            values = [np.nanmean(keqs) for keqs in all_keqs]
-            rp, pp = spearmanr(y, values)
+        r, p, values = CorrelatePYandMeasure(parc, rna_len, ITSs,
+                                                msat_normalization, measure, PYs)
 
         # ignore parameter correlation where the correlation is a nan
-        if np.isnan(rp):
+        if np.isnan(r):
             continue
 
-        all_hits.append((values, parc, rp, pp))
+        all_hits.append((values, parc, r, p))
 
     return all_hits
 
@@ -501,7 +525,7 @@ def keq_i(RT, rna_len, dg3d, dna_dna, rna_dna, a, b, c):
     return k1
 
 
-def pick_top_results(several_results):
+def pick_top_results(several_results, msat_param_estimate):
     """
     Keep only the top scores for each of the results in the sample. Those top
     scores will then be used to make a new object with the average and std of
@@ -540,14 +564,19 @@ def pick_top_results(several_results):
         for k, v in res_obj.params.items():
             new_params[k].append(v[0])
 
-    print('Top result')
-    print new_corr
     # Check if new_corr is empty (means all results were NaN)
     if new_corr == []:
         result = Result()
     else:
-        # make a new result object (from all the best random results, equallly
-        # likely to have positive and negative correlation)
-        result = Result(new_corr, new_pvals, new_params)
+        # making a new result object where the attributes take on NEW MEANINGS :((((
+        # never do this again kthnx.
+        if msat_param_estimate:
+            all_full_corr = np.asarray([r.all_corr_for_msat for r in several_results])
+            mean_full_corr = np.nanmean(all_full_corr, axis=0)
+            std_full_corr = np.nanstd(all_full_corr, axis=0)
+            result = Result(msat_corr_mean=mean_full_corr, msat_corr_std=std_full_corr)
+        else:
+            result = Result(new_corr, new_pvals, new_params)
 
+    debug()
     return result

@@ -359,6 +359,7 @@ class Calculator(object):
         import itertools
 
         freeEns = ['DNA', 'RNA', '3N']
+        debug()
 
         # get all unique combinations of the free energies
         # skip the single-combinations (just 'RNA' f.ex)
@@ -430,6 +431,7 @@ class Calculator(object):
         """
         See the individual effect of DG3N, DGRNADNA, DGDNADNA
         """
+        debug()
 
         delineateResultsOrder = ['DNA', 'RNA', '3N']
 
@@ -588,7 +590,6 @@ class Calculator(object):
         else:
             scatter_plot_nt_pos = 13  # max without msat
 
-
         if scatter_plot_nt_pos not in rnaRange:
             return 'XXX: scatter plot could not be made'
 
@@ -609,7 +610,7 @@ class Calculator(object):
                     onlySignCoeff, analysis, self.name,
                     grid_size, self.msat_normalization, self.type_of_average,
                     self.msat_param_estimate, aInfo=aInfo)
-            
+
             self.coeffs = c1, c2, c3
 
             print ('c1: {0}, c2: {1}, c3: {2}'.format(c1, c2, c3))
@@ -619,7 +620,7 @@ class Calculator(object):
             its.calc_keq(c1, c2, c3, self.msat_normalization, rnaMax)
 
         # Ensure to use full rnaRange here, even if a smaller RNA range has
-        # been used to obtain the weight coefficients themselves 
+        # been used to obtain the weight coefficients themselves
         corr, pvals = self.correlateMeasure_PY(rnaRange, measure='AvgKbt')
         indx = rnaRange
 
@@ -649,46 +650,45 @@ class Calculator(object):
         """
 
         # set the range of values for which you wish to calculate correlation
-
         rnaMin = 2
-        #rnaMax = 20
-        rnaMax = 15
+        rnaMax = 20
         rnaRange = range(rnaMin, rnaMax+1)
-        if self.testing:
-            #rnaRange = [rnaMin, 5, 10, 15, rnaMax]
-            #rnaRange = [rnaMin, 3, 4, 5, 7, 10, 12, 15, 17, rnaMax]
-            rnaRange = range(rnaMin, rnaMax+1)
+
+        # XXX Be very aware of the distinction between rnaRange and
+        # rnaRangeSmallest which is used for msat parameter estimation.
+        if self.msat_param_estimate:
+            rnaRangeSmallestPossible = range(20, 21)
+        else:
+            rnaRangeSmallestPossible = rnaRange
 
         analysis2stats = {}
 
         variable_combo = {'DNA':True, 'RNA':True, '3N':True}
-        for analysis in ['Normal', 'Random', 'Cross Correlation']:
+
+        #for analysis in ['Normal', 'Random', 'Cross Correlation']:
         #for analysis in ['Cross Correlation']:
-        #for analysis in ['Random']:
+        for analysis in ['Random']:
 
-            result, grid_size, aInfo = optimizeParam(self.ITSs, rnaRange,
-                    testing=self.testing, analysis=analysis,
-                    variableCombo=variable_combo, measure='AvgKbt',
-                    msat_normalization=self.msat_normalization)
+            result, grid_size, aInfo = optimizeParam(self.ITSs,
+                    rnaRangeSmallestPossible, self.testing, analysis,
+                    variable_combo, 'AvgKbt', self.msat_normalization,
+                    self.msat_param_estimate)
 
-            # CrossCorr and Normal. How is this printed? How is this plotted?
-            corr_stds = [r[1].corr_std for r in sorted(result.items())]
-            # corr_stds corresponds to itsRange
-            indx = rnaRange
+            # CrossCorr and Normal.
+            corr_std = [r[1].corr_std for r in sorted(result.items())]
 
-            # if normal, pick the median c1, c2, c3 values as for Figure 2
+            # if normal, pick mean (no-msat_param_estimate) or optimal for
+            # rna=20=msat parameter values
             if analysis == 'Normal':
-                # Print some output and return one value for c1, c2, and c3
                 onlySignCoeff = 0.05
 
-                c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
+                c1, c2, c3 = get_print_parameterValue_output(result,
+                        rnaRangeSmallestPossible,
                         onlySignCoeff, analysis, self.name, grid_size,
                         self.msat_normalization, self.type_of_average,
                         self.type_of_average, self.msat_param_estimate,
                         aInfo=aInfo)
 
-                # add the constants to the ITS objects and calculate Keq with
-                # the new c1, c2, and c3 mean values
                 for its in self.ITSs:
                     its.calc_keq(c1, c2, c3)
 
@@ -697,20 +697,28 @@ class Calculator(object):
             # if random or cross-correlation, pick the average of the best
             # results for each nucleotide
             else:
-                # I considered the median for correlation coefficient -- it
-                # does improve the values slightly, and the distribution is
-                # slightly skewed so I can justify using it. I'll have a look.
-                corr = [r[1].corr_mean for r in sorted(result.items())]
-                #pvals = [r[1].pvals_mean for r in sorted(result.items())]
-                pvals = [r[1].pvals_median for r in sorted(result.items())]
-                # the median is a much better measure for pvals!!! (at least
-                onlySignCoeff = 0.05  # doesn't make sense really
-                c1, c2, c3 = get_print_parameterValue_output(result, rnaRange,
+                if self.msat_param_estimate:
+                    corr = result[20].all_corr_for_msat_mean
+                    corr_std = result[20].all_corr_for_msat_std
+                    pvals = [np.nan for _ in corr]  # you don't use these
+
+                else:
+                    corr = [r[1].corr_mean for r in sorted(result.items())]
+                    pvals = [r[1].pvals_mean for r in sorted(result.items())]
+
+                # NOTE: you don't care about the c1,c2,c3, but you want to
+                # write output ...
+                onlySignCoeff = 0.05
+                c1, c2, c3 = get_print_parameterValue_output(result,
+                                rnaRangeSmallestPossible,
                                 onlySignCoeff, analysis, self.name, grid_size,
                                 self.msat_normalization, self.type_of_average,
                                 self.msat_param_estimate, aInfo=aInfo)
 
-            analysis2stats[analysis] = [indx, corr, corr_stds, pvals]
+            # corr_stds corresponds to itsRange
+            indx = rnaRange
+
+            analysis2stats[analysis] = [indx, corr, corr_std, pvals]
 
         return analysis2stats
 
@@ -1396,7 +1404,7 @@ class Plotter(object):
         """
 
         # the index for which corr has the highest value
-        print("PYvsAvgKbtscatter: Spearman, Pearson for avgkbt{0} and PY"\
+        print("PYvsAvgKbtscatter: Spearman, Pearson for avgkbt{0} and PY"
                 .format(rna_len_choice))
         print(str(spearmanr(values, PYs)) + 'Spearmanr')
         print(str(pearsonr(values, PYs)) + 'Pearsonr')
@@ -1934,8 +1942,8 @@ def write_py_SE15(dg400):
     outp.close()
 
 
-def optimizeParam(ITSs, rna_range, testing, analysis,
-        variableCombo, measure, msat_normalization, msat_param_estimate):
+def optimizeParam(ITSs, rna_range, testing, analysis, variableCombo, measure,
+                  msat_normalization, msat_param_estimate):
     """
     Optimize c1, c2, c3 to obtain max correlation with PY/FL/TA/TR
 
@@ -1956,16 +1964,17 @@ def optimizeParam(ITSs, rna_range, testing, analysis,
     if msat_param_estimate:
         rna_range = range(20, 21)
 
-    # grid size parameter values search space
+    # grid size parameter value search space
     grid_size = 20
     if testing:
         grid_size = 5
 
-    # defalt: do nothing
+    # Information about which analysis to run, and for CrossCorr and Random how
+    # many iterations
     analysisInfo = {
             'Normal':{'run':False},
-            'CrossCorr': {'run':False, 'value':0},
-            'Random': {'run':False, 'value':0},
+            'CrossCorr': {'run':False, 'nr_iterations':0},
+            'Random': {'run':False, 'nr_iterations':0},
             }
 
     if analysis == 'Normal':
@@ -1974,16 +1983,16 @@ def optimizeParam(ITSs, rna_range, testing, analysis,
     if analysis == 'Random':
         # nr of random sequences tested for each parameter combination
         analysisInfo['Random']['run'] = True
-        analysisInfo['Random']['value'] = 100
+        analysisInfo['Random']['nr_iterations'] = 100
         if testing:
-            analysisInfo['Random']['value'] = 5
+            analysisInfo['Random']['nr_iterations'] = 20
 
     elif analysis == 'Cross Correlation':
         # nr of samplings of 50% of ITSs for each parameter combination
         analysisInfo['CrossCorr']['run'] = True
-        analysisInfo['CrossCorr']['value'] = 100
+        analysisInfo['CrossCorr']['nr_iterations'] = 100
         if testing:
-            analysisInfo['CrossCorr']['value'] = 5
+            analysisInfo['CrossCorr']['nr_iterations'] = 5
 
     elif analysis != 'Normal':
         print('Give correct analysis parameter name')
@@ -2008,7 +2017,7 @@ def optimizeParam(ITSs, rna_range, testing, analysis,
     par_ranges = (c1, c2, c3)
 
     all_results = optim.main_optim(rna_range, ITSs, par_ranges, analysisInfo,
-                                    measure, msat_normalization)
+                                    measure, msat_normalization, msat_param_estimate)
 
     # return results for requested analysis type ('normal' by default)
     return all_results[analysis], grid_size, analysisInfo
@@ -2056,8 +2065,8 @@ def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
         for asis, settings in aInfo.items():
             runThis = settings['run']
             logFileHandle.write('analysis: ' + asis + ' ' + str(runThis))
-            if 'value' in settings:
-                howMany = settings['value']
+            if 'nr_iterations' in settings:
+                howMany = settings['nr_iterations']
                 logFileHandle.write(' nr: ' + str(howMany) + '\n')
     # output
     outp = {}
@@ -2091,7 +2100,7 @@ def get_print_parameterValue_output(results, rna_range, onlySignCoeff,
             if analysis == 'Normal':
                 msat_estimate = results[20].params_best[param]
 
-            elif analysis in ['Cross Correlation', 'Random'] :
+            elif analysis in ['Cross Correlation', 'Random']:
                 msat_estimate = results[20].params_average[param]
 
         # for random you again want the median value ... this is
@@ -3472,7 +3481,7 @@ def main():
                     tickLength=2, tickWidth=0.5)
 
             # Challenge: ladder plot requires full RNA range.
-            # Solution: use full RNA range, but do not re-calculate coeffs. 
+            # Solution: use full RNA range, but do not re-calculate coeffs.
 
             # Set position for scatter plot
             ax_scatr = plotr.PYvsAvgKbtscatter(PYs, PYstd, values_choice, choice)
@@ -3520,7 +3529,7 @@ def main():
             # XXX plot settings for ax_lad are reset below
             #plotr.cumulativeAbortive(*results2, corr=corr)
             # XXX try another approach than the cumulative: the absolute!
-            plotr.instantaneousCorrelation(corr) 
+            plotr.instantaneousCorrelation(corr)
 
             # Should be 8.7 cm
             plotr.setFigSize(current_journal_width, 4.5)

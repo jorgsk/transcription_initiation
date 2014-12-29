@@ -321,7 +321,7 @@ class ITS(object):
 
     def calc_keq(self, c1, c2, c3, msat_normalization, rna_len):
         """
-        Calculate Keq_i for each i in [2,20]
+        Calculate Keq_i for each i in [2,rna_len]
         """
 
         # hard-coded constants hello Fates!
