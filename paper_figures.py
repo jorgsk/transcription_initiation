@@ -321,9 +321,8 @@ class Calculator(object):
 
         # calculate keq values using latest parameter values
         # this must be kept in copy-paste sync :(
-        coeffs = [0.12, 0.14, 0.66]  # median of 20 runs with its_range(2,16)
 
-        c1, c2, c3 = coeffs
+        c1, c2, c3 = self.coeffs
 
         for dset, name in [(self.dg100, 'dg100'), (self.dg400, 'dg400')]:
             for its in dset:
@@ -346,14 +345,20 @@ class Calculator(object):
         compare DG100 with DG400.
         """
         outp = {
-                'dg100': {'avgkbt': [], 'averageAP': []},
-                'dg400': {'avgkbt': [], 'averageAP': []}
-                }
+                'dg100': {'avgkbt': [], 'averageAP': [], 'PY':[]},
+                'dg400': {'avgkbt': [], 'averageAP': [], 'PY':[]}
+               }
+
+        #outp = {
+                #'dg100': {'avgkbt': [], 'averageAP': []},
+                #'dg400': {'avgkbt': [], 'averageAP': []}
+                #}
 
         c1, c2, c3 = self.coeffs
 
         for dset, name in [(self.dg100, 'dg100'), (self.dg400, 'dg400')]:
             for its in dset:
+                outp[name]['PY'].append(its.PY)
 
                 #its.calc_keq(c1, c2, c3, self.msat_normalization, rna_len=20)
                 #outp[name]['avgkbt'].append(np.nanmean(its.keq))
@@ -640,6 +645,7 @@ class Calculator(object):
         indx = rnaRange
 
         # print the results for each nucleotide
+        print('PY vs AvgKbt correlation:')
         for combo in zip(indx, corr, pvals):
             print combo
 
@@ -990,8 +996,18 @@ class Plotter(object):
         #keq = results['dg100']['avgkbt']
 
         averageAP = results['dg100']['averageAP'] + results['dg400']['averageAP']
-        #averageAP = results['dg400']['averageAP']
-        #averageAP = results['dg100']['averageAP']
+
+        averageAP400 = results['dg400']['averageAP']
+        averageAP100 = results['dg100']['averageAP']
+
+        PY400 = results['dg400']['PY']
+        PY100 = results['dg100']['PY']
+
+        print('Correlation between PY and average AP for 400 and 100:')
+        print spearmanr(PY400, averageAP400)
+        print spearmanr(PY100, averageAP100)
+        print('---')
+        1/0
 
         # make into fake percentage
         averageAP = [s*100 for s in averageAP]
@@ -1009,7 +1025,7 @@ class Plotter(object):
         if xlab:
             ax.set_xlabel('$\overline{K}_{bt,\mathrm{MSAT}}$', size=self.labSize)
 
-        ax.set_ylabel('Average abortive probability ($\%$)', size=self.labSize)
+        ax.set_ylabel('Average AP ($\%$)', size=self.labSize)
 
         # ticks
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -1272,7 +1288,7 @@ class Plotter(object):
         ########### Set figure and axis properties ############
         ax.set_xlabel('$\overline{K}_{bt,\mathrm{MSAT}}$', size=self.labSize)
 
-        ax.set_ylabel('Productive yield ($\%$)', size=self.labSize)
+        ax.set_ylabel('PY ($\%$)', size=self.labSize)
 
         xmin, xmax = min(SE15), max(SE15)
         xscale = (xmax-xmin)*0.1
@@ -1441,7 +1457,7 @@ class Plotter(object):
         ax.scatter(values, PYs, c='b', s=12, linewidth=0.6, zorder=2)
         # XXX get the errorbars to be gray too!!!!!!!!
 
-        ax.set_ylabel("Productive yield ($\%$)", size=self.labSize)
+        ax.set_ylabel("PY ($\%$)", size=self.labSize)
         ax.set_xlabel("$\overline{K}_{bt,\mathrm{MSAT}}$", size=self.labSize)
 
         ymin = -0.1
@@ -1451,8 +1467,16 @@ class Plotter(object):
                 width=self.tickWidth)
 
         xmin, xmax = min(values), max(values)
-        xscale = (xmax-xmin)*0.06
-        ax.set_xlim(xmin-xscale, xmax+xscale)
+        step = 0.2
+        tick_positions = np.arange(xmin, xmax+step, step)
+        tick_labels = [format(v, '.1f') for v in tick_positions]
+
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
+
+        xscale = (xmax-xmin)*0.08
+        ax.set_xlim(min(xmin-xscale, tick_positions[0]),
+                    max(xmax+xscale, tick_positions[-1]))
 
         ymin, ymax = min(PYs), max(PYs)
         #yscale_low = (ymax-ymin)*0.03
@@ -1645,7 +1669,7 @@ class Plotter(object):
             #axsmall.text(0.035, 2100, '$r$=-{0:.2f}'.format(y), size=10)
 
             axsmall.set_xlabel('SE$_{13}$', size=6)
-            axsmall.set_ylabel('Productive yield ($\%$)', size=6)
+            axsmall.set_ylabel('PY ($\%$)', size=6)
             axsmall.xaxis.labelpad = 1
             axsmall.yaxis.labelpad = 1
 
@@ -1682,7 +1706,7 @@ class Plotter(object):
             pval_line_pos = np.argmax(np.asarray(pv[::-1]) < 0.05)
             #ax.axhline(y=(-1)*f(0.05), ls=':', color='r',
                                 #label='p = 0.05 threshold', linewidth=2)
-            ax.axvspan(0, pval_line_pos, color='darksalmon')
+            ax.axvspan(0, pval_line_pos-1, color='darksalmon')
 
         ymin = -0.1
         #ymin = 0
@@ -1986,9 +2010,10 @@ def optimizeParam(ITSs, rna_range, testing, analysis, variableCombo, measure,
         rna_range = range(20, 21)
 
     # grid size parameter value search space
-    grid_size = 20
+    # XXX use 21/11 instead of 20/10 to evenly space your values!
+    grid_size = 21
     if testing:
-        grid_size = 15
+        grid_size = 11
 
     # Information about which analysis to run, and for CrossCorr and Random how
     # many iterations
@@ -2013,7 +2038,7 @@ def optimizeParam(ITSs, rna_range, testing, analysis, variableCombo, measure,
         analysisInfo['CrossCorr']['run'] = True
         analysisInfo['CrossCorr']['nr_iterations'] = 100
         if testing:
-            analysisInfo['CrossCorr']['nr_iterations'] = 15
+            analysisInfo['CrossCorr']['nr_iterations'] = 20
 
     elif analysis != 'Normal':
         print('Give correct analysis parameter name')
@@ -3384,6 +3409,7 @@ def main():
     #coeffs = [0.14, 0.14, 0.69]  # median of 100 runs
     #coeffs = [0.0, 0.0, 0.95]  # median of 100 runs
     coeffs = [0.26, 0.0, 0.58]  # median of 100 runs
+    #coeffs = [1.0, 1.0, 1.0]  # median of 100 runs
     #coeffs = False  # False means coeffs will be calculated
 
     # when testing, run fewer iterations when estimating parameters
@@ -3403,9 +3429,9 @@ def main():
     #msat_param_estimate = False
 
     figures = [
-            #'Figure2',  # AvgKbt vs PY (in Paper)
+            'Figure2',  # AvgKbt vs PY (in Paper)
+            #'FigureX2',  # 1x2 Keq and AvgKbt vs AP (in Paper)
             #'Figure32',  # DG400 scatter plot (in Paper)
-            'FigureX2',  # 1x2 Keq vs AP (in Paper)
             #'CrossRandomDelineateSuppl',  # (in Paper)
             #'megaFig',  # One big figure for the first 4 plots
             #'Figure2_DG400',  # SE vs PY for DG400
@@ -3525,8 +3551,8 @@ def main():
             plotr.setFigSize(current_journal_width, 4.5)
 
             #plt.tight_layout()
-            plotr.figure.subplots_adjust(left=0.08, top=0.96, right=0.90,
-                    bottom=0.16, wspace=0.35)
+            plotr.figure.subplots_adjust(left=0.08, top=0.95, right=0.90,
+                    bottom=0.17, wspace=0.35)
             #plotr.figure.subplots_adjust(wspace=0.45)
             # make the correlation label come closer
             ax_lad.yaxis.labelpad = 1

@@ -168,14 +168,22 @@ def randomize_ITS_sequence(ITSs):
     """
     Copy the ITS variables and then randomize their sequence.
     """
+    import random
 
     copy_ITSs = []
 
     # keep only the PY and names of the ITS objects -> new sequence and energies
     for its in ITSs:
-        random_its = DNASequenceGenerator(length=19)
-        copy_ITSs.append(ITS(random_its, name=its.name, PY=its.PY,
+
+        l = its.sequence[:20]
+        random.shuffle(l)
+        copy_ITSs.append(ITS(''.join(l), name=its.name, PY=its.PY,
                             msat=its.msat))
+        #random_its = DNASequenceGenerator(length=19)
+        #copy_ITSs.append(ITS(random_its, name=its.name, PY=its.PY,
+                            #msat=its.msat))
+        #copy_ITSs.append(ITS(random_its, name=its.name, PY=its.PY,
+                            #msat=20))
 
     return copy_ITSs
 
