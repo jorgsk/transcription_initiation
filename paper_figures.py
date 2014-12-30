@@ -950,8 +950,8 @@ class Plotter(object):
 
         # labels
         if xlab:
-            ax.set_xlabel('ITS position', size=self.labSize)
-        ax.set_ylabel('Correlation: $\overline{K}_{bt,\mathrm{MSAT}}$ and AP', size=self.labSize)
+            ax.set_xlabel('ITS position, $i$', size=self.labSize)
+        ax.set_ylabel('Correlation: AP and $K_{bt,i}$', size=self.labSize)
 
         # ticks
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -975,10 +975,9 @@ class Plotter(object):
 
         # XXX uncommented while testing
         # Y: show every other tick with a label
-        #yIndx = [g for g in np.arange(-0.2, 0.8, 0.2)]
-        #ax.set_yticks(yIndx)
-        #ax.set_ylim(-0.12, 0.63)
-        #ax.set_ylim(-0.12, 0.63)
+        yIndx = [g for g in np.arange(-0.2, 0.8, 0.2)]
+        ax.set_yticks(yIndx)
+        ax.set_ylim(-0.05, 0.63)
 
         return ax
 
@@ -3430,7 +3429,7 @@ def main():
 
     figures = [
             'Figure2',  # AvgKbt vs PY (in Paper)
-            #'FigureX2',  # 1x2 Keq and AvgKbt vs AP (in Paper)
+            'Figure_AP_Kbt',  # 1x2 Keq and AvgKbt vs AP (in Paper)
             #'Figure32',  # DG400 scatter plot (in Paper)
             #'CrossRandomDelineateSuppl',  # (in Paper)
             #'megaFig',  # One big figure for the first 4 plots
@@ -3452,7 +3451,7 @@ def main():
     # Commented out figures are not in paper currently
     fig2calc = {
             'Figure2': ['PYvsAvgKbt'],
-            'FigureX2': ['AP_vs_Keq', 'averageAPandKbt'],
+            'Figure_AP_Kbt': ['AP_vs_Keq'],
             'Figure32': ['dg400_validation'],  # only do dg400 validation
             'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
             #'megaFig': ['PYvsAvgKbt', 'cumulativeAbortive', 'delineate', 'dg400_validation'],
@@ -3722,34 +3721,26 @@ def main():
 
             saveMe[fig] = plotr.figure
 
-        if fig == 'FigureX2':
+        if fig == 'Figure_AP_Kbt':
 
             """
             Display the sum(AP)-avgKbt correlation as well as the nt-2-nt
             correlation between AP and Keq.
             """
-            plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
+            plotr = Plotter(YaxNr=1, XaxNr=1, plotName=fig,
                     p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
                     tickLength=2, tickWidth=0.5)
-
-            # scatterplot
-            resAP = calcResults['averageAPandKbt']
-            plotr.averageAP_SEXX(resAP, norm=False)
 
             # bar plot
             resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
             axM1 = plotr.moving_average_ap_keq(resAPvsKeq)
 
-            plotr.setFigSize(current_journal_width, 4.1)
+            plotr.setFigSize(current_journal_width-2.5, 4.2)
             #plt.tight_layout()
-            plotr.figure.subplots_adjust(left=0.11, top=0.97, right=0.995,
+            plotr.figure.subplots_adjust(left=0.14, top=0.97, right=0.995,
                     bottom=0.19, wspace=0.33)
 
             axM1.yaxis.labelpad = 0.4
-
-            letters = ('A', 'B')
-            positions = ['UL', 'UR']
-            plotr.addLetters(letters, positions)
 
             saveMe[fig] = plotr.figure
 
