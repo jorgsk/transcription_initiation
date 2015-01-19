@@ -344,6 +344,12 @@ class ITS(object):
             # so if msat = 11, there can be no equilibrium constant after index 9
             self.keq[self.msat-1:] = np.nan
 
+    def calc_purines(self):
+        """
+        ATGCCA -> [101001]
+        """
+        self.purines = [1 if nuc in ['G', 'A'] else 0 for nuc in self.sequence[:20]]
+
     def calc_AbortiveYield(self):
         """
         Calculate abortive to productive ratio

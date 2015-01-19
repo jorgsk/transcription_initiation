@@ -100,7 +100,7 @@ class Result(object):
 
 
 def main_optim(rna_range, ITSs, ranges, analysisInfo, measure,
-        msat_normalization, msat_param_estimate):
+        msat_normalization, msat_param_estimate, randomize_method):
     """
     Call the core optimialization wrapper but treat different analysis cases
     differently.
@@ -129,7 +129,7 @@ def main_optim(rna_range, ITSs, ranges, analysisInfo, measure,
         if analysisInfo['Random']['run']:
             iterations = analysisInfo['Random']['nr_iterations']
             random_obj = randomize_wrapper(rna_length, ITSs, ranges, measure,
-                    msat_normalization, msat_param_estimate,
+                    msat_normalization, msat_param_estimate, randomize_method,
                     randomize=iterations)
 
         # Cross correlation
@@ -164,7 +164,7 @@ def ITS_RandomSplit(ITSs):
     return ITS_fit, ITS_compare
 
 
-def randomize_ITS_sequence(ITSs):
+def randomize_ITS_sequence(ITSs, randomize_method):
     """
     Copy the ITS variables and then randomize their sequence.
     """
@@ -175,15 +175,16 @@ def randomize_ITS_sequence(ITSs):
     # keep only the PY and names of the ITS objects -> new sequence and energies
     for its in ITSs:
 
-        l = its.sequence[:20]
-        random.shuffle(l)
-        copy_ITSs.append(ITS(''.join(l), name=its.name, PY=its.PY,
+        if randomize_method == 'random_gatc':
+            new_sequence = DNASequenceGenerator(length=19)
+
+        elif randomize_method == 'shuffle':
+            l = list(its.sequence[2:20])
+            random.shuffle(l)
+            new_sequence = 'AT' + ''.join(l)
+
+        copy_ITSs.append(ITS(new_sequence, name=its.name, PY=its.PY,
                             msat=its.msat))
-        #random_its = DNASequenceGenerator(length=19)
-        #copy_ITSs.append(ITS(random_its, name=its.name, PY=its.PY,
-                            #msat=its.msat))
-        #copy_ITSs.append(ITS(random_its, name=its.name, PY=its.PY,
-                            #msat=20))
 
     return copy_ITSs
 
@@ -213,7 +214,7 @@ def MsatParamEstimateCorrleation(ITSs, params, msat_normalization, measure):
 
 
 def randomize_wrapper(rna_len, ITSs, ranges, measure, msat_normalization,
-                        msat_param_estimate, randomize=0):
+                        msat_param_estimate, randomize_method, randomize=0):
     """
     Generate random ITS sequences and do the simulation with them
     Return the average of the best scores you obtained
@@ -222,7 +223,7 @@ def randomize_wrapper(rna_len, ITSs, ranges, measure, msat_normalization,
     randResults = []
     for dummy in range(randomize):
 
-        ITS_random = randomize_ITS_sequence(ITSs)
+        ITS_random = randomize_ITS_sequence(ITSs, randomize_method)
 
         rand_result = core_optim_wrapper(rna_len, ITS_random, ranges,
                                             measure, msat_normalization)
@@ -360,7 +361,7 @@ def core_optim_wrapper(rna_len, ITSs, ranges, measure, msat_normalization):
     corr = np.array([c[2] for c in top_hits])
     pvals = np.array([c[3] for c in top_hits])
 
-    print 'mean top 20 corr', np.nanmean(corr)
+    #print 'mean top 20 corr', np.nanmean(corr)
     #print 'top 3 corr and pval'
     #itr=1
     #for cr, pvl in zip(corr, pvals):
@@ -605,7 +606,8 @@ def pick_top_results(several_results, msat_param_estimate):
             all_full_corr = np.asarray([r.all_corr_for_msat for r in several_results])
             mean_full_corr = np.nanmean(all_full_corr, axis=0)
             std_full_corr = np.nanstd(all_full_corr, axis=0)
-            result = Result(msat_corr_mean=mean_full_corr, msat_corr_std=std_full_corr)
+            result = Result(params=new_params, msat_corr_mean=mean_full_corr,
+                    msat_corr_std=std_full_corr)
         else:
             result = Result(new_corr, new_pvals, new_params)
 
