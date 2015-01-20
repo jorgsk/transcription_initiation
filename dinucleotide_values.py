@@ -4,9 +4,10 @@ Dictionaries with dinucleotide values from Hein et al:
 
 RNA Transcript 3′-Proximal Sequence Affects Translocation Bias of RNA Polymerase
 
-And malinen et al
+And malinen et al.
 
 NOTE dinucleotides are in terms of the non-template DNA = 'same as RNA strand'
+= coding strand
 
 If you had to do this again you should have stored the original data in some
 other form, like csv files.
@@ -26,9 +27,6 @@ malinen_et_al_forward_translocation_halflives_ms = {
         }
 
 # RNA-DNA duplexes from Sugimoto 2002 paper
-# BASES ARE FROM THE TEMPLATE DNA STRAND OF A TRANSCRIPTION BUBBLE WITH AN
-# RNA-DNA HYBRID XXX TODO: look into this, are you gettting this right? ALL
-# your input data should be in terms of the non-template strand.
 NNRD = {'AA':-0.4,
         'AC':-1.6,
         'AG':-1.4,
@@ -236,3 +234,23 @@ scaled_hein_translocation_reverse_rate_constants = {
 'TG': 3.1291727140783747,
 'TT': 121.7674418604651
 }
+
+if __name__ == '__main__':
+    import os
+    energy_dir = 'free_energy_parameters'
+    # Write out some of these dictionaries to file
+    energies =\
+    {'Malinen_nucleotide_addition_halflife_ms': malinen_et_al_nucleotide_addition_halflives_ms,
+     'Malinen_forward_translocation_halflife_ms': malinen_et_al_forward_translocation_halflives_ms,
+     'Hein_pyrophosphorolysis_forward_min':  pyrophosphorolysis_forward,
+     'Hein_pyrophosphorolysis_reverse_min': pyrophosphorolysis_reverse,
+     'Keq_EC8_EC9': Keq_EC8_EC9}
+
+    for name, hashmap in energies.items():
+        file_path = os.path.join(energy_dir, name + '.txt')
+        file_handle = open(file_path, 'wb')
+        for key, value in hashmap.items():
+            if len(key) > 2:
+                continue
+            file_handle.write(key + '\t' + str(value) + '\n')
+        file_handle.close()

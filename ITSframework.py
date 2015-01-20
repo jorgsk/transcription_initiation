@@ -21,10 +21,7 @@ class ITS(object):
         self.APR = apr
         self.msat = int(msat)
 
-        self.nr_purines = sum([1 for s in self.sequence[:20] if s in ['G','A']])
-
-        # These are optional data which are used if the raw quantitations are
-        # available
+        # These are optional data which are used if the raw quantitations are available
         self.quantitations = []
         # all data lists go from RNA-mer 2 to 21
         self.abortiveProb = []  # mean
@@ -58,28 +55,15 @@ class ITS(object):
 
         self.dinucs = __dinucs
 
-        # Make di-nucleotide vectors for all the energy parameters
-        # goes from 2-mer till length of sequence
-        # XXX MAN!! You are perpetually confused by the starting index of your
-        # arrays. How non-robust. If you want to keep returning to this you'll
-        # need something better.
-
-        # Index 0 never happens, index 1 is the bubble opening for the first
-        # translocation step
         self.rna_dna_di = [Ec.NNRD[di] for di in __dinucs]
 
-        # Index 0, 1 etc is not relevant fo translocation because there is no
-        # change in length
+        # Index 0, 1 etc is not relevant for translocation equilibrium because
+        # there is no change in length
         self.dna_dna_di = [Ec.NNDD[di] for di in __dinucs]
 
         # Index 0 is the first translocation step
         self.dinucleotide_delta_g_f = [Ec.dinucleotide_deltaG_f[di] for di in __dinucs]
         self.dinucleotide_delta_g_b = [Ec.dinucleotide_deltaG_b[di] for di in __dinucs]
-
-        # define the 15 dna-dna and rna-rna and keq values
-        self.DgDNA15 = sum(self.dna_dna_di[:15])
-        self.DgRNA15 = sum(self.rna_dna_di[:15])
-        self.Dg3D15 = sum(self.dinucleotide_delta_g_b[:15])
 
     def __repr__(self):
         return "{0}, PY: {1}".format(self.name, self.PY)

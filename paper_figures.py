@@ -3170,8 +3170,30 @@ def basic_info(ITSs):
 
     py = [i.PY for i in ITSs]
 
+    # XXX RESULT: the "A" part contributes more to correlation with PY
+    # than the "G" part of the pyrimidines for dg100, and much more for dg400.
+    # for DG400 correlation is significant starting at +4, dips at +5, and then
+    # increases gradually to +11. Correlation with G isn't significant at all
+    # until + 10 or so! But gradually increases from +8 all the way up to + 15.
+    # for DG400 G is actually significantly ANTI correlated with PY at +3 and +4!
+    # this is also true for DG100, but not significant, and -0.18 or so.
+    # The DG400 stuff can be an artefact from biasing toward the 3rd and 4th
+    # nucleotides by forcing the dinucleotide structure.
+    # Still, i'd say that for DG100 your conclusion still stands. How big is
+    # the AG difference in Hein and Malinen?
+    # Considering the U > C > A > G for going to the backtracked state, for
+    # DG100 U has a stronger anti-correlation with PY than
+    # There is an assymetry here though:
+    #   A is more strongly correlated than G -> together they are stronger
+    #   C and T are similarly anti-correlated -> together they are stronger (or
+    #   just the negative of the AG correlation)
+    for i in ITSs:
+        print i.PY, i.sequence[:15]
+
     #ladder_pre = [[1 if nuc in ['G', 'A'] else 0 for nuc in i.sequence[:i.msat]] for i in ITSs]
-    ladder_pre = [[1 if nuc in ['G', 'A'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
+    ladder_pre = [[1 if nuc in ['C', 'T'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
+    #ladder_pre = [[1 if nuc in ['G'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
+    #ladder_pre = [[1 if nuc in ['G'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
     #ladder = [sum(ladder_pre[:i])]
     avg_corr = []
     np_corr = []
@@ -3487,9 +3509,9 @@ def main():
     #normalize_AP(ITSs)
 
     # basic correlations
-    #basic_info(dg100)
+    basic_info(dg100)
     #basic_info(dg400)
-    #return
+    return
 
     ## plot data when sorting by SE
     #ITSs = sortITS(ITSs, 'SE')

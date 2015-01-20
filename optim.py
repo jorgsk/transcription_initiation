@@ -478,19 +478,39 @@ def keq_i(RT, rna_len, dg3d, dna_dna, rna_dna, a, b, c):
 
     Recall that the energies are in dinucleotide form. Thus ATG -> [0.4, 0.2]
 
+    Duplex DNA:
+    TACG
+    ATGC
+
+    TA
+    AT 0.4
+
+    GC
+    TG 0.1
+
+    CG
+    GC 0.2
+
+    # What is the cost of opening that last G-C basepair?
+    # This is a nearest neighbor model (see SantaLucia and Hicks for example)
+    # so you would compare the free energy of the ATG with the free energy of
+    # the ATGC strand. The calculation is
+    (0.4 + 0.1 + 0.2) - (0.4 + 0.1) = 0.2
+    # this is equivalent to the free energy of the last dinucleotide
+
     Tip for the future; start at +1 also for nucleotides, so all arrays have the
     same length. Just have the first values as 0. Makes it much easier to
     understand the code later. The 0s are placeholders.
 
     k1[0] should be for d(x_3)/dt
 
-    -> keq = (1,2)
+    -> 3D = (1,2)
     -> RD = 0
     -> DD = (1,3) - (1,2)
 
     k1[1] should be for d(x_4)/dt
 
-    -> keq = (2,3)
+    -> 3D = (2,3)
     -> RD = 0
     -> DD = (1,4) - (1,3)
 
