@@ -160,11 +160,13 @@ def ReadData(dataset):
                  '1207_second': 'quant1207.csv',
                  '1214_third':  'quant1214.csv'}
 
+        # this re-calculates PY and AP and all that from raw data
         ITSs = read_raw(path, files, dset='dg100')
 
-        # add msat from the old csv approach
+        # read its-data the "old" way just to get msat and copy msat to ITSs
+        # read the 'new' way
         oldcsvpath = cwd + 'sequence_data/Hsu/csvHsu'
-        ITSs_oldcsv = ReadDG100Old(oldcsvpath)
+        ITSs_oldcsv = PYHsu_oldcsv(oldcsvpath)
         for its_name in ITSs:
             for its_old in ITSs_oldcsv:
                 if its_name == its_old.name:
