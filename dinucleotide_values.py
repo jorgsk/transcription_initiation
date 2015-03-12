@@ -237,8 +237,11 @@ scaled_hein_translocation_reverse_rate_constants = {
 
 if __name__ == '__main__':
     import os
+    from Energycalc import HalfLife2RateConstant, Ms2s
     energy_dir = 'free_energy_parameters'
+
     # Write out some of these dictionaries to file
+
     energies =\
     {'Malinen_nucleotide_addition_halflife_ms': malinen_et_al_nucleotide_addition_halflives_ms,
      'Malinen_forward_translocation_halflife_ms': malinen_et_al_forward_translocation_halflives_ms,
@@ -254,3 +257,19 @@ if __name__ == '__main__':
                 continue
             file_handle.write(key + '\t' + str(value) + '\n')
         file_handle.close()
+
+        # Convert half-lives to rate constants for Malinen and save to separate
+        # file
+        if name.startswith('Malinen') and name.endswith('halflife_ms'):
+            filename = name.replace('halflife_ms', 'rate_constants')
+            file_path_2 = os.path.join(energy_dir, filename + '.txt')
+            file_handle_2 = open(file_path_2, 'wb')
+            for nt, hl in hashmap.items():
+                if len(nt) != 1:
+                    continue
+                rate = Ms2s(HalfLife2RateConstant(hl))
+                file_handle_2.write(nt + '\t' + str(rate) + '\n')
+
+            file_handle_2.close()
+
+
