@@ -157,6 +157,13 @@ for din, en in dna_keq.items():
     dinucleotide_deltaG_b[din] = -RT*np.log(en)/1000  # divide by 1000 to get kcal
 
 
+def Ms2s(value):
+    """
+    Convert unit from miliseconds to seconds
+    """
+    return value * 1000
+
+
 def HalfLife2RateConstant(hl):
     """
     Assuming first order kinetics
