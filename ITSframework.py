@@ -6,7 +6,7 @@ translocation equilibria, or other such values.
 """
 import numpy as np
 import Energycalc as Ec
-#from ipdb import set_trace as debug
+from ipdb import set_trace as debug  # NOQA
 
 
 class ITS(object):
@@ -271,9 +271,13 @@ class ITS(object):
 
             # define tmp arrays to work with
             rawD = self.rawData[quant]
+
+            # Set all missing values to nan. Use nanmean to get watcha want.
+            rawD = np.array([np.nan if x==-99 else x for x in rawD])
+
             fullL = self.fullLength[quant]
 
-            totalAbortive = sum(rawD)
+            totalAbortive = np.nansum(rawD)
             totalRNA = totalAbortive + fullL
 
             # Save these two for posterity
@@ -283,13 +287,13 @@ class ITS(object):
             rDRange = range(len(rawD))
 
             # percentage yield at this x-mer
-            prctYield = [(rD/totalRNA)*100 for rD in rawD]
+            prctYield = [(rD/totalRNA)*100. for rD in rawD]
 
             # amount of RNA produced from here and out
-            RNAprodFromHere = [sum(rawD[i:]) + fullL for i in rDRange]
+            RNAprodFromHere = [np.nansum(rawD[i:]) + fullL for i in rDRange]
 
             # percent of RNAP reaching this position
-            prctRNAP = [(rpfh/totalRNA)*100 for rpfh in RNAprodFromHere]
+            prctRNAP = [(rpfh/totalRNA)*100. for rpfh in RNAprodFromHere]
 
             # probability to abort at this position
             # More accurately: probability that an abortive RNA of length i is
@@ -297,11 +301,13 @@ class ITS(object):
             # little abortive product but reducing productive yield)
             self._APraw[quant] = [prctYield[i]/prctRNAP[i] for i in rDRange]
 
-        self.abortiveProb = np.mean(self._APraw.values(), axis=0)
-        self.abortiveProb_std = np.std(self._APraw.values(), axis=0)
+        self.abortiveProb = np.nanmean(self._APraw.values(), axis=0)
+        self.abortiveProb_std = np.nanstd(self._APraw.values(), axis=0)
 
-        self.totAbortMean = np.mean(self.totAbort.values(), axis=0)
-        self.totRNAMean = np.mean(self.totRNA.values(), axis=0)
+        self.totAbortMean = np.nanmean(self.totAbort.values(), axis=0)
+
+        # test, no abortive probability should be less than zero
+        assert sum([1 for ap in self.abortiveProb if ap < 0]) == 0
 
     def calc_keq(self, c1, c2, c3, msat_normalization, rna_len):
         """
@@ -350,8 +356,8 @@ class ITS(object):
             totalRNA = sum(self.rawData[quant]) + self.fullLength[quant]
             self._AYraw[quant] = self.rawData[quant]/totalRNA
 
-        self.AY = np.mean([py for py in self._PYraw.values()])
-        self.AY_std = np.std([py for py in self._PYraw.values()])
+        self.AY = np.mean([py for py in self._AYraw.values()])
+        self.AY_std = np.std([py for py in self._AYraw.values()])
 
 
 if __name__ == '__main__':
