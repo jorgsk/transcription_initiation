@@ -22,6 +22,23 @@ from scipy.interpolate import InterpolatedUnivariateSpline as interpolate
 from scipy import optimize
 import numpy.ma as ma
 
+# Specify better colors than the 'ugh' default colors in matplotlib
+import brewer2mpl
+bmap = brewer2mpl.get_map('Set1', 'qualitative', 9)
+brew_red, brew_blue, brew_green, brew_purple, brew_orange, brew_yellow, brew_brown, brew_pink, brew_gray = bmap.mpl_colors
+
+# Global settings for matplotlib
+from matplotlib import rcParams
+#rcParams['axes.labelsize'] = 9
+#rcParams['xtick.color'] = 'gray'
+#rcParams['ytick.labelsize'] = 9
+#rcParams['legend.fontsize'] = 9
+
+rcParams['font.family'] = 'serif'
+rcParams['font.serif'] = ['Times']
+rcParams['text.usetex'] = True
+
+
 # Global variables :)
 #here = os.getcwd()  # where this script is executed from! Beware!
 here = os.path.abspath(os.path.dirname(__file__))  # where this script is located
@@ -547,7 +564,7 @@ class Calculator(object):
             elif measure == 'AvgKbt':
                 measure_values = [np.nanmean(i.keq[:rna_len-1]) for i in ITSs]
             elif measure == 'SumPurines':
-                measure_values = [sum(i.purines[:rna_len-1]) for i in ITSs]
+                measure_values = [sum(i.purines[:rna_len]) for i in ITSs]
 
             co, pv = spearmanr(measure_values, PY)
 
@@ -855,7 +872,7 @@ class Plotter(object):
     """
 
     def __init__(self, YaxNr=1, XaxNr=1, shareX=False, shareY=False,
-                    plotName='MyPlot', p_line=True, labSize=12, tickLabelSize=10,
+                    plotName='MyPlot', p_line=True, labSize=10.5, tickLabelSize=10.5,
                     lineSize=2, tickLength=3, tickWidth=1):
 
         # squeeze=False guarantees that axes will be a 2d array
@@ -1046,17 +1063,30 @@ class Plotter(object):
         # Add colors to the bar-plots according to the benjamini hochberg method
         # sort the p-values from high to low; test against plim/
 
-        colors = benjami_colors(pvals, Q=Q, nonsigncol='gray', signcol='orange')
+        #colors = benjami_colors(pvals, Q=Q, nonsigncol=brew_gray, signcol=brew_orange)
+        colors, sign_indx = benjami_colors(pvals, Q=Q, nonsigncol=brew_gray, signcol=brew_gray)
+
+        def autolabel(rects, sign_indx):
+            # attach some text labels
+            for rect, sign in zip(rects, sign_indx):
+                height = rect.get_height()
+                if sign == 1:
+                    ax.text(rect.get_x()+rect.get_width()/2., height + 0.01, '$*$',
+                            ha='center', va='bottom')
 
         # plotit
         ax = self.getNextAxes()  # for the local figure
-        ax.bar(left=xmers, height=bar_height, align='center', color=colors)
+        rectangles = ax.bar(left=xmers, height=bar_height, align='center',
+                color=colors, width=1.0)
         ax.set_xticks(xmers)
         ax.set_xlim(xmers[0]-1, xmers[-1]+1)
 
+        # add a start for the significant ones
+        autolabel(rectangles, sign_indx)
+
         # labels
         if xlab:
-            ax.set_xlabel('ITS position, $i$', size=self.labSize)
+            ax.set_xlabel('ITS position $i$', size=self.labSize)
         ax.set_ylabel('Correlation: AP and $K_{bt,i}$', size=self.labSize)
 
         # ticks
@@ -1083,7 +1113,7 @@ class Plotter(object):
         # Y: show every other tick with a label
         yIndx = [g for g in np.arange(-0.2, 0.8, 0.2)]
         ax.set_yticks(yIndx)
-        ax.set_ylim(-0.05, 0.63)
+        ax.set_ylim(-0.05, 0.73)
 
         return ax
 
@@ -1128,7 +1158,7 @@ class Plotter(object):
 
         # labels
         if xlab:
-            ax.set_xlabel('Average equilibrium constant: $\overline{K}_{bt,\mathrm{MSAT}}$', size=self.labSize)
+            ax.set_xlabel('$\overline{K}_{bt,\mathrm{MSAT}}$', size=self.labSize)
 
         ax.set_ylabel('Average AP ($\%$)', size=self.labSize)
 
@@ -1197,12 +1227,18 @@ class Plotter(object):
         ymax = 1.1
 
         ax = self.getNextAxes()
+        ax.yaxis.set_ticks_position('left')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.yaxis.grid(True, which='major', color='lightgrey',
+                      alpha=0.5, dashes=[1,1,1,1,1,1])
 
         colors = ['g', 'b', 'k', 'c']
-        lstyle = ['--', '-', '-.',':']
+        colors = [brew_blue, brew_blue, brew_green, brew_purple]
+        lstyle = ['-', '-', '-','-']
 
         # create labels from the combinations
-        enOrder = ['$\Delta{DNA-DNA}$', '$\Delta{RNA-DNA}$', '$\Delta{3N}$']
+        #enOrder = ['$\Delta${DNA-DNA}', '$\Delta{RNA-DNA}$', '$\Delta{3N}$']
+        enOrder = ['$\Delta$DNA-DNA', '$\Delta$RNA-DNA', '$\Delta${3N}']
 
         # convert from dict-keys to plot labels. bad stuff.
         key2label = {}
@@ -1218,6 +1254,10 @@ class Plotter(object):
         for key, label in key2label.items():
             color = colors.pop()
             ls = lstyle.pop()
+
+            # skip the one with all -- you're showing it in too many plots
+            if key == 'True_True_True':
+                continue
 
             # indices, correlation coefficients, and pvalues SE - PY
             indx, corr, pvals = delineateResults[key]
@@ -1257,20 +1297,21 @@ class Plotter(object):
             #ax.set_xticklabels(xticklabels)
             ax.set_xticklabels(odd_even_spacer(xticklabels, oddeven='even'))
             ax.set_xlim(indMin-1, indxMax)
-            ax.set_xlabel("$i$", size=self.labSize)
+            ax.set_xlabel("$n$", size=self.labSize)
 
             #  setting the tick font sizes
             ax.tick_params(labelsize=self.tickLabelSize)
 
-            ax.set_ylabel("Correlation: PY and average $\overline{K}_{bt,i}$", size=self.labSize)
+            ax.set_ylabel("Correlation: PY and average $\overline{K}_{bt,n}$", size=self.labSize)
 
             ax.set_yticks(np.arange(ymin, ymax, 0.1))
             ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
             ax.set_ylim(ymin, ymax)
-            ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                          alpha=0.5)
-            ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                          alpha=0.5)
+
+            #ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                          #alpha=0.5)
+            #ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                          #alpha=0.5)
 
     def delineatorPlot(self, delineateResults, inst_change=False):
         """
@@ -1290,15 +1331,20 @@ class Plotter(object):
         ymax = 1.1
 
         ax = self.getNextAxes()
+        ax.yaxis.set_ticks_position('left')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.yaxis.grid(True, which='major', color='lightgrey',
+                      alpha=0.5, dashes=[1,1,1,1,1,1])
 
-        colors = ['k', 'g', 'b']
-        dashes = [(1,1,1,1,1), (1,3,1,3,1,3), False]
+        colors = [brew_green, brew_purple, brew_blue]
+        #dashes = [(1,1,1,1,1,1), (1,3,1,3,1,3), False]
+        dashes = [False, False, False]
 
         # convert from dict-keys to plot labels
         key2label = {
-                'False_False_True': '$\Delta{3N}$',
-                'True_False_False': '$\Delta{DNA-DNA}$',
-                'False_True_False': '$\Delta{RNA-DNA}$',
+                'False_False_True': '$\Delta$3N',
+                'True_False_False': '$\Delta$DNA-DNA',
+                'False_True_False': '$\Delta$RNA-DNA',
                 }
 
         for key, label in key2label.items():
@@ -1359,40 +1405,44 @@ class Plotter(object):
         ax.set_xticklabels(xtickLabels)
 
         ax.set_xlim(indMin-1, indxMax)
-        ax.set_xlabel("$i$", size=self.labSize)
+        ax.set_xlabel("$n$", size=self.labSize)
 
         # setting the tick font sizes
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
                 width=self.tickWidth)
 
-        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,i}$", size=self.labSize)
+        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,n}$", size=self.labSize)
 
         ax.set_yticks(np.arange(ymin, ymax, 0.1))
         ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
         ax.set_ylim(ymin, ymax)
-        ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                      alpha=0.5)
-        ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                      alpha=0.5)
 
-    def dg400validater(self, dg400, SE15, PY, PYstd, fit_function=False):
+        #ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      #alpha=0.5)
+        #ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      #alpha=0.5)
+
+        #ax.yaxis.set_ticks_position('left')
+        #ax.xaxis.set_ticks_position('bottom')
+
+    def dg400validater(self, dg400, values, PY, PYstd, fit_function=False):
 
         ax = self.getNextAxes()
 
-        print("DG400 correlation SE15 PY")
-        print spearmanr(SE15, PY)
+        print("DG400 correlation values PY")
+        print spearmanr(values, PY)
 
         # multiply by 100 for plot
         PY = [p*100 for p in PY]
         PYstd = [p*100 for p in PYstd]
 
         # simple average for now, just for the effect
-        ax.scatter(SE15, PY, s=12, color='b', zorder=2)
-        ax.errorbar(SE15, PY, yerr=PYstd, fmt=None, zorder=1, elinewidth=0.3)
+        ax.errorbar(values, PY, yerr=PYstd, fmt=None, ecolor='gray', zorder=1,
+                elinewidth=0.3)
+        ax.scatter(values, PY, c=brew_blue, s=12, zorder=2, lw=0)
 
         ########### Set figure and axis properties ############
-        ax.set_xlabel('Average equilibrium constant: $\overline{K}_{bt,\mathrm{15}}$',
-                       size=self.labSize)
+        ax.set_xlabel('$\overline{K}_{bt,\mathrm{15}}$', size=self.labSize)
 
         ax.set_ylabel('Productive yield ($\%$)', size=self.labSize)
 
@@ -1418,7 +1468,7 @@ class Plotter(object):
 
         # add a polynomial or sigmoid fit
         if fit_function:
-            self.add_fitted_function(ax, PY, SE15)
+            self.add_fitted_function(ax, PY, values)
 
         dg400dict = dict(((o.name, o) for o in dg400))
 
@@ -1564,13 +1614,13 @@ class Plotter(object):
         PYs = [p*100 for p in PYs]
         PYstd = [p*100 for p in PYstd]
 
-        ax.errorbar(values, PYs, yerr=PYstd, fmt=None, ecolor='b', zorder=1,
+        ax.errorbar(values, PYs, yerr=PYstd, fmt=None, ecolor='gray', zorder=1,
                 elinewidth=0.3)
-        ax.scatter(values, PYs, c='b', s=12, linewidth=0.6, zorder=2)
+        ax.scatter(values, PYs, c=brew_blue, s=12, zorder=2, lw=0)
         # XXX get the errorbars to be gray too!!!!!!!!
 
         ax.set_ylabel("Productive yield ($\%$)", size=self.labSize)
-        ax.set_xlabel("Average equilibrium constant: $\overline{K}_{bt,\mathrm{MSAT}}$", size=self.labSize)
+        ax.set_xlabel("$\overline{K}_{bt,\mathrm{MSAT}}$", size=self.labSize)
 
         ymin = -0.1
 
@@ -1757,10 +1807,10 @@ class Plotter(object):
         corr, pvals = remove_nan(corr111, pvals111)
 
         ## the ladder plot
-        colr = 'k'
+        colr = brew_gray
         revCorr = [c*(-1) for c in corr]  # to get an increasing correlation
-        existing_ax.plot(indx, revCorr, linewidth=self.lineSize-1, color=colr, marker='s',
-                markersize=2, ls='-', label='$c_{1}=c_{2}=c_{3}=1$')
+        existing_ax.plot(indx, revCorr, linewidth=self.lineSize, color=colr, marker='s',
+                markersize=2, ls='-', label='$c_{1}=c_{2}=c_{3}=1$', markeredgecolor='none')
 
     def PYvsAvgKbtLadderPurines(self, existing_ax, indx, corr_purines, pvals_purines, PYs):
         """
@@ -1773,12 +1823,12 @@ class Plotter(object):
         corr, pvals = remove_nan(corr_purines, pvals_purines)
 
         ## the ladder plot
-        colr = 'g'
+        colr = brew_green
         #rev_corr = [c*(-1) for c in corr_purines]  # to get an increasing correlation
-        purine_ax.plot(indx, corr_purines, linewidth=self.lineSize-1, color=colr, marker='s',
-                markersize=2, ls='-', label='Number of purines')
+        purine_ax.plot(indx, corr, linewidth=self.lineSize, color=colr, marker='s',
+                markersize=2, ls='-', label='Number of purines', markeredgecolor='none')
 
-        purine_ax.set_ylabel('Correlation: PY and #purines\n up to RNA length $i$',
+        purine_ax.set_ylabel('Correlation: PY and \#purines\n up to RNA length $n$',
                 size=self.labSize-1, color='green', multialignment='center')
 
         # Set axis parameters the same as for other axis
@@ -1794,7 +1844,7 @@ class Plotter(object):
         purine_ax.set_ylim(ylim)
 
         #purine_ax.set_xticklabels(xticklabels)
-        purine_ax.set_xlim(2, indx[-1]+1)
+        purine_ax.set_xlim(2-0.5, indx[-1]+1)
         #purine_ax.set_xticks(xticks)
 
         purine_ax.tick_params(axis='y', labelsize=self.tickLabelSize,
@@ -1807,6 +1857,9 @@ class Plotter(object):
 
         ax = self.getNextAxes()
 
+        ax.yaxis.grid(True, which='major', color='lightgrey',
+                      alpha=0.5, dashes=[1,1,1,1,1,1])
+
         # check for nan in corr (make it 0)
         corr, pvals = remove_nan(corr, pvals)
 
@@ -1814,12 +1867,12 @@ class Plotter(object):
         #its_max = 15
 
         ## the ladder plot
-        colr = 'b'
+        colr = brew_blue
         revCorr = [c*(-1) for c in corr]  # to get an increasing correlation
         #ax.plot(indx, revCorr, linewidth=self.lineSize, color=colr, marker='s',
                 #markersize=3, label='Optimal $c_1, c_2, c_3$')
         ax.plot(indx, revCorr, linewidth=self.lineSize, color=colr, marker='s',
-                markersize=3)
+                markersize=2, markeredgecolor='none')
 
         if self.p_line:
             # sort pvals and corr and interpolate
@@ -1845,7 +1898,7 @@ class Plotter(object):
 
         #ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,i}$", size=self.labSize,
                      #color='blue')
-        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,i}$", size=self.labSize)
+        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,n}$", size=self.labSize)
 
         # set tick label size
         ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
@@ -1854,31 +1907,30 @@ class Plotter(object):
         ax.tick_params(axis='y')
 
         # xticks
+        xticks = range(2, its_max+1)
         xtickLabels = []
-        for i in range(3, its_max):
+        for i in xticks:
             if i%2 == 0:
                 xtickLabels.append(str(i))
             else:
                 xtickLabels.append('')
 
-        ax.set_xticks(range(3, its_max))
+        ax.set_xticks(xticks)
         ax.set_xticklabels(xtickLabels)
         #ax.set_xticklabels([])
-        ax.set_xlim(3, its_max)
-        ax.set_xlabel("$i$", size=self.labSize)
+        ax.set_xlim(2-0.5, its_max)
+        ax.set_xlabel("$n$", size=self.labSize)
 
         # bbox_to_anchor= x, y, width, height
-        if pval_pos == 'high':
-            yLoc = 0.85
-        elif pval_pos == 'low':
-            yLoc = 0.15
-        ax.legend(bbox_to_anchor=(0.8, yLoc, 0.2, 0.1), loc='best',
-                    prop={'size':4.5})
+        #if pval_pos == 'high':
+            #yLoc = 0.85
+        #elif pval_pos == 'low':
+            #yLoc = 0.15
 
-        ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                      alpha=0.5)
-        ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                      alpha=0.5)
+        #debug()
+
+        #ax.legend(bbox_to_anchor=(0.8, yLoc, 0.2, 0.1), loc='best',
+                    #prop={'size':4.5})
 
         return ax
 
@@ -1915,7 +1967,7 @@ class Plotter(object):
         ax.set_yticks(yticks)
         ax.set_yticklabels(yticklabels_skip)
         ax.set_ylim(ymin, 1.1)
-        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,i}$", size=self.labSize)
+        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,n}$", size=self.labSize)
 
         # xticks
         xticklabels = [str(integer) for integer in range(indxMin, indxMax+1)]
@@ -1924,7 +1976,7 @@ class Plotter(object):
         ax.set_xticks(range(indxMin, indxMax))
         ax.set_xticklabels(xticklabels_skip)
         ax.set_xlim(indxMin-1, indxMax)
-        ax.set_xlabel("$i$", size=self.labSize)
+        ax.set_xlabel("$n$", size=self.labSize)
 
         # setting the tick font sizes
         ax.tick_params(labelsize=self.tickLabelSize)
@@ -1940,8 +1992,12 @@ class Plotter(object):
         """
 
         ax = self.getNextAxes()
+        ax.yaxis.set_ticks_position('left')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.yaxis.grid(True, which='major', color='lightgrey',
+                      alpha=0.5, dashes=[1,1,1,1,1,1])
 
-        colors = ['b', 'g', 'k']
+        colors = [brew_blue, brew_green, brew_purple]
 
         for analysis, stats in analysis2stats.items():
             indx, corr, corr_stds, pvals = stats
@@ -1960,7 +2016,7 @@ class Plotter(object):
 
                 lab = 'Full DG100 dataset'
                 ax.plot(incrX, corr, label=lab, linewidth=self.lineSize,
-                        color=colr, marker='s', markersize=3)
+                        color=colr)
 
                 p_line = False
                 if p_line:
@@ -1976,14 +2032,12 @@ class Plotter(object):
             elif analysis == 'Random':
                 lab = 'random sequences'
                 ax.errorbar(incrX, corr, yerr=corr_stds, label=lab,
-                                     linewidth=self.lineSize, color=colr,
-                                     marker='*', markersize=3)
+                                     linewidth=self.lineSize, color=colr)
 
             elif analysis == 'Cross Correlation':
                 lab = 'cross-validation'
                 ax.errorbar(incrX, corr, yerr=corr_stds, label=lab,
-                                     linewidth=self.lineSize, color=colr,
-                                     marker='x', markersize=3)
+                                     linewidth=self.lineSize, color=colr)
 
         indxMax = incrX[-1] + 1
         indxMin = 2
@@ -1998,7 +2052,7 @@ class Plotter(object):
         ax.set_yticks(yticks)
         ax.set_yticklabels(yticklabels_skip)
         ax.set_ylim(ymin, 1.1)
-        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,i}$", size=self.labSize)
+        ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,n}$", size=self.labSize)
 
         # xticks
         xticklabels = [str(integer) for integer in range(indxMin, indxMax+1)]
@@ -2007,17 +2061,17 @@ class Plotter(object):
         ax.set_xticks(range(indxMin, indxMax))
         ax.set_xticklabels(xticklabels_skip)
         ax.set_xlim(indxMin-1, indxMax)
-        ax.set_xlabel("$i$", size=self.labSize)
+        ax.set_xlabel("$n$", size=self.labSize)
 
         ax.legend(loc='upper left', prop={'size':6})
 
         # setting the tick font sizes
         ax.tick_params(labelsize=self.tickLabelSize)
 
-        ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                      alpha=0.5)
-        ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                      alpha=0.5)
+        #ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      #alpha=0.5)
+        #ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                      #alpha=0.5)
 
 
 class AP(object):
@@ -3187,14 +3241,46 @@ def basic_info(ITSs):
     #   A is more strongly correlated than G -> together they are stronger
     #   C and T are similarly anti-correlated -> together they are stronger (or
     #   just the negative of the AG correlation)
-    for i in ITSs:
-        print i.PY, i.sequence[:15]
+
+    # At the same time, there is an interesting effect where there is no
+    # correlation between the number of As and the number of Gs. This can
+    # indicate that these two purines have a different
+    # that these two purine values have
+
+    # This can be result 1 in your work. Strong correlation with number of
+    # purines. Has been shown ... G..., butstronger with A than with G.
+    # Further, no correlation between A and G; if A and G were equally
+    # beneficial to avoid paused and backtracked state, one would expect these
+    # two values to have some correlation since they would be equally likely to
+    # appear in the high-PY variants, and equally likely not to appear in the
+    # low-PY variants.
+
+    # What about abortive probabilities. Are they totally random ORWTF?
 
     #ladder_pre = [[1 if nuc in ['G', 'A'] else 0 for nuc in i.sequence[:i.msat]] for i in ITSs]
-    ladder_pre = [[1 if nuc in ['C', 'T'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
-    #ladder_pre = [[1 if nuc in ['G'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
-    #ladder_pre = [[1 if nuc in ['G'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
+    ladder_pre = [[1 if nuc in ['A'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
     #ladder = [sum(ladder_pre[:i])]
+    #xx=15
+    #ladder_G = [[1 if nuc in ['G'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
+    #ladder_A = [[1 if nuc in ['A'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
+    #ladder_C = [[1 if nuc in ['C'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
+    #ladder_T = [[1 if nuc in ['T'] else 0 for nuc in i.sequence[:20]] for i in ITSs]
+    #ladder_G = [[1 if nuc in ['G'] else 0 for nuc in i.sequence[:i.msat]] for i in ITSs]
+    #ladder_A = [[1 if nuc in ['A'] else 0 for nuc in i.sequence[:i.msat]] for i in ITSs]
+    #ladder_C = [[1 if nuc in ['C'] else 0 for nuc in i.sequence[:i.msat]] for i in ITSs]
+    #ladder_T = [[1 if nuc in ['T'] else 0 for nuc in i.sequence[:i.msat]] for i in ITSs]
+    #lad_np_G = [sum(ladder_G[i][:xx]) for i in range(len(ladder_pre))]
+    #lad_np_A = [sum(ladder_A[i][:xx]) for i in range(len(ladder_pre))]
+    #lad_np_C = [sum(ladder_C[i][:xx]) for i in range(len(ladder_pre))]
+    #lad_np_T = [sum(ladder_T[i][:xx]) for i in range(len(ladder_pre))]
+    #msats = [i.msat for i in ITSs]
+
+    #nts = ('G', 'A', 'C', 'T')
+    #nr_nts = (lad_np_G, lad_np_A, lad_np_C, lad_np_T)
+    #for nt, nr_nt in zip(nts, nr_nts):
+        #print nt, spearmanr(msats, nr_nt)
+
+    #debug()
     avg_corr = []
     np_corr = []
 
@@ -3202,12 +3288,20 @@ def basic_info(ITSs):
     for i in ITSs:
         i.calc_keq(*coeff, msat_normalization=True, rna_len=20)
 
-    rna_lenghts = range(2,21)
+    #rna_lenghts = range(2,10)
 
+    #for x in rna_lenghts:
+        #lad_np = [sum(ladder_pre[i][:x]) for i in range(len(ladder_pre))]
+        ##avg_kbt = [np.mean(i.keq[:x]) for i in ITSs]
+        #measure_values = [np.nanmean(i.keq[:x-1]) for i in ITSs]
+        #np_corr.append(spearmanr(py, lad_np)[0])
+        #avg_corr.append(spearmanr(py, measure_values)[0])
+
+    rna_lenghts = range(12,16)
     for x in rna_lenghts:
-        lad_np = [sum(ladder_pre[i][:x]) for i in range(len(ladder_pre))]
+        lad_np = [sum(ladder_pre[i][12:x]) for i in range(len(ladder_pre))]
         #avg_kbt = [np.mean(i.keq[:x]) for i in ITSs]
-        measure_values = [np.nanmean(i.keq[:x-1]) for i in ITSs]
+        measure_values = [np.nanmean(i.keq[12:x-1]) for i in ITSs]
         np_corr.append(spearmanr(py, lad_np)[0])
         avg_corr.append(spearmanr(py, measure_values)[0])
 
@@ -3339,6 +3433,7 @@ def benjami_colors(pvals, Q, signcol, nonsigncol):
     of the sorted p-vals. Then add color based on the order and the pval.
     """
     colors = []
+    indx = []
 
     # recall that 0 implies that no test was done.
     # you'll need to avoid this: remove all 0s
@@ -3351,14 +3446,17 @@ def benjami_colors(pvals, Q, signcol, nonsigncol):
     for pvl in pvals:
         if pvl == 0:
             colors.append('k')
+            indx.append(-1)
         else:
             # two index operations: first the index in the sorted
             if pvl < ((no_zero_pvals_sorted.index(pvl)+1)/nr_tests)*Q:
                 colors.append(signcol)
+                indx.append(1)
             else:
                 colors.append(nonsigncol)
+                indx.append(0)
 
-    return colors
+    return colors, indx
 
 
 def pickle_wrap(data='', path='', action=''):
@@ -3493,6 +3591,56 @@ def mad_std(a, c=0.6745, axis=None):
     return m
 
 
+def ap_distribution(dg100, dg400):
+    """
+    Distribution of AP across all ITSs
+    """
+
+    from pandas import DataFrame as df
+
+    for dset_name, ITSs in [('DG100', dg100), ('DG400', dg400)]:
+        #if dset_name == 'DG400':
+            #for its in ITSs:
+                #its.abortiveProb = its.abortiveProb*2
+        dsetmean = np.nanmean([i.PY for i in ITSs])
+        if dset_name == 'DG100':
+            rna_range = range(2,21)
+        else:
+            rna_range = range(2,16)
+        for division in ['low PY', 'high PY', 'all']:
+            my_df = df()
+            for rna_len in rna_range:
+                if division == 'low PY':
+                    my_df[rna_len] = [i.abortiveProb[rna_len-2] for i in ITSs
+                            if i.PY < dsetmean]
+                if division == 'high PY':
+                    my_df[rna_len] = [i.abortiveProb[rna_len-2] for i in ITSs
+                            if i.PY > dsetmean]
+                if division == 'all':
+                    my_df[rna_len] = [i.abortiveProb[rna_len-2] for i in ITSs]
+
+            ax = my_df.plot(kind='box', ylim=(0,0.8))
+            fig = ax.get_figure()
+            fig.suptitle('AP distributions for {0} {1}'.
+                    format(dset_name, division))
+            filepath = os.path.join('AP_distributions', dset_name + '_' +division + '.pdf')
+            fig.savefig(filepath, format='pdf', size_inches=(9,15))
+
+
+def dg100_to_file(dg100):
+    filepath = 'dg100_parameters.txt'
+    filehandle = open(filepath, 'wb')
+    for its in dg100:
+        line = []
+        line.append(its.name)
+        line.append(its.sequence)
+        line.append(str(its.PY))
+
+        filehandle.write('\t'.join(line) + '\n')
+
+    filehandle.close()
+
+
 def main():
     #remove_controls = True
     remove_controls = False
@@ -3509,9 +3657,11 @@ def main():
     #normalize_AP(ITSs)
 
     # basic correlations
-    basic_info(dg100)
+    #basic_info(dg100)
     #basic_info(dg400)
-    return
+    #ap_distribution(dg100, dg400)
+    #dg100_to_file(dg100)
+    #return
 
     ## plot data when sorting by SE
     #ITSs = sortITS(ITSs, 'SE')
@@ -3541,8 +3691,8 @@ def main():
     #moving_average_ap(dg100, dg400)
 
     # Do not recalculate but use saved values (for tweaking plots)
-    #calculateAgain = False
-    calculateAgain = True
+    calculateAgain = False
+    #calculateAgain = True
 
     # XXX warning if coeffs are set they are used instead of recalculating!
     # XXX afaik, these are only used for Figure2 (and 400-library). It would
@@ -3574,8 +3724,8 @@ def main():
     figures = [
             #'Figure_PYvsAvgKbt',  # AvgKbt vs PY (in Paper)
             #'Figure_AP_Kbt',  # 1x2 Keq and AvgKbt vs AP (in Paper)
-            #'CrossRandomDelineateSuppl',  # (in Paper)
-            'Figure_DG400_corr_ladder',  # DG400 scatter plot and ladder (in Paper)
+            'CrossRandomDelineateSuppl',  # (in Paper)
+            #'Figure_DG400_corr_ladder',  # DG400 scatter plot and ladder (in Paper)
             #'Figure_DinucleotideOrder',
             #'Figure_DG400_corr',  # DG400 scatter plot (in Paper)
             #'Figure3',  # Delineate + DG400
@@ -3591,9 +3741,9 @@ def main():
     fig2calc = {
             'Figure_PYvsAvgKbt': ['PYvsAvgKbt'],
             'Figure_AP_Kbt': ['AP_vs_Keq'],
-            'Figure_DG400_corr': ['dg400_validation'],
             'Figure_DG400_corr_ladder': ['dg400_scatter_ladder'],
             'CrossRandomDelineateSuppl': ['crossCorrRandom', 'delineate', 'delineateCombo'],
+            #'Figure_DG400_corr': ['dg400_validation'],
             #'Figure_DinucleotideOrder': ['Shuffler']
             #'Figure3': ['delineate', 'dg400_validation'],
             #'Figure3_instantaneous_change': ['delineate'],
@@ -3630,14 +3780,19 @@ def main():
             topNuc, indx, corr, pvals, PYs, PYstd, value_pack, corr111, pvals111, corr_purine, pvals_purine = calcResults['PYvsAvgKbt']
             values_max, values_best, values_choice, choice = value_pack
 
+            #debug()
+
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName='values_15 vs PY',
-                    p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
+                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1,
                     tickLength=2, tickWidth=0.5)
 
             # Set position for scatter plot
             ax_scatr = plotr.PYvsAvgKbtscatter(PYs, PYstd, values_choice, choice)
-            ax_lad = plotr.PYvsAvgKbtladder(indx, corr, pvals, PYs, values_best, topNuc,
-                                            inset=False)
+            ax_lad = plotr.PYvsAvgKbtladder(indx, corr, pvals, PYs)
+
+            ax_scatr.yaxis.set_ticks_position('left')
+            ax_scatr.xaxis.set_ticks_position('bottom')
+            ax_lad.xaxis.set_ticks_position('bottom')
 
             # adding a visualization of what 1-1-1 looks like
             plotr.PYvsAvgKbtLadder111(ax_lad, indx, corr111, pvals111, PYs)
@@ -3659,6 +3814,12 @@ def main():
             ax_lad.yaxis.labelpad = 1
             ax_scatr.yaxis.labelpad = 1
 
+            # Only keep bottom and left ticks and axes
+            # Hide the right and top spines
+            #ax_scatr.spines['right'].set_visible(False)
+            #ax_scatr.spines['top'].set_visible(False)
+            # Only show ticks on the left and bottom spines
+
             plotr.addLetters(shiftX=0)
 
             saveMe['PYvsAvgKbt'] = plotr.figure
@@ -3669,7 +3830,7 @@ def main():
             delinResults = calcResults['delineate']
 
             plotr = Plotter(plotName=fig,
-                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1.5,
+                    p_line=True, labSize=6, tickLabelSize=2, lineSize=1,
                     tickLength=2, tickWidth=0.5)
 
             plotr.delineatorPlot(delinResults, inst_change=True)  # plot the delineate plot
@@ -3691,7 +3852,7 @@ def main():
             calcdDG400, SE15, PY, PYstd = calcResults['dg400_validation']
 
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
-                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1.5,
+                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1,
                     tickLength=2, tickWidth=0.5)
 
             plotr.delineatorPlot(delinResults)  # plot the delineate plot
@@ -3713,17 +3874,21 @@ def main():
             dg400, rna_range, values, PY, PYstd, corr_kbt, pvals_kbt, corr_purine, pvals_purine = calcResults['dg400_scatter_ladder']
 
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
-                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1.5,
+                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1,
                     tickLength=2, tickWidth=0.5)
 
             ax_sct = plotr.dg400validater(dg400, values, PY, PYstd)
             ax_lad = plotr.PYvsAvgKbtladder(rna_range, corr_kbt, pvals_kbt, PY)
 
+            ax_sct.yaxis.set_ticks_position('left')
+            ax_sct.xaxis.set_ticks_position('bottom')
+            ax_lad.xaxis.set_ticks_position('bottom')
+
             plotr.PYvsAvgKbtLadderPurines(ax_lad, rna_range, corr_purine, pvals_purine, PY)
 
             # Should be 8.7 cm
             plotr.setFigSize(current_journal_width, 4.5)
-            plotr.figure.subplots_adjust(left=0.05, top=0.98, right=0.88,
+            plotr.figure.subplots_adjust(left=0.09, top=0.98, right=0.88,
                     bottom=0.18, wspace=0.4)
 
             ax_lad.yaxis.labelpad = 1
@@ -3741,7 +3906,7 @@ def main():
             calcdDG400, SE15, PY, PYstd = calcResults['dg400_validation']
 
             plotr = Plotter(YaxNr=1, XaxNr=1, plotName=fig,
-                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1.5,
+                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1,
                     tickLength=2, tickWidth=0.5)
 
             plotr.dg400validater(calcdDG400, SE15, PY, PYstd)
@@ -3766,7 +3931,7 @@ def main():
                     #p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
                     #tickLength=2, tickWidth=0.5)
             plotr = Plotter(YaxNr=1, XaxNr=2, plotName=fig,
-                    p_line=True, labSize=8, tickLabelSize=8, lineSize=2,
+                    p_line=True, labSize=8, tickLabelSize=8, lineSize=1,
                     tickLength=2, tickWidth=0.5)
 
             # ladder plut with cumul abortive
@@ -3794,6 +3959,8 @@ def main():
             positions = ['UL', 'UR']
             plotr.addLetters(letters, positions)
 
+            # Add a little grid
+
             saveMe[fig] = plotr.figure
 
         if fig == 'Figure_AP_Kbt':
@@ -3803,19 +3970,26 @@ def main():
             correlation between AP and Keq.
             """
             plotr = Plotter(YaxNr=1, XaxNr=1, plotName=fig,
-                    p_line=True, labSize=6, tickLabelSize=6, lineSize=2,
+                    p_line=True, labSize=6, tickLabelSize=6, lineSize=1,
                     tickLength=2, tickWidth=0.5)
 
             # bar plot
             resAPvsKeq = calcResults['AP_vs_Keq']['Non-Normalized']
-            axM1 = plotr.moving_average_ap_keq(resAPvsKeq)
+            ax = plotr.moving_average_ap_keq(resAPvsKeq)
 
             plotr.setFigSize(current_journal_width-2.5, 4.2)
             #plt.tight_layout()
             plotr.figure.subplots_adjust(left=0.14, top=0.97, right=0.995,
                     bottom=0.19, wspace=0.33)
 
-            axM1.yaxis.labelpad = 0.4
+            ax.yaxis.labelpad = 0.4
+
+            ax.yaxis.set_ticks_position('left')
+            ax.xaxis.set_ticks_position('bottom')
+
+            ax.yaxis.grid(True, linestyle='--', which='major', color='lightgrey',
+                          alpha=0.5, dashes=[1,1,1,1,1,1])
+            ax.set_axisbelow(True)
 
             saveMe[fig] = plotr.figure
 
@@ -3824,7 +3998,7 @@ def main():
         if fig == 'Figure_DinucleotideOrder':
 
             plotr = Plotter(YaxNr=1, XaxNr=1, plotName=fig,
-                    p_line=False, labSize=6, tickLabelSize=6, lineSize=2,
+                    p_line=False, labSize=6, tickLabelSize=6, lineSize=1,
                     tickLength=2, tickWidth=0.5)
 
             shuffle_results = calcResults['Shuffler']
@@ -3841,7 +4015,7 @@ def main():
         if fig == 'CrossRandomDelineateSuppl':
 
             plotr = Plotter(YaxNr=1, XaxNr=3, plotName=fig,
-                    p_line=False, labSize=6, tickLabelSize=6, lineSize=2,
+                    p_line=False, labSize=6, tickLabelSize=6, lineSize=1,
                     tickLength=2, tickWidth=0.5)
 
             # delineation of effects of different energies
