@@ -1,7 +1,5 @@
 """
-New class based attempt at getting some rigour into creating figures for your
-papers. You need more flexibility in terms of subfiguring and not re-running
-simulations just to change figure data.
+Program to make plots for Equilibrium paper.
 """
 from __future__ import division
 
@@ -21,6 +19,7 @@ from scipy.stats import spearmanr, pearsonr, nanmean, nanstd, nanmedian  # NOQA
 from scipy.interpolate import InterpolatedUnivariateSpline as interpolate
 from scipy import optimize
 import numpy.ma as ma
+
 
 # Specify better colors than the 'ugh' default colors in matplotlib
 import brewer2mpl
@@ -3220,6 +3219,12 @@ def basic_info(ITSs):
 
     Can you make a sensitivity plot? How sensitive the PY or the total abortive
     product is to the AP in a certain region?
+
+    XXXX ------- XXXX
+
+    Update: you should plot all the basic correlations available in the
+    dataserts: G, A, T, C with AP, raw abortive raw FL, combinations, throw at
+    it all you've got.
     """
 
     py = [i.PY for i in ITSs]
@@ -3591,6 +3596,49 @@ def mad_std(a, c=0.6745, axis=None):
     return m
 
 
+def raw_data_distribution(dg100, dg400):
+    """
+    Distribution of raw radiactive intensity across all ITSs
+    """
+    from pandas import DataFrame as df
+
+    for dset_name, ITSs in [('DG100', dg100), ('DG400', dg400)]:
+        #if dset_name == 'DG400':
+            #for its in ITSs:
+                #its.abortiveProb = its.abortiveProb*2
+        dsetmean = np.nanmean([i.PY for i in ITSs])
+        if dset_name == 'DG100':
+            rna_range = range(2,21)
+            ymax = 2*10**7
+        else:
+            rna_range = range(2,16)
+            ymax = 0.2*10**7
+        for division in ['low PY', 'high PY', 'all']:
+            my_df = df()
+            for rna_len in rna_range:
+                if division == 'low PY':
+                    my_df[rna_len] = [i.rawDataMean[rna_len-2] for i in ITSs
+                            if i.PY < dsetmean]
+                if division == 'high PY':
+                    my_df[rna_len] = [i.rawDataMean[rna_len-2] for i in ITSs
+                            if i.PY > dsetmean]
+                if division == 'all':
+                    my_df[rna_len] = [i.rawDataMean[rna_len-2] for i in ITSs]
+
+            # -99 is nan here.
+            my_df.replace('-99.0', value=np.nan, inplace=True)
+            ax = my_df.plot(kind='box', ylim=(0, ymax))
+            #ax = my_df.plot(kind='box')
+            fig = ax.get_figure()
+            fig.suptitle('Intensity distributions for {0} {1}'.
+                    format(dset_name, division))
+            dirname = 'Intensity_distributions'
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname)
+            filepath = os.path.join(dirname, dset_name + '_' +division + '.pdf')
+            fig.savefig(filepath, format='pdf', size_inches=(9,15))
+
+
 def ap_distribution(dg100, dg400):
     """
     Distribution of AP across all ITSs
@@ -3627,8 +3675,12 @@ def ap_distribution(dg100, dg400):
             fig.savefig(filepath, format='pdf', size_inches=(9,15))
 
 
-def dg100_to_file(dg100):
-    filepath = 'dg100_parameters.txt'
+def dataset_to_file(dg100, name, write_AP=False):
+    if write_AP:
+        filepath = name + '_parameters_AP.txt'
+    else:
+        filepath = name + '_parameters.txt'
+
     filehandle = open(filepath, 'wb')
     for its in dg100:
         line = []
@@ -3636,9 +3688,96 @@ def dg100_to_file(dg100):
         line.append(its.sequence)
         line.append(str(its.PY))
 
+        if write_AP:
+            for ap in its.abortiveProb:
+                line.append(str(ap))
+
         filehandle.write('\t'.join(line) + '\n')
 
     filehandle.close()
+
+
+def consensus_pause_sites(dg100, dg400):
+    """
+    Consensus pause signal is -10G, -1Y, +1G. Assume it's because of the RNA-DNA
+    hybrid, can you find this signal in the ITSs?
+
+    'G[GATC]{8}[T,C]G' ?
+
+    Result: vague preference for low to medium PY ITSs, but one example in DG100 of a
+    high PY ITS. Conclusion: does not have explanatory power. A lot more
+    sequences have 2 out of 3 matching, but neither here is there a clear
+    pattern.
+    """
+    import re
+
+    p = re.compile('G[GATC]{8}[T,C]G')
+    #matches = p.findall('GGGGGGGGGCG')
+    #nr_matches = len(matches)
+
+    for name, dset in [('DG100', dg100), ('DG400', dg400)]:
+
+        ma = []
+        PY = []
+
+        print('\n {0}\n'.format(name))
+
+        for its in sortITS(dset):
+            matches = p.findall(its.sequence[:15])
+            nr_matches = len(matches)
+            print its.PY, nr_matches
+
+            ma.append(nr_matches)
+            PY.append(its.PY)
+
+        print(spearmanr(ma, PY))
+
+
+def purine_vs_PY_scatter(dg100, dg400):
+    """
+    Reviewers want to see purine vs PY scatterplot. Do it for purines up to
+    +15.
+    """
+
+    rcParams['figure.figsize'] = 8, 4  # This was the only way I could get this respected
+    fig, axes = plt.subplots(ncols=2)
+    ax_index = 0
+    for dset_name, dset in [('DG100', dg100), ('DG400', dg400)]:
+        purines = []
+        PYs = []
+        PYstd = []
+        for its in dset:
+            its.calc_purines()
+            purines_15 = sum(its.purines[:15])
+
+            purines.append(purines_15)
+            PYs.append(its.PY)
+            PYstd.append(its.PY_std)
+
+        ax = axes[ax_index]
+        ax.errorbar(purines, PYs, yerr=PYstd, fmt=None, ecolor=brew_gray, zorder=1,
+                elinewidth=0.3)
+        ax.scatter(purines, PYs, c='black', s=14, zorder=2, lw=0)
+        ax.set_xlabel('Number of purines from +1 to +15')
+        ax.set_ylabel('PY')
+        ax.set_title(dset_name + ' library')
+
+        if ax_index == 0:
+            label = 'A'
+        elif ax_index == 1:
+            label = 'B'
+
+        xpos = 0.03
+        ypos = 0.97
+        ax.text(xpos, ypos,
+                label, transform=ax.transAxes, fontsize=18,
+                fontweight='bold', va='top')
+
+        ax_index += 1
+
+    plt.tight_layout()
+    #fig.savefig('figures/purine_py_scatter.pdf', format='pdf')
+    fig.savefig('../../The-Tome/my_papers/rna-dna-paper/supplementary/figures/purine_py_scatter.pdf', format='pdf')
 
 
 def main():
@@ -3660,8 +3799,71 @@ def main():
     #basic_info(dg100)
     #basic_info(dg400)
     #ap_distribution(dg100, dg400)
-    #dg100_to_file(dg100)
+    #raw_data_distribution(dg100, dg400)
+
+    # These values are pretty different from the PY from quantitative data. How are they
+    # obtained?
+    table2_py_data = {
+            'N25/A1': {'plus':     16.3, 'minus': 7.1},
+            'N25': {'plus':        18.5, 'minus': 9.0},
+            'DG115a': {'plus':     15.2, 'minus': 5.1},
+            'DG127': {'plus':      13.4, 'minus': 3.5},
+            'DG133': {'plus':      15.1, 'minus': 4.3},
+            'N25anti':{'plus':     20.1, 'minus': 3.8},
+            'DG137a': {'plus':     5.4, 'minus':  1.5},
+            'DG154a': {'plus':     6.0, 'minus':  1.8},
+            'N25/A1anti': {'plus': 6.0, 'minus':  1.5}
+            }
+
+    plus = [16.3, 18.5, 15.2, 13.4, 15.1, 20.1, 5.4, 6.0, 6.0]
+    minus = [7.1, 9.0, 5.1, 3.5, 4.3, 3.8, 1.5, 1.8, 1.5]
+
+    # XXX For the values in the table, the coefficient of variation is 30%
+    # higher for GreB minus (statistically significant?). This
+    # indicates that when using GreB, PY values become more similar. This
+    # enforces the idea that abortive cycling drives low PY.
+    # NOTE: the PY values given in Table 2 are high compared to the values
+    # given in Table 1 of the paper. Using the values in Table 1, the GreB+
+    # experiments have half the spread in PY compared to Table2.
+    # You can mention this to Lilian. This is an argument that rate of
+    # backtracking is not greatly sequence dependent.
+
+    mean_plus = np.mean(plus)
+    std_plus = np.std(plus)
+    mean_minus = np.mean(minus)
+    std_minus = np.std(minus)
+    print(std_plus / mean_plus)
+    print(std_minus / mean_minus)
     #return
+    py_table1 = [i.PY for i in dg100 if i.name in table2_py_data]
+    mean_table1 = np.mean(py_table1)
+    std_table1 = np.std(py_table1)
+    print(std_table1 / mean_table1)
+
+    # Print PY for the ones you have GreB PY for
+    py = [i.PY for i in dg100]
+    fl = [np.mean([f for f in its.fullLength.values()]) for its in dg100]
+    purines = []
+    for its in dg100:
+        its.calc_purines()
+        purines.append(sum(its.purines))
+    for its in dg100:
+        if its.name in table2_py_data:
+            tabPy = table2_py_data[its.name]['minus']
+            tabPyplus = table2_py_data[its.name]['plus']
+            print(its.name + ' ', its.PY * 100, tabPy, tabPyplus)
+            print(its.sequence)
+
+    #dataset_to_file(dg100, name='dg100', write_AP=True)
+    #dataset_to_file(dg400, name='dg400')
+
+    #consensus_pause_sites(dg100, dg400)
+
+    # XXX: start here: create this figure, add to supplementary, build
+    # supplementary, build new version, make a list of all your changes, and
+    # send to Lilian et. al
+    #purine_vs_PY_scatter(dg100, dg400)
+    return
 
     ## plot data when sorting by SE
     #ITSs = sortITS(ITSs, 'SE')
@@ -3722,9 +3924,9 @@ def main():
     #msat_param_estimate = False
 
     figures = [
-            #'Figure_PYvsAvgKbt',  # AvgKbt vs PY (in Paper)
+            'Figure_PYvsAvgKbt',  # AvgKbt vs PY (in Paper)
             #'Figure_AP_Kbt',  # 1x2 Keq and AvgKbt vs AP (in Paper)
-            'CrossRandomDelineateSuppl',  # (in Paper)
+            #'CrossRandomDelineateSuppl',  # (in Paper)
             #'Figure_DG400_corr_ladder',  # DG400 scatter plot and ladder (in Paper)
             #'Figure_DinucleotideOrder',
             #'Figure_DG400_corr',  # DG400 scatter plot (in Paper)

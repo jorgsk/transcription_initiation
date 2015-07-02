@@ -41,10 +41,6 @@ class ITS(object):
         self._prctYield = {}
         self._RNAprodFromHere = {}
 
-        # Redlisted sequences
-        self.redlist = []
-        self.redlisted = False
-
         # The SE sum of equilibrium constants (Keqs)
         self.SE = -1
 
@@ -82,8 +78,7 @@ class ITS(object):
 
         if method == 'hein_et_al':
             # /min
-            return np.array([Ec.scaled_hein_translocation_reverse_rate_constants[di]
-                for di in self.dinucs])
+            return np.array([Ec.scaled_hein_translocation_reverse_rate_constants[di] for di in self.dinucs])
 
     def forward_transclocation(self, method='constant', constant=80):
         """
@@ -99,13 +94,11 @@ class ITS(object):
 
         if method == 'hein_et_al':
             # /min
-            return np.array([Ec.scaled_hein_translocation_forward_rate_constants[di] for di
-                in self.dinucs])
+            return np.array([Ec.scaled_hein_translocation_forward_rate_constants[di] for di in self.dinucs])
 
         if method == 'malinen_et_al':
             # unit /s
-            half_lives = np.array([Ec.malinen_et_al_forward_translocation_halflives_ms[nt]
-                                        for nt in self.sequence])
+            half_lives = np.array([Ec.malinen_et_al_forward_translocation_halflives_ms[nt] for nt in self.sequence])
             rate_constants = np.array([Ec.HalfLife2RateConstant(hl) for hl in half_lives])
 
             return rate_constants
@@ -147,8 +140,7 @@ class ITS(object):
             """
             pass
 
-    def subsequent_backtracking_rate_constants(self, method='constant',
-            constant=5):
+    def subsequent_backtracking_rate_constants(self, method='constant', constant=5):
         """
         The rate constants for further backtracking until a state with abortive
         initiation is reached.
@@ -196,8 +188,7 @@ class ITS(object):
             Transcription initiation is assumed to start with a 2-NMP RNA so
             this array may be used starting from the third element: [2]
             """
-            half_lives = np.array([Ec.malinen_et_al_nucleotide_addition_halflives_ms[n] for
-                                        n in self.sequence])
+            half_lives = np.array([Ec.malinen_et_al_nucleotide_addition_halflives_ms[n] for n in self.sequence])
             rate_constants = np.array([Ec.HalfLife2RateConstant(hl) for hl in half_lives])
 
             return rate_constants
@@ -273,7 +264,7 @@ class ITS(object):
             rawD = self.rawData[quant]
 
             # Set all missing values to nan. Use nanmean to get watcha want.
-            rawD = np.array([np.nan if x==-99 else x for x in rawD])
+            rawD = np.array([np.nan if x == -99 else x for x in rawD])
 
             fullL = self.fullLength[quant]
 
@@ -364,5 +355,4 @@ if __name__ == '__main__':
 
     test_its = ITS('GATTACAGATTACAGATTACA', name='test_sequence')
     test_its.forward_transclocation(method='hein_et_al')
-
 

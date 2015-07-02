@@ -139,8 +139,7 @@ def ReadData(dataset):
 
     Possible input is dg100, dg100-new, dg400.
 
-    dg100 is the version of the dg100 dataset you have used the past 3 years.
-    Here you just used the PY values calculated by Lilian.
+    dg100 is just the PY values calculated by Lilian from the paper.
 
     dg100-new uses the raw transcription data. This allows you to calculate PY
     and AP yourself.
