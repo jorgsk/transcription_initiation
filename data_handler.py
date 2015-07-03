@@ -71,7 +71,12 @@ def read_raw(path, files, dset, skipN25=False):
                 continue
 
             # turn nans to zeros
-            entry = rawData[variant].fillna(value=-99)
+            # XXX: this is an issue that remains: when using -99, you get into
+            # situations like this: 13, 0, 0; average = 13, while it should be
+            # less, because in 2 replicas there was no signal.
+            # But, when you look at average AP for ALL its, you WANT to perform a nanmean
+            # The solution is then to subsitute 0 for nan when doing that.
+            entry = rawData[variant].fillna(value=-0)
 
             # deal with replicas that contain a '.'
             replica = ''
