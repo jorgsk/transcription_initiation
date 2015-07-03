@@ -126,8 +126,8 @@ class Calculator(object):
     """
 
     def __init__(self, dg100, dg400, calcName, testing, dset, coeffs, topNuc,
-            msat_normalization, average_for_plots_and_output,
-            msat_param_estimate):
+                 msat_normalization, average_for_plots_and_output,
+                 msat_param_estimate):
 
         self.coeffs = coeffs
         self.topNuc = topNuc
@@ -212,10 +212,12 @@ class Calculator(object):
 
                 # This is how the figure currently is
                 movAP = get_movAv_array(dset, center=mer_center_pos,
-                        movSize=movSize, attr='abortiveProb', prePost='both')
+                                        movSize=movSize, attr='abortiveProb',
+                                        prePost='both')
 
                 movKeq = get_movAv_array(dset, center=mer_center_pos,
-                        movSize=movSize, attr='keq', prePost='both')
+                                         movSize=movSize, attr='keq',
+                                         prePost='both')
 
                 corr, pval = spearmanr(movAP, movKeq)
 
@@ -329,9 +331,8 @@ class Calculator(object):
 
         """
         outp = {
-                'dg100': {'PY':[], 'keq': [], 'sumAP': [], 'sumAPnorm': []},
-                'dg400': {'PY':[], 'keq': [], 'sumAP': [], 'sumAPnorm': []}
-                }
+                'dg100': {'PY': [], 'keq': [], 'sumAP': [], 'sumAPnorm': []},
+                'dg400': {'PY': [], 'keq': [], 'sumAP': [], 'sumAPnorm': []}}
 
         # calculate keq values using latest parameter values
         # this must be kept in copy-paste sync :(
@@ -359,14 +360,9 @@ class Calculator(object):
         compare DG100 with DG400.
         """
         outp = {
-                'dg100': {'avgkbt': [], 'averageAP': [], 'PY':[]},
-                'dg400': {'avgkbt': [], 'averageAP': [], 'PY':[]}
+                'dg100': {'avgkbt': [], 'averageAP': [], 'PY': []},
+                'dg400': {'avgkbt': [], 'averageAP': [], 'PY': []}
                }
-
-        #outp = {
-                #'dg100': {'avgkbt': [], 'averageAP': []},
-                #'dg400': {'avgkbt': [], 'averageAP': []}
-                #}
 
         c1, c2, c3 = self.coeffs
 
@@ -401,7 +397,7 @@ class Calculator(object):
         combos = []
         rawCombos = [set(_) for _ in itertools.product(freeEns, repeat=3)]
         for c in rawCombos:
-            if c in combos or len(c)==1:
+            if c in combos or len(c) == 1:
                 continue
             else:
                 combos.append(c)
@@ -440,13 +436,14 @@ class Calculator(object):
             comboKey = '_'.join([str(combo[v]) for v in freeEns])
 
             result, grid_size, aInfo = optimizeParam(self.ITSs,
-                    rnaRangeSmallestPossible, self.testing, analysis,
-                    combo,'AvgKbt', self.msat_normalization,
-                    self.msat_param_estimate)
+                                  rnaRangeSmallestPossible, self.testing, analysis,
+                                  combo,'AvgKbt', self.msat_normalization,
+                                  self.msat_param_estimate)
 
             onlySignCoeff=0.05
             # Print some output and return one value for c1, c2, and c3
-            c1, c2, c3 = get_print_parameterValue_output(result,
+            c1, c2, c3 =\
+                    get_print_parameterValue_output(result,
                     rnaRangeSmallestPossible, onlySignCoeff, analysis,
                     self.name, grid_size, self.msat_normalization,
                     self.type_of_average, self.msat_param_estimate,
@@ -471,9 +468,9 @@ class Calculator(object):
         delineateResultsOrder = ['DNA', 'RNA', '3N']
 
         # include the 3 variables sequentially
-        varCombinations = [{'DNA':False, 'RNA':False, '3N':True},
-                           {'DNA':True,  'RNA':False, '3N':False},
-                           {'DNA':False, 'RNA':True,  '3N':False}]
+        varCombinations = [{'DNA': False, 'RNA': False, '3N': True},
+                           {'DNA': True,  'RNA': False, '3N': False},
+                           {'DNA': False, 'RNA': True,  '3N': False}]
 
         # set the range for which you wish to calculate correlation
         rnaMin = 2
@@ -622,8 +619,7 @@ class Calculator(object):
         for its in self.dg400:
             its.calc_keq(c1, c2, c3, self.msat_normalization, rnaMax)
 
-        corr_kbt, pvals_kbt = self.correlateMeasure_PY(rnaRange,
-                measure='AvgKbt', dset='dg400')
+        corr_kbt, pvals_kbt = self.correlateMeasure_PY(rnaRange, measure='AvgKbt', dset='dg400')
 
         # get PY and PY standard deviation
         PY = [i.PY for i in self.dg400]
@@ -639,8 +635,8 @@ class Calculator(object):
         for its in self.dg400:
             its.calc_purines()
 
-        corr_purine, pvals_purine = self.correlateMeasure_PY(rnaRange,
-                measure='SumPurines', dset='dg400')
+        corr_purine, pvals_purine = self.correlateMeasure_PY(rnaRange, measure='SumPurines',
+                                                             dset='dg400')
 
         return self.dg400, rnaRange, values, PY, PYstd, corr_kbt, pvals_kbt, corr_purine, pvals_purine
 
@@ -685,8 +681,8 @@ class Calculator(object):
             c1, c2, c3 = self.coeffs
         else:
             analysis = 'Normal'
-            onlySignCoeff=0.05
-            variable_combo = {'DNA':True, 'RNA':True, '3N':True}
+            onlySignCoeff = 0.05
+            variable_combo = {'DNA': True, 'RNA': True, '3N': True}
             result, grid_size, aInfo = optimizeParam(self.ITSs,
                     rnaRangeSmallestPossible,
                     self.testing, analysis, variable_combo, 'AvgKbt',
@@ -752,7 +748,7 @@ class Calculator(object):
         else:
             rnaRangeSmallestPossible = rnaRange
 
-        variable_combo = {'DNA':True, 'RNA':True, '3N':True}
+        variable_combo = {'DNA': True, 'RNA': True, '3N': True}
 
         analysis = 'Random'
 
@@ -806,7 +802,7 @@ class Calculator(object):
 
         analysis2stats = {}
 
-        variable_combo = {'DNA':True, 'RNA':True, '3N':True}
+        variable_combo = {'DNA': True, 'RNA': True, '3N': True}
 
         for analysis in ['Normal', 'Random', 'Cross Correlation']:
         #for analysis in ['Cross Correlation']:
@@ -944,12 +940,11 @@ class Plotter(object):
             self._nextYaxNr += 1
         else:
             self._nextYaxNr = 0
-            self._nextXaxNr +=1
+            self._nextXaxNr += 1
 
         return nextAx
 
-    def addLetters(self, letters=('A', 'B'), positions=('UL', 'UL'), shiftX=0,
-            shiftY=0):
+    def addLetters(self, letters=('A', 'B'), positions=('UL', 'UL'), shiftX=0, shiftY=0):
         """
         letters = ('A', 'B') will add A and B to the subplots
         """
@@ -980,8 +975,7 @@ class Plotter(object):
 
             # plot error bars if present
             if data_std != []:
-                ax.bar(range(2, len(data)+2), data, yerr=data_std,
-                        align='center')
+                ax.bar(range(2, len(data)+2), data, yerr=data_std, align='center')
             else:
                 ax.bar(range(2, len(data)+2), data, align='center')
 
@@ -1075,8 +1069,7 @@ class Plotter(object):
 
         # plotit
         ax = self.getNextAxes()  # for the local figure
-        rectangles = ax.bar(left=xmers, height=bar_height, align='center',
-                color=colors, width=1.0)
+        rectangles = ax.bar(left=xmers, height=bar_height, align='center', color=colors, width=1.0)
         ax.set_xticks(xmers)
         ax.set_xlim(xmers[0]-1, xmers[-1]+1)
 
@@ -1089,8 +1082,7 @@ class Plotter(object):
         ax.set_ylabel('Correlation: AP and $K_{bt,i}$', size=self.labSize)
 
         # ticks
-        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
-                width=self.tickWidth)
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength, width=self.tickWidth)
 
         # X: show only positions with significant positions or 5, 10, 15, 20
         # XXX The start here must be in sync with the range for which
@@ -1162,8 +1154,7 @@ class Plotter(object):
         ax.set_ylabel('Average AP ($\%$)', size=self.labSize)
 
         # ticks
-        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
-                width=self.tickWidth)
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength, width=self.tickWidth)
 
         if not xticks:
             ax.set_xticklabels([])
@@ -1233,7 +1224,7 @@ class Plotter(object):
 
         colors = ['g', 'b', 'k', 'c']
         colors = [brew_blue, brew_blue, brew_green, brew_purple]
-        lstyle = ['-', '-', '-','-']
+        lstyle = ['-', '-', '-', '-']
 
         # create labels from the combinations
         #enOrder = ['$\Delta${DNA-DNA}', '$\Delta{RNA-DNA}$', '$\Delta{3N}$']
@@ -1286,7 +1277,7 @@ class Plotter(object):
 
             #Make sure ymin has only one value behind the comma
             ymin = float(format(ymin, '.1f'))
-            yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -ymax, -0.1)]
+            yticklabels = [format(i, '.1f') for i in np.arange(-ymin, -ymax, -0.1)]
 
             # legend
             ax.legend(loc='upper left', prop={'size': 5}, handlelength=3.3)
@@ -1306,11 +1297,6 @@ class Plotter(object):
             ax.set_yticks(np.arange(ymin, ymax, 0.1))
             ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
             ax.set_ylim(ymin, ymax)
-
-            #ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                          #alpha=0.5)
-            #ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                          #alpha=0.5)
 
     def delineatorPlot(self, delineateResults, inst_change=False):
         """
@@ -1343,8 +1329,7 @@ class Plotter(object):
         key2label = {
                 'False_False_True': '$\Delta$3N',
                 'True_False_False': '$\Delta$DNA-DNA',
-                'False_True_False': '$\Delta$RNA-DNA',
-                }
+                'False_True_False': '$\Delta$RNA-DNA'}
 
         for key, label in key2label.items():
             color = colors.pop()
@@ -1386,10 +1371,10 @@ class Plotter(object):
 
         #Make sure ymin has only one value behind the comma
         ymin = float(format(ymin, '.1f'))
-        yticklabels = [format(i,'.1f') for i in np.arange(-ymin, -ymax, -0.1)]
+        yticklabels = [format(i, '.1f') for i in np.arange(-ymin, -ymax, -0.1)]
 
         # legend
-        ax.legend(loc='upper left', prop={'size':6}, handlelength=3)
+        ax.legend(loc='upper left', prop={'size' :6}, handlelength=3)
 
         # xticks
         ax.set_xticks(range(indMin, indxMax))
@@ -1407,22 +1392,13 @@ class Plotter(object):
         ax.set_xlabel("$n$", size=self.labSize)
 
         # setting the tick font sizes
-        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
-                width=self.tickWidth)
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength, width=self.tickWidth)
 
         ax.set_ylabel("Correlation: PY and $\overline{K}_{bt,n}$", size=self.labSize)
 
         ax.set_yticks(np.arange(ymin, ymax, 0.1))
         ax.set_yticklabels(odd_even_spacer(yticklabels, oddeven='odd'))
         ax.set_ylim(ymin, ymax)
-
-        #ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                      #alpha=0.5)
-        #ax.xaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                      #alpha=0.5)
-
-        #ax.yaxis.set_ticks_position('left')
-        #ax.xaxis.set_ticks_position('bottom')
 
     def dg400validater(self, dg400, values, PY, PYstd, fit_function=False):
 
@@ -1436,8 +1412,7 @@ class Plotter(object):
         PYstd = [p*100 for p in PYstd]
 
         # simple average for now, just for the effect
-        ax.errorbar(values, PY, yerr=PYstd, fmt=None, ecolor='gray', zorder=1,
-                elinewidth=0.3)
+        ax.errorbar(values, PY, yerr=PYstd, fmt=None, ecolor='gray', zorder=1, elinewidth=0.3)
         ax.scatter(values, PY, c=brew_blue, s=12, zorder=2, lw=0)
 
         ########### Set figure and axis properties ############
@@ -1462,8 +1437,7 @@ class Plotter(object):
             label.set_visible(False)
 
         # tick parameters
-        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength,
-                width=self.tickWidth)
+        ax.tick_params(labelsize=self.tickLabelSize, length=self.tickLength, width=self.tickWidth)
 
         # add a polynomial or sigmoid fit
         if fit_function:
@@ -3652,27 +3626,32 @@ def ap_distribution(dg100, dg400):
                 #its.abortiveProb = its.abortiveProb*2
         dsetmean = np.nanmean([i.PY for i in ITSs])
         if dset_name == 'DG100':
-            rna_range = range(2,21)
+            rna_range = range(2, 21)
         else:
-            rna_range = range(2,16)
-        for division in ['low PY', 'high PY', 'all']:
+            rna_range = range(2, 16)
+
+        for partition in ['low PY', 'high PY', 'all']:
             my_df = df()
             for rna_len in rna_range:
-                if division == 'low PY':
+                if partition == 'low PY':
                     my_df[rna_len] = [i.abortiveProb[rna_len-2] for i in ITSs
-                            if i.PY < dsetmean]
-                if division == 'high PY':
+                                      if i.PY < dsetmean]
+                if partition == 'high PY':
                     my_df[rna_len] = [i.abortiveProb[rna_len-2] for i in ITSs
-                            if i.PY > dsetmean]
-                if division == 'all':
+                                      if i.PY > dsetmean]
+                if partition == 'all':
                     my_df[rna_len] = [i.abortiveProb[rna_len-2] for i in ITSs]
 
-            ax = my_df.plot(kind='box', ylim=(0,0.8))
+            # replace no signal with Nan. This way, you average those abortive
+            # probabilities which actually exist (at position 20, 90% of itss
+            # do not abort, but take the average AP of those who actually
+            # reach)
+            my_df = my_df.replace(0.0, np.nan)
+            ax = my_df.plot(kind='box', ylim=(0, 0.8))
             fig = ax.get_figure()
-            fig.suptitle('AP distributions for {0} {1}'.
-                    format(dset_name, division))
-            filepath = os.path.join('AP_distributions', dset_name + '_' +division + '.pdf')
-            fig.savefig(filepath, format='pdf', size_inches=(9,15))
+            fig.suptitle('AP distributions for {0} {1}'.format(dset_name, partition))
+            filepath = os.path.join('AP_distributions', dset_name + '_' + partition + '.pdf')
+            fig.savefig(filepath, format='pdf', size_inches=(9, 15))
 
 
 def dataset_to_file(dg100, name, write_AP=False):
@@ -3780,27 +3759,10 @@ def purine_vs_PY_scatter(dg100, dg400):
     fig.savefig('../../The-Tome/my_papers/rna-dna-paper/supplementary/figures/purine_py_scatter.pdf', format='pdf')
 
 
-def main():
-    #remove_controls = True
-    remove_controls = False
-
-    dg100 = data_handler.ReadData('dg100-new')
-    dg400 = data_handler.ReadData('dg400')
-
-    if remove_controls:
-        controls = ['DG133', 'DG115a', 'N25', 'N25anti', 'N25/A1anti']
-        dg400 = [i for i in dg400 if not i.name in controls]
-        #dg100 = [i for i in dg100 if not i.name in controls]
-
-    # Normalize the AP -- removes correlation between sum(PY) and sum(AP)
-    #normalize_AP(ITSs)
-
-    # basic correlations
-    #basic_info(dg100)
-    #basic_info(dg400)
-    #ap_distribution(dg100, dg400)
-    #raw_data_distribution(dg100, dg400)
-
+def greB_analysis(dg100):
+    """
+    Analyse the GreB+/- data from 2006 paper.
+    """
     # These values are pretty different from the PY from quantitative data. How are they
     # obtained?
     table2_py_data = {
@@ -3809,11 +3771,10 @@ def main():
             'DG115a': {'plus':     15.2, 'minus': 5.1},
             'DG127': {'plus':      13.4, 'minus': 3.5},
             'DG133': {'plus':      15.1, 'minus': 4.3},
-            'N25anti':{'plus':     20.1, 'minus': 3.8},
-            'DG137a': {'plus':     5.4, 'minus':  1.5},
-            'DG154a': {'plus':     6.0, 'minus':  1.8},
-            'N25/A1anti': {'plus': 6.0, 'minus':  1.5}
-            }
+            'N25anti': {'plus':    20.1, 'minus': 3.8},
+            'DG137a': {'plus':     5.4,  'minus': 1.5},
+            'DG154a': {'plus':     6.0,  'minus': 1.8},
+            'N25/A1anti': {'plus': 6.0,  'minus': 1.5}}
 
     plus = [16.3, 18.5, 15.2, 13.4, 15.1, 20.1, 5.4, 6.0, 6.0]
     minus = [7.1, 9.0, 5.1, 3.5, 4.3, 3.8, 1.5, 1.8, 1.5]
@@ -3841,8 +3802,6 @@ def main():
     print(std_table1 / mean_table1)
 
     # Print PY for the ones you have GreB PY for
-    py = [i.PY for i in dg100]
-    fl = [np.mean([f for f in its.fullLength.values()]) for its in dg100]
     purines = []
     for its in dg100:
         its.calc_purines()
@@ -3854,8 +3813,33 @@ def main():
             print(its.name + ' ', its.PY * 100, tabPy, tabPyplus)
             print(its.sequence)
 
+
+def main():
+    #remove_controls = True
+    remove_controls = False
+
+    dg100 = data_handler.ReadData('dg100-new')
+    dg400 = data_handler.ReadData('dg400')
+
+    if remove_controls:
+        controls = ['DG133', 'DG115a', 'N25', 'N25anti', 'N25/A1anti']
+        dg400 = [i for i in dg400 if i.name not in controls]
+        #dg100 = [i for i in dg100 if not i.name in controls]
+
+    # Normalize the AP -- removes correlation between sum(PY) and sum(AP)
+    #normalize_AP(ITSs)
+
+    # basic correlations
+    #basic_info(dg100)
+    #basic_info(dg400)
+    ap_distribution(dg100, dg400)
+    return
+    #raw_data_distribution(dg100, dg400)
+    #greB_analysis(dg100)
+
     #dataset_to_file(dg100, name='dg100', write_AP=True)
     #dataset_to_file(dg400, name='dg400')
+    #return
 
     #consensus_pause_sites(dg100, dg400)
 
@@ -3863,7 +3847,6 @@ def main():
     # supplementary, build new version, make a list of all your changes, and
     # send to Lilian et. al
     #purine_vs_PY_scatter(dg100, dg400)
-    return
 
     ## plot data when sorting by SE
     #ITSs = sortITS(ITSs, 'SE')
