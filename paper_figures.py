@@ -103,6 +103,15 @@ class Fit(object):
         return (1.0 / (x*a*np.sqrt(2*np.pi))) * np.exp(-((np.log(x)-b)**2)/(2*a**2))
 
 
+class AP(object):
+    def __init__(self, keq, ap, dg3d=-1, dgDna=-1, dgRna=-1):
+        self.keq = keq
+        self.dg3d = dg3d
+        self.ap = ap
+        self.dgDna = dgDna
+        self.dgRna = dgRna
+
+
 class SimulationResult(object):
     """
     Holds the data from each simulation.
@@ -2047,15 +2056,6 @@ class Plotter(object):
                       #alpha=0.5)
 
 
-class AP(object):
-    def __init__(self, keq, ap, dg3d=-1, dgDna=-1, dgRna=-1):
-        self.keq = keq
-        self.dg3d = dg3d
-        self.ap = ap
-        self.dgDna = dgDna
-        self.dgRna = dgRna
-
-
 def odd_even_spacer(vals, oddeven='even', integer=False):
     out = []
     if oddeven == 'odd':
@@ -2574,87 +2574,6 @@ def sortITS(ITSs, attribute='PY'):
     return ITSs
 
 
-def separateByScrunch(ITSs, sortby, nr='two'):
-    """
-    Screen by scrunch in the 0 to 15 value
-
-    Divide in two. High has around -19, low aroudn -24
-    """
-
-    if nr == 'three':
-
-        scrunches = {'Low scrunch': [],
-                     'High scrunch': [],
-                     'Medium scrunch': []}
-
-        low = scrunches['Low scrunch']
-        high = scrunches['High scrunch']
-        med = scrunches['Medium scrunch']
-
-        dividor = len(ITSs)/3
-
-        for nr, its in enumerate(sortITS(ITSs, sortby)):
-            if nr <= dividor:
-                low.append(its)
-            elif dividor < nr < 2*dividor:
-                med.append(its)
-            else:
-                high.append(its)
-
-    elif nr == 'two':
-
-        scrunches = {'Low scrunch': [],
-                     'High scrunch': []}
-
-        low = scrunches['Low scrunch']
-        high = scrunches['High scrunch']
-
-        dividor = len(ITSs)/2
-
-        for nr, its in enumerate(sortITS(ITSs, sortby)):
-            if nr <= dividor:
-                low.append(its)
-            else:
-                high.append(its)
-
-    elif nr == 'one':
-        scrunches = {'All': ITSs}
-
-    return scrunches
-
-
-def getITSdnaSep(ITSs, nr='two', upto=15):
-    """
-    Separate the ITSs based on DGDNA in a low, mid, high group
-
-    Can also be in a low, high group (better for publication)
-    """
-
-    scrunches = separateByScrunch(ITSs, 'DgDNA15', nr=nr)
-
-    arranged = {}
-
-    for lab, ITSs in scrunches.items():
-
-        aProbs = []
-        keqs = []
-
-        fro = 2
-        to = upto
-
-        # build arrays
-        for its in ITSs:
-            #for (ap, keq) in zip(its.abortiveProb[fro:to], its.dg3d[fro:to]):
-            for (ap, keq) in zip(its.abortiveProb[fro:to], its.keq[fro:to]):
-
-                aProbs.append(ap)
-                keqs.append(keq)
-
-        arranged[lab] = (aProbs, keqs)
-
-    return arranged
-
-
 def shifted_ap_keq(ITSs, start=2, upto=15, plusmin=5):
     """
     Sort values with the DNA DNA value up to that point
@@ -2690,181 +2609,6 @@ def shifted_ap_keq(ITSs, start=2, upto=15, plusmin=5):
         objects[pm] = apobjs
 
     return objects
-
-
-def getDinosaur(ITSs, nr=2, upto=15, sortBy='dgDna'):
-    """
-    Sort values with the DNA DNA value up to that point
-
-    Optionally subtract the RNA-DNA value (length 10 RNA-DNA)
-
-    How to do it? Make a basic class for AP! This makes it super-easy to change
-    sortings: just loop through a keyword.
-
-    Return arrays of AP and DG3N values in different batches. For example, the
-    values could be split in 2 or 3. What determines the difference in
-    correlation between those two groups will then be how you split the
-    """
-
-    # add objects here and sort by score
-    objects = []
-
-    for its in ITSs:
-        for pos in range(1, upto):
-
-            # correct for a max 10 nt rna-dna hybrid
-            rnaBeg = max(pos-10, 0)
-
-            if its.abortiveProb[pos] < 0:
-                continue
-
-            #apObj = AP(sum(its.keq[pos:pos+1]),
-            apObj = AP(its.keq[pos-1],
-                       its.dg3d[pos],
-                       its.abortiveProb[pos],
-                       sum(its.dna_dna_di[:pos]),
-                       sum(its.rna_dna_di[rnaBeg:pos]))
-
-            objects.append(apObj)
-
-    # sort objects by one of your metrices (small to large)
-    if sortBy:
-        objects.sort(key=attrgetter(sortBy))
-
-    arranged = {}
-    # divide the list into two/three etc
-    ssize = int(len(objects)/nr)
-    splitObj = [objects[i:i+ssize] for i in range(0, len(objects), ssize)]
-
-    # XXX todo if onw group is small, add to the closest.
-
-    for spNr, sub_objs in enumerate(splitObj):
-        if spNr == 0:
-            label = '1 Smallest values'
-        elif spNr == nr-1:
-            label = '{0} Largest values'.format(nr)
-        else:
-            label = '{0} Intermediate value'.format(spNr+1)
-
-        label = label + ' ({0} objects)'.format(len(sub_objs))
-
-        aprobs = [o.ap for o in sub_objs]
-        #dg3d = [o.dg3d for o in sub_objs]
-        dg3d = [o.keq for o in sub_objs]
-
-        arranged[label] = (aprobs, dg3d)
-
-    return arranged
-
-
-def keq_ap_raw(ITSs, method='initial', upto=15):
-    """
-    Correlation between Keq and AP and Keq and raw reads
-
-    Divide the population of sites in two: those with low and high 'scrunched
-    energy' terms.
-
-    What is the conclusion from these things?
-
-    The conclusion is that there is a weak correlation.
-    It seems to be located in (2,10).
-
-    Interestingly, the raw correlation decreases with longer sequence, but not
-    the AP, which is normalized.
-
-    This actually indicates that there is a weak but present correlation.
-
-    Furthermore, this correlation is present in both DGXXX sets :)
-
-    OK. Can you now get this correlation to increase/decrease by 'correcting'
-    etc using DGDNA DGRNA?
-
-    Make a high scrunch and a low scrunch group
-
-    The little scrunch has lower correlation that the high scrunch.
-
-    This could mean that high scrunch makes an abortive release more certain
-    once backtracking has occured.
-
-    This is much more pronounced if you ignore the first 2nt band!
-
-    How can we further increase the 0.30 correlation? Your method is crude, but
-    actually pretty good. I think you'll be hard pressed finding a better
-    correlation. But I think you should try.
-
-    Try to separate each individual Keq by DNA-DNA up to that position -- first
-    by absolute DGDNA then by normalization by length.
-
-    The 'upto' parameter variation is very interesting. With upto=11 there is
-    no significant correlation for the high scrunch group, but at 14 there is.
-    For the low scrunch group, correlation decreases from 11 to 14.
-
-    They have opposite behavior. However, this is getting very technical for
-    people who aren't 'into it'. You'll need to simplify.
-
-    It seems that by looking only at sites with a large dg3d and/or large AP
-    you're getting a good correlation.
-
-    Is this even more important than checking for dgdna? if so, can you combine
-    them to reach a higher score? For example, you could divide the group into
-    4 and compare only the top/low 25% for example.
-
-    Either way what you have is good enough.
-
-    How robust is it to a +/- 1 shift in ap values?
-
-    OMG! Strangeness: the keq is strongly anticorrelated with AP-1 at the keq
-    position; it is then weakly positively correlated with AP-2, before being
-    zero-corrlated with AP-3.
-
-    It is also zero correlated with ap+1 and somewhat correlated with ap+2/3/4
-
-    How can you describe this systematically?
-
-    Now you normalized AP -- and should ignore positions with ap < 0
-
-    """
-
-    #fig, ax = plt.subplots()
-
-    #method = 'initial'
-    method = 'dinosaur'
-    upto = 15
-
-    # TODO do a systematic +/- 1,2,3,4 analysis of the AP and keq to look for
-    # correlation. Find out what the relationship really really means. Make
-    # sure that the AP matches the keq/dg3d so you KNOW what you are comparing
-
-    #for srtb in ['dg3d', 'ap', 'dgDna', 'dgRna', 'dgDnaNorm', 'dgRnaNorm',
-            #'dgControl', 'dgControlNorm']:
-    #for srtb in ['dg3d', 'ap', 'dgDna', 'dgRna']:
-    for srtb in ['dgDna']:
-        #cols = ['r', 'g', 'k']
-
-        if method == 'initial':
-            arranged = getITSdnaSep(ITSs, nr='two', upto=upto)
-
-        elif method == 'dinosaur':
-            arranged = getDinosaur(ITSs, nr=1, upto=upto, sortBy=srtb)
-
-        print('\n'+ '-------- ' + srtb + '--------')
-        for labl in sorted(arranged):
-
-            if len(arranged[labl][0]) < 30:
-                continue
-
-            aprobs, keqs = arranged[labl]
-
-            corr, pvals = spearmanr(aprobs, keqs)
-
-            print(labl)
-            print('Corr: {0}, pval: {1}'.format(corr, pvals))
-            #ax.scatter(aprobs, keqs, label=labl, color=cols.pop())
-        print('-------- ' + srtb + '--------')
-
-    #ax.legend()
-
-    # keqs
 
 
 def normalize_AP(ITSs):
@@ -3854,10 +3598,6 @@ def main():
     #fold_difference(ITSs)
     ## Plot FL, PY, total RNA for the different quantitations
     #data_overview(ITSs)
-
-    # plot correlation between Keq and AP and Raw
-    # add possibility for screening for high/low dnadna dnarna values
-    #keq_ap_raw(ITSs)
 
     # ap keq for all positions
     #plus_minus_keq_ap(dg100, dg400)
