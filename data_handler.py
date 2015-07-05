@@ -36,7 +36,7 @@ def read_raw(path, files, dset, skipN25=False):
     # 2) test assert that there is a match between the names in the sequence
     # file and the names in the should I?
 
-    cwd = '/home/jorgsk/Dropbox/phdproject/hsuVitro/'
+    cwd = '/home/jorgsk/Dropbox/phdproject/transcription_initiation/kinetic_model/'
 
     ITSs = {}
     seqs = {}
@@ -151,7 +151,7 @@ def ReadData(dataset):
 
     dg400 also uses raw transcription data.
     """
-    cwd = '/home/jorgsk/Dropbox/phdproject/hsuVitro/'
+    cwd = '/home/jorgsk/Dropbox/phdproject/transcription_initiation/kinetic_model/'
 
     # Selecting the dataset you want to use
     if dataset == 'dg100':
