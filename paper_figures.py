@@ -3,7 +3,9 @@ Make plots for Equilibrium paper.
 """
 from __future__ import division
 
-########### Make a debug function ##########
+import sys
+sys.path.append('/home/jorgsk/Dropbox/phdproject/transcription_initiation/transcription_data')
+
 from ipdb import set_trace as debug  # NOQA
 
 import data_handler
