@@ -4,7 +4,7 @@ Make plots for Equilibrium paper.
 from __future__ import division
 
 import sys
-sys.path.append('/home/jorgsk/Dropbox/phdproject/transcription_initiation/transcription_data')
+sys.path.append('/home/jorgsk/Dropbox/phdproject/transcription_initiation/data')
 
 from ipdb import set_trace as debug  # NOQA
 
@@ -40,7 +40,6 @@ rcParams['text.usetex'] = True
 
 
 # Global variables :)
-#here = os.getcwd()  # where this script is executed from! Beware!
 here = os.path.abspath(os.path.dirname(__file__))  # where this script is located
 fig_dir1 = os.path.join(here, 'figures')
 fig_dir2 = '/home/jorgsk/Dropbox/The-Tome/my_papers/rna-dna-paper/figures'
